@@ -371,7 +371,7 @@ struct cgroup_subsys_state *mem_cgroup_css_from_folio(struct folio *folio)
 {
 	struct mem_cgroup *memcg = folio_memcg(folio);
 
-	if (!memcg || !cgroup_subsys_on_dfl(memory_cgrp_subsys))
+	if (!memcg)
 		memcg = root_mem_cgroup;
 
 	return &memcg->css;
