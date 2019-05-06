@@ -344,6 +344,8 @@ struct mem_cgroup {
 	unsigned long async_fork;
 #endif
 
+	unsigned long offline_jiffies;
+
 	CK_KABI_RESERVE(1)
 	CK_KABI_RESERVE(2)
 	CK_KABI_RESERVE(3)
@@ -1173,6 +1175,8 @@ unsigned long mem_cgroup_soft_limit_reclaim(pg_data_t *pgdat, int order,
 
 void memcg_meminfo(struct mem_cgroup *memcg,
 		struct sysinfo *info, struct sysinfo_ext *ext);
+
+void drain_all_stock(struct mem_cgroup *root_memcg);
 
 #ifdef CONFIG_RICH_CONTAINER
 struct mem_cgroup *rich_container_get_memcg(void);
