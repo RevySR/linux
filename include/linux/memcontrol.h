@@ -314,6 +314,7 @@ struct mem_cgroup {
 
 	unsigned int		wmark_ratio;
 	struct work_struct	wmark_work;
+	unsigned int		wmark_scale_factor;
 
 #ifdef CONFIG_MEMCG_KMEM
 	int kmemcg_id;

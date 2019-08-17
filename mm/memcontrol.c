@@ -3689,10 +3689,18 @@ static void setup_memcg_wmark(struct mem_cgroup *memcg)
 	unsigned long max = memcg->memory.high > memcg->memory.max ?
 			    memcg->memory.max : memcg->memory.high;
 	unsigned int wmark_ratio = memcg->wmark_ratio;
+	unsigned int wmark_scale_factor = memcg->wmark_scale_factor;
+	unsigned long gap;
 
 	if (wmark_ratio) {
 		high_wmark = (max * wmark_ratio) / 100;
-		low_wmark = high_wmark - (high_wmark >> 8);
+
+		/*
+		 * Set the memcg watermark distance according to the
+		 * scale factor in proportion to max limit.
+		 */
+		gap = mult_frac(max, wmark_scale_factor, 10000);
+		low_wmark = high_wmark - gap;
 
 		page_counter_set_wmark_low(&memcg->memory, low_wmark);
 		page_counter_set_wmark_high(&memcg->memory, high_wmark);
@@ -4539,6 +4547,42 @@ static ssize_t memory_wmark_ratio_write(struct kernfs_open_file *of,
 
 	if (!is_wmark_ok(memcg, true))
 		queue_work(memcg_wmark_wq, &memcg->wmark_work);
+
+	return nbytes;
+}
+
+static int memory_wmark_scale_factor_show(struct seq_file *m, void *v)
+{
+	struct mem_cgroup *memcg = mem_cgroup_from_css(seq_css(m));
+	unsigned int wmark_scale_factor;
+
+	wmark_scale_factor = READ_ONCE(memcg->wmark_scale_factor);
+
+	seq_printf(m, "%d\n", wmark_scale_factor);
+
+	return 0;
+}
+
+static ssize_t memory_wmark_scale_factor_write(struct kernfs_open_file *of,
+				char *buf, size_t nbytes, loff_t off)
+{
+	struct mem_cgroup *memcg = mem_cgroup_from_css(of_css(of));
+	int ret, wmark_scale_factor;
+
+	buf = strstrip(buf);
+	if (!buf)
+		return -EINVAL;
+
+	ret = kstrtouint(buf, 0, &wmark_scale_factor);
+	if (ret)
+		return ret;
+
+	if (wmark_scale_factor > 1000 || wmark_scale_factor < 1)
+		return -EINVAL;
+
+	xchg(&memcg->wmark_scale_factor, wmark_scale_factor);
+
+	setup_memcg_wmark(memcg);
 
 	return nbytes;
 }
@@ -5473,6 +5517,12 @@ static struct cftype mem_cgroup_legacy_files[] = {
 		.read_u64 = mem_cgroup_read_u64,
 	},
 	{
+		.name = "wmark_scale_factor",
+		.flags = CFTYPE_NOT_ON_ROOT,
+		.seq_show = memory_wmark_scale_factor_show,
+		.write = memory_wmark_scale_factor_write,
+	},
+	{
 		.name = "force_empty",
 		.write = mem_cgroup_force_empty_write,
 	},
@@ -5843,6 +5893,9 @@ mem_cgroup_css_alloc(struct cgroup_subsys_state *parent_css)
 		WRITE_ONCE(memcg->oom_kill_disable, READ_ONCE(parent->oom_kill_disable));
 		WRITE_ONCE(memcg->wmark_ratio, READ_ONCE(parent->wmark_ratio));
 		memcg->reap_background = parent->reap_background;
+		/* Default gap is 0.5% max limit */
+		memcg->wmark_scale_factor = parent->wmark_scale_factor ?
+					    : 50;
 #ifdef CONFIG_ASYNC_FORK
 		memcg->async_fork = parent->async_fork;
 #endif
@@ -7313,6 +7366,12 @@ static struct cftype memory_files[] = {
 		.name = "wmark_low",
 		.flags = CFTYPE_NOT_ON_ROOT,
 		.seq_show = memory_wmark_low_show,
+	},
+	{
+		.name = "wmark_scale_factor",
+		.flags = CFTYPE_NOT_ON_ROOT,
+		.seq_show = memory_wmark_scale_factor_show,
+		.write = memory_wmark_scale_factor_write,
 	},
 	{
 		.name = "events",
