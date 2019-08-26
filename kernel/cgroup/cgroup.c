@@ -2411,6 +2411,28 @@ void cgroup_attach_unlock(bool lock_threadgroup)
 	cpus_read_unlock();
 }
 
+static void css_account_procs(struct task_struct *task,
+				struct css_set *cset, int num)
+{
+	struct cgroup_subsys *ss;
+	int ssid;
+
+	if (!thread_group_leader(task))
+		return;
+
+	for_each_subsys(ss, ssid) {
+		struct cgroup_subsys_state *css = cset->subsys[ssid];
+
+		if (!css)
+			continue;
+		css->nr_procs += num;
+		while (css->parent) {
+			css = css->parent;
+			css->nr_procs += num;
+		}
+	}
+}
+
 /**
  * cgroup_migrate_add_task - add a migration target task to a migration context
  * @task: target task
@@ -2563,8 +2585,10 @@ static int cgroup_migrate_execute(struct cgroup_mgctx *mgctx)
 
 			get_css_set(to_cset);
 			to_cset->nr_tasks++;
+			css_account_procs(task, to_cset, 1);
 			css_set_move_task(task, from_cset, to_cset, true);
 			from_cset->nr_tasks--;
+			css_account_procs(task, from_cset, -1);
 			/*
 			 * If the source or destination cgroup is frozen,
 			 * the task might require to change its state.
@@ -6626,6 +6650,7 @@ void cgroup_post_fork(struct task_struct *child,
 
 		WARN_ON_ONCE(!list_empty(&child->cg_list));
 		cset->nr_tasks++;
+		css_account_procs(child, cset, 1);
 		css_set_move_task(child, NULL, cset, false);
 	} else {
 		put_css_set(cset);
@@ -6707,6 +6732,7 @@ void cgroup_exit(struct task_struct *tsk)
 	css_set_move_task(tsk, cset, NULL, false);
 	list_add_tail(&tsk->cg_list, &cset->dying_tasks);
 	cset->nr_tasks--;
+	css_account_procs(tsk, cset, -1);
 
 	if (dl_task(tsk))
 		dec_dl_tasks_cs(tsk);
