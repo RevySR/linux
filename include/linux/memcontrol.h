@@ -74,6 +74,8 @@ struct mem_cgroup_reclaim_cookie {
 	unsigned int generation;
 };
 
+struct alloc_context;
+
 #ifdef CONFIG_MEMCG
 
 #define MEM_CGROUP_ID_SHIFT	16
@@ -327,6 +329,9 @@ struct mem_cgroup {
 
 	/* memory.exstat */
 	struct mem_cgroup_exstat_cpu __percpu *exstat_cpu;
+
+	int			wmark_min_adj;	/* user-set value */
+	int			wmark_min_eadj;	/* value in effect */
 
 	unsigned int		wmark_ratio;
 	struct work_struct	wmark_work;
@@ -995,6 +1000,7 @@ unsigned long mem_cgroup_get_zone_lru_size(struct lruvec *lruvec,
 }
 
 void mem_cgroup_handle_over_high(gfp_t gfp_mask);
+void mem_cgroup_wmark_min_throttle(void);
 
 unsigned long mem_cgroup_get_max(struct mem_cgroup *memcg);
 
@@ -1245,6 +1251,10 @@ static inline bool is_wmark_ok(struct mem_cgroup *memcg, bool high)
 
 	return page_counter_read(&memcg->memory) < memcg->memory.wmark_low;
 }
+
+int memcg_get_wmark_min_adj(struct task_struct *curr);
+void memcg_check_wmark_min_adj(struct task_struct *curr,
+		struct alloc_context *ac);
 
 #else /* CONFIG_MEMCG */
 
@@ -1564,6 +1574,10 @@ static inline void mem_cgroup_handle_over_high(gfp_t gfp_mask)
 {
 }
 
+static inline void mem_cgroup_wmark_min_throttle(void)
+{
+}
+
 static inline void mem_cgroup_enter_user_fault(void)
 {
 }
@@ -1698,6 +1712,16 @@ unsigned long mem_cgroup_soft_limit_reclaim(pg_data_t *pgdat, int order,
 static inline bool is_wmark_ok(struct mem_cgroup *memcg, bool low)
 {
 	return false;
+}
+
+static inline int memcg_get_wmark_min_adj(struct task_struct *curr)
+{
+	return 0;
+}
+
+static inline void memcg_check_wmark_min_adj(struct task_struct *curr,
+		struct alloc_context *ac)
+{
 }
 #endif /* CONFIG_MEMCG */
 

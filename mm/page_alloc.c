@@ -2888,6 +2888,14 @@ bool __zone_watermark_ok(struct zone *z, unsigned int order, unsigned long mark,
 	long min = mark;
 	int o;
 
+	/* apply negative memory.wmark_min_adj */
+	if ((alloc_flags & ALLOC_WMARK_MASK) == ALLOC_WMARK_MIN) {
+		int min_adj = memcg_get_wmark_min_adj(current);
+
+		if (min_adj < 0)
+			min -= mark * (-min_adj) / 100;
+	}
+
 	/* free_pages may go negative - that's OK */
 	free_pages -= __zone_watermark_unusable_free(z, order, alloc_flags);
 
@@ -2919,6 +2927,13 @@ bool __zone_watermark_ok(struct zone *z, unsigned int order, unsigned long mark,
 		if (alloc_flags & ALLOC_OOM)
 			min -= min / 2;
 	}
+
+	/*
+	 * Only happens due to memory.wmark_min_adj.
+	 * Guarantee safe min after memory.wmark_min_adj?
+	 */
+	if (min < mark / 4)
+		min = mark / 4;
 
 	/*
 	 * Check watermarks for an order-0 allocation request. If these
@@ -4219,6 +4234,10 @@ fail:
 	warn_alloc(gfp_mask, ac->nodemask,
 			"page allocation failure: order:%u", order);
 got_pg:
+
+	if (ac->migratetype == MIGRATE_MOVABLE)
+		memcg_check_wmark_min_adj(current, ac);
+
 	return page;
 }
 
