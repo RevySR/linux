@@ -2646,9 +2646,10 @@ static void cpuset_attach_task(struct cpuset *cs, struct task_struct *task)
 {
 	lockdep_assert_held(&cpuset_mutex);
 
-	if (cs != &top_cpuset)
+	if (cs != &top_cpuset) {
 		guarantee_online_cpus(task, cpus_attach);
-	else
+		wilds_cpus_allowed(cpus_attach);
+	} else
 		cpumask_andnot(cpus_attach, task_cpu_possible_mask(task),
 			       cs->subparts_cpus);
 	/*
@@ -3477,8 +3478,24 @@ static void cpuset_fork(struct task_struct *task)
 	rcu_read_unlock();
 
 	if (same_cs) {
-		if (cs == &top_cpuset)
+		if (cs == &top_cpuset) {
+			/*
+			 * This is necessary since update_wilds_cpumask()
+			 * could have missed the 'task', if it's parent is
+			 * the last one on the iteratoration list, like:
+			 *
+			 * 1. 'task' dup old dyn_allowed from parent
+			 * 2. update_wilds_cpumask() begin
+			 * 3. new dyn_allowed applied to parent
+			 * 4. update_wilds_cpumask() end
+			 * 5. 'task' add into iteratoration list
+			 *
+			 * Fix this by redup current's allowed here if changed.
+			 */
+			if (!cpumask_equal(task->cpus_ptr, current->cpus_ptr))
+				set_cpus_allowed_ptr(task, current->cpus_ptr);
 			return;
+		}
 
 		set_cpus_allowed_ptr(task, current->cpus_ptr);
 		task->mems_allowed = current->mems_allowed;
