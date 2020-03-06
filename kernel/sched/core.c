@@ -10998,6 +10998,7 @@ static int tg_set_cfs_bandwidth(struct task_group *tg, u64 period, u64 quota,
 {
 	int i, ret = 0, runtime_enabled, runtime_was_enabled;
 	struct cfs_bandwidth *cfs_b = &tg->cfs_bandwidth;
+	u64 buffer;
 
 	if (tg == &root_task_group)
 		return -EINVAL;
@@ -11029,6 +11030,16 @@ static int tg_set_cfs_bandwidth(struct task_group *tg, u64 period, u64 quota,
 		return -EINVAL;
 
 	/*
+	 * Bound burst to defend burst against overflow during bandwidth shift.
+	 */
+	if (burst > max_cfs_runtime)
+		return -EINVAL;
+
+	if (quota == RUNTIME_INF)
+		buffer = RUNTIME_INF;
+	else
+		buffer = min(max_cfs_runtime, quota + burst);
+	/*
 	 * Prevent race between setting of cfs_rq->runtime_enabled and
 	 * unthrottle_offline_cfs_rqs().
 	 */
@@ -11052,6 +11063,7 @@ static int tg_set_cfs_bandwidth(struct task_group *tg, u64 period, u64 quota,
 		cfs_b->period = ns_to_ktime(period);
 		cfs_b->quota = quota;
 		cfs_b->burst = burst;
+		cfs_b->buffer = buffer;
 
 		__refill_cfs_bandwidth_runtime(cfs_b);
 
@@ -11138,7 +11150,11 @@ static int tg_set_cfs_burst(struct task_group *tg, long cfs_burst_us)
 {
 	u64 quota, period, burst;
 
-	if ((u64)cfs_burst_us > U64_MAX / NSEC_PER_USEC)
+	if (cfs_burst_us < 0)
+		burst = RUNTIME_INF;
+	else if ((u64)cfs_burst_us <= U64_MAX / NSEC_PER_USEC)
+		burst = (u64)cfs_burst_us * NSEC_PER_USEC;
+	else
 		return -EINVAL;
 
 	burst = (u64)cfs_burst_us * NSEC_PER_USEC;
@@ -11151,6 +11167,9 @@ static int tg_set_cfs_burst(struct task_group *tg, long cfs_burst_us)
 static long tg_get_cfs_burst(struct task_group *tg)
 {
 	u64 burst_us;
+
+	if (tg->cfs_bandwidth.burst == RUNTIME_INF)
+		return -1;
 
 	burst_us = tg->cfs_bandwidth.burst;
 	do_div(burst_us, NSEC_PER_USEC);
@@ -11182,18 +11201,17 @@ static int cpu_cfs_period_write_u64(struct cgroup_subsys_state *css,
 	return tg_set_cfs_period(css_tg(css), cfs_period_us);
 }
 
-static u64 cpu_cfs_burst_read_u64(struct cgroup_subsys_state *css,
+static s64 cpu_cfs_burst_read_s64(struct cgroup_subsys_state *css,
 				  struct cftype *cft)
 {
 	return tg_get_cfs_burst(css_tg(css));
 }
 
-static int cpu_cfs_burst_write_u64(struct cgroup_subsys_state *css,
-				   struct cftype *cftype, u64 cfs_burst_us)
+static int cpu_cfs_burst_write_s64(struct cgroup_subsys_state *css,
+				   struct cftype *cftype, s64 cfs_burst_us)
 {
 	return tg_set_cfs_burst(css_tg(css), cfs_burst_us);
 }
-
 struct cfs_schedulable_data {
 	struct task_group *tg;
 	u64 period, quota;
@@ -11399,8 +11417,8 @@ static struct cftype cpu_legacy_files[] = {
 	},
 	{
 		.name = "cfs_burst_us",
-		.read_u64 = cpu_cfs_burst_read_u64,
-		.write_u64 = cpu_cfs_burst_write_u64,
+		.read_s64 = cpu_cfs_burst_read_s64,
+		.write_s64 = cpu_cfs_burst_write_s64,
 	},
 	{
 		.name = "stat",
@@ -11635,8 +11653,8 @@ static struct cftype cpu_files[] = {
 	{
 		.name = "max.burst",
 		.flags = CFTYPE_NOT_ON_ROOT,
-		.read_u64 = cpu_cfs_burst_read_u64,
-		.write_u64 = cpu_cfs_burst_write_u64,
+		.read_s64 = cpu_cfs_burst_read_s64,
+		.write_s64 = cpu_cfs_burst_write_s64,
 	},
 #endif
 #ifdef CONFIG_UCLAMP_TASK_GROUP
