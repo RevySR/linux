@@ -11086,6 +11086,8 @@ static int tg_set_cfs_bandwidth(struct task_group *tg, u64 period, u64 quota,
 			cfs_b->runtime = min(max_cfs_runtime, cfs_b->runtime);
 		}
 
+		cfs_b->runtime_snap = cfs_b->runtime;
+
 		/* Restart the period timer (if active) to handle new period expiry: */
 		if (runtime_enabled)
 			start_cfs_bandwidth(cfs_b, 1);
@@ -11338,6 +11340,7 @@ static int cpu_cfs_stat_show(struct seq_file *sf, void *v)
 		seq_printf(sf, "wait_sum %llu\n", ws);
 	}
 
+	seq_printf(sf, "current_bw %llu\n", cfs_b->runtime);
 	seq_printf(sf, "nr_bursts %d\n", cfs_b->nr_burst);
 	seq_printf(sf, "burst_time %llu\n", cfs_b->burst_time);
 
@@ -11481,20 +11484,24 @@ static int cpu_extra_stat_show(struct seq_file *sf,
 	{
 		struct task_group *tg = css_tg(css);
 		struct cfs_bandwidth *cfs_b = &tg->cfs_bandwidth;
-		u64 throttled_usec, burst_usec;
+		u64 throttled_usec, current_bw_usec, burst_usec;
 
 		throttled_usec = cfs_b->throttled_time;
 		do_div(throttled_usec, NSEC_PER_USEC);
+		current_bw_usec = cfs_b->runtime;
+		do_div(current_bw_usec, NSEC_PER_USEC);
 		burst_usec = cfs_b->burst_time;
 		do_div(burst_usec, NSEC_PER_USEC);
 
 		seq_printf(sf, "nr_periods %d\n"
 			   "nr_throttled %d\n"
 			   "throttled_usec %llu\n"
+			   "current_bw_usec %llu\n"
 			   "nr_bursts %d\n"
 			   "burst_usec %llu\n",
 			   cfs_b->nr_periods, cfs_b->nr_throttled,
-			   throttled_usec, cfs_b->nr_burst, burst_usec);
+			   throttled_usec, current_bw_usec, cfs_b->nr_burst,
+			   burst_usec);
 	}
 #endif
 	return 0;
