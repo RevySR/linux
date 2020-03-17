@@ -121,14 +121,15 @@ EXPORT_SYMBOL_GPL(balloon_page_list_dequeue);
  *
  * Return: struct page for the allocated page or NULL on allocation failure.
  */
-struct page *balloon_page_alloc(void)
+struct page *balloon_pages_alloc(unsigned int order)
 {
-	struct page *page = alloc_page(balloon_mapping_gfp_mask() |
+	struct page *page = alloc_pages(balloon_mapping_gfp_mask() |
 				       __GFP_NOMEMALLOC | __GFP_NORETRY |
-				       __GFP_NOWARN);
+				       __GFP_NOWARN,
+				       order);
 	return page;
 }
-EXPORT_SYMBOL_GPL(balloon_page_alloc);
+EXPORT_SYMBOL_GPL(balloon_pages_alloc);
 
 /*
  * balloon_page_enqueue - inserts a new page into the balloon page list.
@@ -153,6 +154,26 @@ void balloon_page_enqueue(struct balloon_dev_info *b_dev_info,
 	spin_unlock_irqrestore(&b_dev_info->pages_lock, flags);
 }
 EXPORT_SYMBOL_GPL(balloon_page_enqueue);
+
+/*
+ * balloon_pages_enqueue - inserts continuous pages into the balloon page list.
+ */
+void balloon_pages_enqueue(struct balloon_dev_info *b_dev_info,
+			   struct page *page, unsigned int order)
+{
+	unsigned long flags, pfn, last_pfn;
+
+	pfn = page_to_pfn(page);
+	last_pfn = pfn + (1 << order) - 1;
+
+	spin_lock_irqsave(&b_dev_info->pages_lock, flags);
+	for (; pfn <= last_pfn; pfn++) {
+		page = pfn_to_page(pfn);
+		balloon_page_enqueue_one(b_dev_info, page);
+	}
+	spin_unlock_irqrestore(&b_dev_info->pages_lock, flags);
+}
+EXPORT_SYMBOL_GPL(balloon_pages_enqueue);
 
 /*
  * balloon_page_dequeue - removes a page from balloon's page list and returns
