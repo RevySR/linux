@@ -862,6 +862,36 @@ static inline u32 id_aa64mmfr0_parange_to_phys_shift(int parange)
 	}
 }
 
+static inline u32 id_aa64mmfr0_pa_range_bits(void)
+{
+	u64 mmfr0;
+	u32 parange;
+
+	mmfr0 = read_sanitised_ftr_reg(SYS_ID_AA64MMFR0_EL1);
+	parange = cpuid_feature_extract_unsigned_field(mmfr0,
+				ID_AA64MMFR0_EL1_PARANGE_SHIFT);
+	return id_aa64mmfr0_parange_to_phys_shift(parange);
+}
+
+static inline u32 id_aa64mmfr2_varange_to_virt_shift(int varange)
+{
+	switch (varange) {
+	case ID_AA64MMFR2_EL1_VARange_48: return 48;
+	case ID_AA64MMFR2_EL1_VARange_52: return 52;
+	default: return CONFIG_ARM64_VA_BITS;
+	}
+}
+
+static inline u32 id_aa64mmfr2_va_range_bits(void)
+{
+	u64 mmfr2;
+	u32 varange;
+
+	mmfr2 = read_sanitised_ftr_reg(SYS_ID_AA64MMFR2_EL1);
+	varange = cpuid_feature_extract_unsigned_field(mmfr2, ID_AA64MMFR2_EL1_VARange_SHIFT);
+	return id_aa64mmfr2_varange_to_virt_shift(varange);
+}
+
 /* Check whether hardware update of the Access flag is supported */
 static inline bool cpu_has_hw_af(void)
 {
