@@ -141,6 +141,22 @@ void __init early_map_cpu_to_node(unsigned int cpu, int nid)
 }
 
 #ifdef CONFIG_HAVE_SETUP_PER_CPU_AREA
+static size_t pcpu_mod_reserved = PERCPU_MODULE_RESERVE;
+
+#ifdef CONFIG_ARM64
+static __init int set_reserve_pcpu(char *str)
+{
+	if (!str)
+		return -EINVAL;
+
+	pcpu_mod_reserved = (size_t)memparse(str, NULL);
+	pr_notice("Reserve module percpu memory to %zuKB\n",
+		  pcpu_mod_reserved >> 10);
+	return 0;
+}
+early_param("pcpu_mod_reserve", set_reserve_pcpu);
+#endif
+
 unsigned long __per_cpu_offset[NR_CPUS] __read_mostly;
 EXPORT_SYMBOL(__per_cpu_offset);
 
@@ -165,7 +181,7 @@ void __init setup_per_cpu_areas(void)
 		 * Always reserve area for module percpu variables.  That's
 		 * what the legacy allocator did.
 		 */
-		rc = pcpu_embed_first_chunk(PERCPU_MODULE_RESERVE,
+		rc = pcpu_embed_first_chunk(pcpu_mod_reserved,
 					    PERCPU_DYNAMIC_RESERVE, PAGE_SIZE,
 					    pcpu_cpu_distance,
 					    early_cpu_to_node);
@@ -178,7 +194,7 @@ void __init setup_per_cpu_areas(void)
 
 #ifdef CONFIG_NEED_PER_CPU_PAGE_FIRST_CHUNK
 	if (rc < 0)
-		rc = pcpu_page_first_chunk(PERCPU_MODULE_RESERVE, early_cpu_to_node);
+		rc = pcpu_page_first_chunk(pcpu_mod_reserved, early_cpu_to_node);
 #endif
 	if (rc < 0)
 		panic("Failed to initialize percpu areas (err=%d).", rc);
