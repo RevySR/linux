@@ -2153,6 +2153,7 @@ static int shmem_swapin_folio(struct inode *inode, pgoff_t index,
 	struct folio *folio = NULL;
 	swp_entry_t swap;
 	int error, nr_pages;
+	u64 start;
 
 	VM_BUG_ON(!*foliop || !xa_is_value(*foliop));
 	swap = radix_to_swp_entry(*foliop);
@@ -2204,7 +2205,9 @@ static int shmem_swapin_folio(struct inode *inode, pgoff_t index,
 		}
 
 		/* Here we actually start the io */
+		memcg_lat_stat_start(&start);
 		folio = shmem_swapin(swap, gfp, info, index);
+		memcg_lat_stat_end(MEM_LAT_DIRECT_SWAPIN, start);
 		if (!folio) {
 			error = -ENOMEM;
 			goto failed;
