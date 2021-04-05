@@ -38,6 +38,7 @@
 #define VIRTIO_BALLOON_F_PAGE_POISON	4 /* Guest is using page poisoning */
 #define VIRTIO_BALLOON_F_REPORTING	5 /* Page reporting virtqueue */
 #define VIRTIO_BALLOON_F_CONT_PAGES	6 /* VQ to report continuous pages */
+#define VIRTIO_BALLOON_F_ALLOC_RETRY	7 /* alloc pages with __GFP_RETRY_MAYFAIL */
 
 /* Size of a PFN in the balloon interface. */
 #define VIRTIO_BALLOON_PFN_SHIFT 12

@@ -121,10 +121,10 @@ EXPORT_SYMBOL_GPL(balloon_page_list_dequeue);
  *
  * Return: struct page for the allocated page or NULL on allocation failure.
  */
-struct page *balloon_pages_alloc(unsigned int order)
+struct page *balloon_pages_alloc(unsigned int order, gfp_t gfp_mask)
 {
 	struct page *page = alloc_pages(balloon_mapping_gfp_mask() |
-				       __GFP_NOMEMALLOC | __GFP_NORETRY |
+				       __GFP_NOMEMALLOC | gfp_mask |
 				       __GFP_NOWARN,
 				       order);
 	return page;

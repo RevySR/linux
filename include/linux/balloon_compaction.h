@@ -59,7 +59,7 @@ struct balloon_dev_info {
 			struct page *page, enum migrate_mode mode);
 };
 
-extern struct page *balloon_pages_alloc(unsigned int order);
+extern struct page *balloon_pages_alloc(unsigned int order, gfp_t gfp_mask);
 extern void balloon_page_enqueue(struct balloon_dev_info *b_dev_info,
 				 struct page *page);
 extern void balloon_pages_enqueue(struct balloon_dev_info *b_dev_info,
@@ -75,7 +75,7 @@ extern size_t balloon_page_list_dequeue_cont(struct balloon_dev_info *b_dev_info
 
 static inline struct page *balloon_page_alloc(void)
 {
-	return balloon_pages_alloc(0);
+	return balloon_pages_alloc(0, __GFP_NORETRY);
 }
 
 static inline void balloon_devinfo_init(struct balloon_dev_info *balloon)
