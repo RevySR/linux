@@ -43,6 +43,17 @@
 						    1 - PAGE_SHIFT), (MAX_ORDER-1))
 #define VIRTIO_BALLOON_DEFLATE_MAX_PAGES_NUM (((__virtio32)~0U) >> PAGE_SHIFT)
 
+/* Maximum number of (4k) pages to deflate on fill balloon OOM notifications. */
+#define VIRTIO_BALLOON_FILL_OOM_NR_PAGES 256
+#define VIRTIO_BALLOON_FILL_OOM_NOTIFY_PRIORITY 80
+
+enum {
+	/* set when balloon is filling */
+	BALLOON_IS_FILLING,
+	/* set when OOM notifier of fill_balloon is running */
+	BALLOON_FILLING_OOM,
+};
+
 enum virtio_balloon_vq {
 	VIRTIO_BALLOON_VQ_INFLATE,
 	VIRTIO_BALLOON_VQ_DEFLATE,
@@ -129,6 +140,11 @@ struct virtio_balloon {
 
 	/* Current order of inflate continuous pages - VIRTIO_BALLOON_F_CONT_PAGES */
 	__u32 current_pages_order;
+
+	unsigned long flags;
+
+	/* OOM notifier to handle OOM when fill balloon - VIRTIO_BALLOON_F_FILL_H_OOM */
+	struct notifier_block fill_oom_nb;
 };
 
 static const struct virtio_device_id id_table[] = {
@@ -242,6 +258,7 @@ static unsigned int fill_balloon(struct virtio_balloon *vb, size_t num)
 	LIST_HEAD(pages);
 	bool is_cont = vb->current_pages_order != 0;
 	gfp_t gfp;
+	bool is_oom = false;
 
 	if (virtio_has_feature(vb->vdev, VIRTIO_BALLOON_F_ALLOC_RETRY))
 		gfp = __GFP_RETRY_MAYFAIL;
@@ -264,6 +281,11 @@ static unsigned int fill_balloon(struct virtio_balloon *vb, size_t num)
 			    num - num_allocated_pages <
 				VIRTIO_BALLOON_PAGES_PER_PAGE << vb->current_pages_order)
 				continue;
+			if (test_bit(BALLOON_FILLING_OOM, &vb->flags)) {
+				page = NULL;
+				is_oom = true;
+				break;
+			}
 			page = balloon_pages_alloc(vb->current_pages_order, gfp);
 			if (page) {
 				/* If the first allocated page is not continuous pages,
@@ -294,13 +316,26 @@ static unsigned int fill_balloon(struct virtio_balloon *vb, size_t num)
 		}
 	}
 
+	if (is_oom || test_bit(BALLOON_FILLING_OOM, &vb->flags)) {
+		num_allocated_pages = 0;
+		goto release_pages;
+	}
+
 	mutex_lock(&vb->balloon_lock);
-
 	vb->num_pfns = 0;
+	num_allocated_pages = 0;
+	while (1) {
+		unsigned int order;
 
-	while ((page = balloon_page_pop(&pages))) {
-		unsigned int order = page_private(page);
+		if (test_bit(BALLOON_FILLING_OOM, &vb->flags)) {
+			is_oom = true;
+			break;
+		}
 
+		page = balloon_page_pop(&pages);
+		if (!page)
+			break;
+		order = page_private(page);
 		set_page_private(page, 0);
 
 		/* Split the continuous pages because they will be freed
@@ -317,9 +352,10 @@ static unsigned int fill_balloon(struct virtio_balloon *vb, size_t num)
 					VIRTIO_BALLOON_F_DEFLATE_ON_OOM))
 			adjust_managed_page_count(page, -(1 << order));
 		vb->num_pfns += pfn_per_alloc;
+		num_allocated_pages += VIRTIO_BALLOON_PAGES_PER_PAGE << order;
 	}
-	vb->num_pages += num_allocated_pages;
 
+	vb->num_pages += num_allocated_pages;
 	/* Did we get any? */
 	if (vb->num_pfns != 0) {
 		if (is_cont)
@@ -329,6 +365,21 @@ static unsigned int fill_balloon(struct virtio_balloon *vb, size_t num)
 	}
 	mutex_unlock(&vb->balloon_lock);
 
+	if (is_oom || test_bit(BALLOON_FILLING_OOM, &vb->flags))
+		goto release_pages;
+
+	return num_allocated_pages;
+
+release_pages:
+	while ((page = balloon_page_pop(&pages))) {
+		unsigned int order = page_private(page);
+
+		set_page_private(page, 0);
+		__free_pages(page, order);
+	}
+	dev_info(&vb->vdev->dev,
+		 "virtio_balloon_fill_oom_notify is running.  Wait 1/5 of a second\n");
+	msleep(200);
 	return num_allocated_pages;
 }
 
@@ -598,9 +649,11 @@ static void update_balloon_size_func(struct work_struct *work)
 	if (!diff)
 		goto stop_out;
 
-	if (diff > 0)
+	if (diff > 0) {
+		set_bit(BALLOON_IS_FILLING, &vb->flags);
 		diff -= fill_balloon(vb, diff);
-	else {
+	} else {
+		clear_bit(BALLOON_IS_FILLING, &vb->flags);
 		if (virtio_has_feature(vb->vdev, VIRTIO_BALLOON_F_CONT_PAGES))
 			diff += leak_balloon_cont(vb, -diff);
 		else
@@ -612,6 +665,7 @@ static void update_balloon_size_func(struct work_struct *work)
 		queue_work(system_freezable_wq, work);
 	else {
 stop_out:
+		clear_bit(BALLOON_IS_FILLING, &vb->flags);
 		if (virtio_has_feature(vb->vdev, VIRTIO_BALLOON_F_CONT_PAGES))
 			vb->current_pages_order = VIRTIO_BALLOON_INFLATE_MAX_ORDER;
 	}
@@ -998,6 +1052,37 @@ static void virtio_balloon_unregister_shrinker(struct virtio_balloon *vb)
 	unregister_shrinker(&vb->shrinker);
 }
 
+static int virtio_balloon_fill_oom_notify(struct notifier_block *nb,
+					  unsigned long dummy, void *parm)
+{
+	struct virtio_balloon *vb = container_of(nb,
+						 struct virtio_balloon, fill_oom_nb);
+	unsigned long *freed, diff;
+
+	if (!test_bit(BALLOON_IS_FILLING, &vb->flags))
+		goto out;
+
+	set_bit(BALLOON_FILLING_OOM, &vb->flags);
+	freed = parm;
+
+	dev_info(&vb->vdev->dev, "Balloon is not fortunate son!\n");
+
+	if (virtio_has_feature(vb->vdev, VIRTIO_BALLOON_F_CONT_PAGES))
+		diff = leak_balloon_cont(vb, VIRTIO_BALLOON_FILL_OOM_NR_PAGES);
+	else
+		diff = leak_balloon(vb, VIRTIO_BALLOON_FILL_OOM_NR_PAGES);
+	dev_info(&vb->vdev->dev, "oom_notify leak %ld pages\n", diff);
+
+	if (diff) {
+		*freed += diff / VIRTIO_BALLOON_PAGES_PER_PAGE;
+		update_balloon_size(vb);
+	}
+
+	clear_bit(BALLOON_FILLING_OOM, &vb->flags);
+out:
+	return NOTIFY_OK;
+}
+
 static int virtio_balloon_register_shrinker(struct virtio_balloon *vb)
 {
 	vb->shrinker.scan_objects = virtio_balloon_shrinker_scan;
@@ -1137,12 +1222,22 @@ static int virtballoon_probe(struct virtio_device *vdev)
 	else
 		vb->current_pages_order = 0;
 
+	if (virtio_has_feature(vb->vdev, VIRTIO_BALLOON_F_FILL_H_OOM)) {
+		vb->fill_oom_nb.notifier_call = virtio_balloon_fill_oom_notify;
+		vb->fill_oom_nb.priority = VIRTIO_BALLOON_FILL_OOM_NOTIFY_PRIORITY;
+		err = register_oom_notifier(&vb->fill_oom_nb);
+		if (err < 0)
+			goto out_page_reporting_unregister;
+	}
+
 	virtio_device_ready(vdev);
 
 	if (towards_target(vb))
 		virtballoon_changed(vdev);
 	return 0;
 
+out_page_reporting_unregister:
+	page_reporting_unregister(&vb->pr_dev_info);
 out_unregister_oom:
 	if (virtio_has_feature(vb->vdev, VIRTIO_BALLOON_F_DEFLATE_ON_OOM))
 		unregister_oom_notifier(&vb->oom_nb);
@@ -1181,6 +1276,8 @@ static void virtballoon_remove(struct virtio_device *vdev)
 {
 	struct virtio_balloon *vb = vdev->priv;
 
+	if (virtio_has_feature(vb->vdev, VIRTIO_BALLOON_F_FILL_H_OOM))
+		unregister_oom_notifier(&vb->fill_oom_nb);
 	if (virtio_has_feature(vb->vdev, VIRTIO_BALLOON_F_REPORTING))
 		page_reporting_unregister(&vb->pr_dev_info);
 	if (virtio_has_feature(vb->vdev, VIRTIO_BALLOON_F_DEFLATE_ON_OOM))
@@ -1259,6 +1356,7 @@ static unsigned int features[] = {
 	VIRTIO_BALLOON_F_REPORTING,
 	VIRTIO_BALLOON_F_CONT_PAGES,
 	VIRTIO_BALLOON_F_ALLOC_RETRY,
+	VIRTIO_BALLOON_F_FILL_H_OOM,
 };
 
 static struct virtio_driver virtio_balloon_driver = {
