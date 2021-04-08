@@ -17,6 +17,7 @@
 #include <linux/oom.h>
 #include <linux/wait.h>
 #include <linux/mm.h>
+#include <linux/mman.h>
 #include <linux/page_reporting.h>
 
 /*
@@ -145,6 +146,9 @@ struct virtio_balloon {
 
 	/* OOM notifier to handle OOM when fill balloon - VIRTIO_BALLOON_F_FILL_H_OOM */
 	struct notifier_block fill_oom_nb;
+
+	/* Save the origional sysctl_overcommit_memory */
+	int orig_sysctl_overcommit_memory;
 };
 
 static const struct virtio_device_id id_table[] = {
@@ -637,6 +641,23 @@ static void update_balloon_stats_func(struct work_struct *work)
 	stats_handle_request(vb);
 }
 
+static void setup_overcommit_memory(struct virtio_balloon *vb)
+{
+	if (sysctl_overcommit_memory != OVERCOMMIT_ALWAYS &&
+	    virtio_has_feature(vb->vdev, VIRTIO_BALLOON_F_FILL_A_OC)) {
+		vb->orig_sysctl_overcommit_memory = sysctl_overcommit_memory;
+		sysctl_overcommit_memory = OVERCOMMIT_ALWAYS;
+	}
+}
+
+static void restore_overcommit_memory(struct virtio_balloon *vb)
+{
+	if (vb->orig_sysctl_overcommit_memory >= 0) {
+		sysctl_overcommit_memory = vb->orig_sysctl_overcommit_memory;
+		vb->orig_sysctl_overcommit_memory = -1;
+	}
+}
+
 static void update_balloon_size_func(struct work_struct *work)
 {
 	struct virtio_balloon *vb;
@@ -651,9 +672,11 @@ static void update_balloon_size_func(struct work_struct *work)
 
 	if (diff > 0) {
 		set_bit(BALLOON_IS_FILLING, &vb->flags);
+		setup_overcommit_memory(vb);
 		diff -= fill_balloon(vb, diff);
 	} else {
 		clear_bit(BALLOON_IS_FILLING, &vb->flags);
+		restore_overcommit_memory(vb);
 		if (virtio_has_feature(vb->vdev, VIRTIO_BALLOON_F_CONT_PAGES))
 			diff += leak_balloon_cont(vb, -diff);
 		else
@@ -666,6 +689,7 @@ static void update_balloon_size_func(struct work_struct *work)
 	else {
 stop_out:
 		clear_bit(BALLOON_IS_FILLING, &vb->flags);
+		restore_overcommit_memory(vb);
 		if (virtio_has_feature(vb->vdev, VIRTIO_BALLOON_F_CONT_PAGES))
 			vb->current_pages_order = VIRTIO_BALLOON_INFLATE_MAX_ORDER;
 	}
@@ -1230,6 +1254,8 @@ static int virtballoon_probe(struct virtio_device *vdev)
 			goto out_page_reporting_unregister;
 	}
 
+	vb->orig_sysctl_overcommit_memory = -1;
+
 	virtio_device_ready(vdev);
 
 	if (towards_target(vb))
@@ -1357,6 +1383,7 @@ static unsigned int features[] = {
 	VIRTIO_BALLOON_F_CONT_PAGES,
 	VIRTIO_BALLOON_F_ALLOC_RETRY,
 	VIRTIO_BALLOON_F_FILL_H_OOM,
+	VIRTIO_BALLOON_F_FILL_A_OC,
 };
 
 static struct virtio_driver virtio_balloon_driver = {
