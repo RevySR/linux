@@ -2039,6 +2039,14 @@ struct kvm_sev_receive_update_data {
 	__u32 trans_len;
 };
 
+struct kvm_sev_receive_update_vmsa {
+	__u32 vcpu_id;
+	__u64 hdr_uaddr;
+	__u32 hdr_len;
+	__u64 trans_uaddr;
+	__u32 trans_len;
+};
+
 struct kvm_csv_batch_list_node {
 	__u64 cmd_data_addr;
 	__u64 addr;
