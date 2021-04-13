@@ -139,9 +139,6 @@ struct virtio_balloon {
 	struct virtqueue *reporting_vq;
 	struct page_reporting_dev_info pr_dev_info;
 
-	/* Current order of inflate continuous pages - VIRTIO_BALLOON_F_CONT_PAGES */
-	__u32 current_pages_order;
-
 	unsigned long flags;
 
 	/* OOM notifier to handle OOM when fill balloon - VIRTIO_BALLOON_F_FILL_H_OOM */
@@ -260,9 +257,15 @@ static unsigned int fill_balloon(struct virtio_balloon *vb, size_t num)
 	unsigned int num_pfns, pfn_per_alloc;
 	struct page *page;
 	LIST_HEAD(pages);
-	bool is_cont = vb->current_pages_order != 0;
+	bool is_cont = false;
 	gfp_t gfp;
 	bool is_oom = false;
+	unsigned int current_pages_order = 0;
+
+	if (virtio_has_feature(vb->vdev, VIRTIO_BALLOON_F_CONT_PAGES)) {
+		current_pages_order = VIRTIO_BALLOON_INFLATE_MAX_ORDER;
+		is_cont = true;
+	}
 
 	if (virtio_has_feature(vb->vdev, VIRTIO_BALLOON_F_ALLOC_RETRY))
 		gfp = __GFP_RETRY_MAYFAIL;
@@ -277,37 +280,37 @@ static unsigned int fill_balloon(struct virtio_balloon *vb, size_t num)
 	for (num_pfns = 0, num_allocated_pages = 0;
 	     num_pfns < ARRAY_SIZE(vb->pfns) && num_allocated_pages < num;
 	     num_pfns += pfn_per_alloc,
-	     num_allocated_pages += VIRTIO_BALLOON_PAGES_PER_PAGE << vb->current_pages_order) {
+	     num_allocated_pages += VIRTIO_BALLOON_PAGES_PER_PAGE << current_pages_order) {
 		struct page *page = NULL;
 
-		for (; vb->current_pages_order >= 0; vb->current_pages_order--) {
-			if (vb->current_pages_order &&
+		for (; current_pages_order >= 0; current_pages_order--) {
+			if (current_pages_order &&
 			    num - num_allocated_pages <
-				VIRTIO_BALLOON_PAGES_PER_PAGE << vb->current_pages_order)
+				VIRTIO_BALLOON_PAGES_PER_PAGE << current_pages_order)
 				continue;
 			if (test_bit(BALLOON_FILLING_OOM, &vb->flags)) {
 				page = NULL;
 				is_oom = true;
 				break;
 			}
-			page = balloon_pages_alloc(vb->current_pages_order, gfp);
+			page = balloon_pages_alloc(current_pages_order, gfp);
 			if (page) {
 				/* If the first allocated page is not continuous pages,
 				 * go back to transport page as signle page.
 				 */
-				if (is_cont && num_pfns == 0 && !vb->current_pages_order) {
+				if (is_cont && num_pfns == 0 && !current_pages_order) {
 					is_cont = false;
 					pfn_per_alloc = VIRTIO_BALLOON_PAGES_PER_PAGE;
 				}
-				set_page_private(page, vb->current_pages_order);
+				set_page_private(page, current_pages_order);
 				balloon_page_push(&pages, page);
 				break;
 			}
-			if (!vb->current_pages_order)
+			if (!current_pages_order)
 				break;
 			dev_info_ratelimited(&vb->vdev->dev,
 					     "Out of puff! Can't get order %u pages\n",
-					     vb->current_pages_order);
+					     current_pages_order);
 		}
 
 		if (!page) {
@@ -690,8 +693,6 @@ static void update_balloon_size_func(struct work_struct *work)
 stop_out:
 		clear_bit(BALLOON_IS_FILLING, &vb->flags);
 		restore_overcommit_memory(vb);
-		if (virtio_has_feature(vb->vdev, VIRTIO_BALLOON_F_CONT_PAGES))
-			vb->current_pages_order = VIRTIO_BALLOON_INFLATE_MAX_ORDER;
 	}
 }
 
@@ -1240,11 +1241,6 @@ static int virtballoon_probe(struct virtio_device *vdev)
 		if (err)
 			goto out_unregister_oom;
 	}
-
-	if (virtio_has_feature(vb->vdev, VIRTIO_BALLOON_F_CONT_PAGES))
-		vb->current_pages_order = VIRTIO_BALLOON_INFLATE_MAX_ORDER;
-	else
-		vb->current_pages_order = 0;
 
 	if (virtio_has_feature(vb->vdev, VIRTIO_BALLOON_F_FILL_H_OOM)) {
 		vb->fill_oom_nb.notifier_call = virtio_balloon_fill_oom_notify;
