@@ -206,6 +206,8 @@ struct vcpu_sev_es_state {
 
 	/* CSV2 migrated ghcb mapping state support */
 	bool receiver_ghcb_map_fail;
+	/* CSV2 reboot vmsa */
+	struct vmcb_save_area *reset_vmsa;
 };
 
 struct vcpu_svm {
