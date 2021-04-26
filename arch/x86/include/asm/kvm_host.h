@@ -1753,6 +1753,8 @@ struct kvm_x86_ops {
 	 * Returns vCPU specific APICv inhibit reasons
 	 */
 	unsigned long (*vcpu_get_apicv_inhibit_reasons)(struct kvm_vcpu *vcpu);
+
+	int (*vm_attestation)(struct kvm *kvm, unsigned long gpa, unsigned long len);
 };
 
 struct kvm_x86_nested_ops {

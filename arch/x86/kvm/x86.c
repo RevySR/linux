@@ -9860,7 +9860,8 @@ int kvm_emulate_hypercall(struct kvm_vcpu *vcpu)
 		a3 &= 0xFFFFFFFF;
 	}
 
-	if (static_call(kvm_x86_get_cpl)(vcpu) != 0) {
+	if (static_call(kvm_x86_get_cpl)(vcpu) != 0 &&
+	    nr != KVM_HC_VM_ATTESTATION) {
 		ret = -KVM_EPERM;
 		goto out;
 	}
@@ -9923,6 +9924,11 @@ int kvm_emulate_hypercall(struct kvm_vcpu *vcpu)
 		vcpu->arch.complete_userspace_io = complete_hypercall_exit;
 		return 0;
 	}
+	case KVM_HC_VM_ATTESTATION:
+		ret = -KVM_ENOSYS;
+		if (kvm_x86_ops.vm_attestation)
+			ret = static_call(kvm_x86_vm_attestation)(vcpu->kvm, a0, a1);
+		break;
 	default:
 		ret = -KVM_ENOSYS;
 		break;
