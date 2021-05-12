@@ -1063,6 +1063,46 @@ int dax_writeback_mapping_range(struct address_space *mapping,
 }
 EXPORT_SYMBOL_GPL(dax_writeback_mapping_range);
 
+int dax_copy_range(struct block_device *bdev, struct dax_device *dax_dev,
+		   u64 src_addr, u64 dst_addr, size_t size)
+{
+	const sector_t src_sector = src_addr >> SECTOR_SHIFT;
+	const sector_t dst_sector = dst_addr >> SECTOR_SHIFT;
+	pgoff_t spgoff, dpgoff;
+	int id, rc;
+	long length;
+	void *saddr, *daddr;
+
+	rc = bdev_dax_pgoff(bdev, src_sector, size, &spgoff);
+	if (rc)
+		return rc;
+
+	rc = bdev_dax_pgoff(bdev, dst_sector, size, &dpgoff);
+	if (rc)
+		return rc;
+
+	id = dax_read_lock();
+	length = dax_direct_access(dax_dev, spgoff, PHYS_PFN(size), DAX_ACCESS,
+				   &saddr, NULL);
+	if (length < 0) {
+		rc = length;
+		goto out;
+	}
+
+	length = dax_direct_access(dax_dev, dpgoff, PHYS_PFN(size), DAX_ACCESS,
+				   &daddr, NULL);
+	if (length < 0) {
+		rc = length;
+		goto out;
+	}
+
+	rc = copy_mc_to_kernel(daddr, saddr, size);
+out:
+	dax_read_unlock(id);
+	return rc;
+}
+EXPORT_SYMBOL_GPL(dax_copy_range);
+
 static int dax_iomap_direct_access(const struct iomap *iomap, loff_t pos,
 		size_t size, void **kaddr, pfn_t *pfnp)
 {
