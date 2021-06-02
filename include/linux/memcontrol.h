@@ -345,6 +345,7 @@ struct mem_cgroup {
 #endif
 
 	unsigned long offline_jiffies;
+	unsigned long reap_background;
 
 	CK_KABI_RESERVE(1)
 	CK_KABI_RESERVE(2)
