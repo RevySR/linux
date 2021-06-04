@@ -575,6 +575,10 @@ struct sched_entity {
 	s64				vlag;
 	u64				slice;
 
+	u64				cg_idle_start;
+	u64				cg_idle_sum;
+	seqlock_t			idle_seqlock;
+
 	u64				nr_migrations;
 
 #ifdef CONFIG_FAIR_GROUP_SCHED
