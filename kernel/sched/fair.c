@@ -12968,6 +12968,46 @@ void init_cfs_rq(struct cfs_rq *cfs_rq)
 }
 
 #ifdef CONFIG_FAIR_GROUP_SCHED
+
+#ifdef CONFIG_SCHED_SLI
+static void update_nr_iowait_fair(struct task_struct *p, long inc)
+{
+	unsigned long flags;
+	struct sched_entity *se = p->se.parent;
+	u64 clock;
+
+	if (!schedstat_enabled())
+		return;
+
+	clock = __rq_clock_broken(cpu_rq(task_cpu(p)));
+
+	for_each_sched_entity(se) {
+		/*
+		 * Avoid locking rq->lock from try_to_wakeup hot path, in
+		 * the price of poor consistency among cgroup hierarchy,
+		 * which we can tolerate.
+		 * While accessing se->on_rq does need to hold rq->lock. We
+		 * already do, because when inc==1, the caller is __schedule
+		 * and task_move_group_fair
+		 */
+		spin_lock_irqsave(&se->iowait_lock, flags);
+		if (!se->on_rq && !schedstat_val(se->cg_nr_iowait) && inc > 0)
+			__schedstat_set(se->cg_iowait_start, clock);
+		if (schedstat_val(se->cg_iowait_start) > 0 &&
+			schedstat_val(se->cg_nr_iowait) + inc == 0) {
+			__schedstat_add(se->cg_iowait_sum, clock -
+				schedstat_val(se->cg_iowait_start));
+			__schedstat_set(se->cg_iowait_start, 0);
+		}
+		__schedstat_add(se->cg_nr_iowait, inc);
+		spin_unlock_irqrestore(&se->iowait_lock, flags);
+	}
+}
+#else
+static void update_nr_iowait_fair(struct task_struct *p, long inc) {}
+#endif
+
+
 static void task_change_group_fair(struct task_struct *p)
 {
 	/*
@@ -12977,6 +13017,9 @@ static void task_change_group_fair(struct task_struct *p)
 	if (READ_ONCE(p->__state) == TASK_NEW)
 		return;
 
+	if (p->in_iowait)
+		update_nr_iowait_fair(p, -1);
+
 	detach_task_cfs_rq(p);
 
 #ifdef CONFIG_SMP
@@ -12985,6 +13028,8 @@ static void task_change_group_fair(struct task_struct *p)
 #endif
 	set_task_rq(p, task_cpu(p));
 	attach_task_cfs_rq(p);
+	if (p->in_iowait)
+		update_nr_iowait_fair(p, 1);
 }
 
 void free_fair_sched_group(struct task_group *tg)
@@ -13121,6 +13166,7 @@ void init_tg_cfs_entry(struct task_group *tg, struct cfs_rq *cfs_rq,
 	update_load_set(&se->load, NICE_0_LOAD);
 	se->parent = parent;
 	seqlock_init(&se->idle_seqlock);
+	spin_lock_init(&se->iowait_lock);
 	se->cg_idle_start = se->cg_init_time = cpu_clock(cpu);
 }
 
@@ -13339,6 +13385,7 @@ DEFINE_SCHED_CLASS(fair) = {
 #endif
 #ifdef CONFIG_SCHED_SLI
 	.update_nr_uninterruptible = update_nr_uninterruptible_fair,
+	.update_nr_iowait	= update_nr_iowait_fair,
 #endif
 
 #ifdef CONFIG_UCLAMP_TASK

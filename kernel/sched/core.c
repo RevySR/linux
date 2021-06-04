@@ -3807,6 +3807,7 @@ ttwu_do_activate(struct rq *rq, struct task_struct *p, int wake_flags,
 	if (p->in_iowait) {
 		delayacct_blkio_end(p);
 		atomic_dec(&task_rq(p)->nr_iowait);
+		update_nr_iowait(p, -1);
 	}
 
 	activate_task(rq, p, en_flags);
@@ -4370,6 +4371,7 @@ int try_to_wake_up(struct task_struct *p, unsigned int state, int wake_flags)
 			if (p->in_iowait) {
 				delayacct_blkio_end(p);
 				atomic_dec(&task_rq(p)->nr_iowait);
+				update_nr_iowait(p, -1);
 			}
 
 			wake_flags |= WF_MIGRATED;
@@ -6831,6 +6833,7 @@ static void __sched notrace __schedule(unsigned int sched_mode)
 
 			if (prev->in_iowait) {
 				atomic_inc(&rq->nr_iowait);
+				update_nr_iowait(prev, 1);
 				delayacct_blkio_start();
 			}
 		}
