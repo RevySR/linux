@@ -2562,4 +2562,10 @@ static inline bool check_rich_container(unsigned int cpu, unsigned int *index,
 }
 #endif
 
+#ifdef CONFIG_SCHED_SLI
+void create_rich_container_reaper(struct task_struct *tsk);
+#else
+static inline void create_rich_container_reaper(struct task_struct *tsk) { }
+#endif
+
 #endif
