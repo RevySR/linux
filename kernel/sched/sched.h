@@ -3586,6 +3586,9 @@ extern int entity_eligible(struct cfs_rq *cfs_rq, struct sched_entity *se);
 #ifdef CONFIG_SCHED_SLI
 extern u64 get_idle_time(struct kernel_cpustat *kcs, int cpu);
 extern u64 get_iowait_time(struct kernel_cpustat *kcs, int cpu);
+void calc_cgroup_load(void);
+#else
+static inline void calc_cgroup_load(void) { }
 #endif
 
 #endif /* _KERNEL_SCHED_SCHED_H */
