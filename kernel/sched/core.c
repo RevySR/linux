@@ -3410,6 +3410,7 @@ void set_task_cpu(struct task_struct *p, unsigned int new_cpu)
 		p->se.nr_migrations++;
 		rseq_migrate(p);
 		sched_mm_cid_migrate_from(p);
+		task_ca_increase_nr_migrations(p);
 		perf_event_task_migrate(p);
 	}
 
