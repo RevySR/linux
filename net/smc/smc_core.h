@@ -92,6 +92,7 @@ struct smc_rdma_wr {				/* work requests per message
 #define SMC_LGR_ID_SIZE		4
 
 struct smc_link {
+	struct iw_ext_conn_param	iw_conn_param;
 	struct smc_ib_device	*smcibdev;	/* ib-device */
 	u8			ibport;		/* port - values 1 | 2 */
 	struct ib_pd		*roce_pd;	/* IB protection domain,
@@ -604,6 +605,8 @@ struct smc_link *smc_switch_conns(struct smc_link_group *lgr,
 				  struct smc_link *from_lnk, bool is_dev_err);
 void smcr_link_down_cond(struct smc_link *lnk);
 void smcr_link_down_cond_sched(struct smc_link *lnk);
+int smcr_iw_net_reserve_ports(struct net *net);
+void smcr_iw_net_release_ports(struct net *net);
 int smc_nl_get_sys_info(struct sk_buff *skb, struct netlink_callback *cb);
 int smcr_nl_get_lgr(struct sk_buff *skb, struct netlink_callback *cb);
 int smcr_nl_get_link(struct sk_buff *skb, struct netlink_callback *cb);

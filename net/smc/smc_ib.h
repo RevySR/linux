@@ -23,6 +23,7 @@
 #define SMC_GID_SIZE			sizeof(union ib_gid)
 
 #define SMC_IB_MAX_SEND_SGE		2
+#define SMC_IWARP_RSVD_PORTS_BASE	65500
 
 struct smc_ib_devices {			/* list of smc ib devices definition */
 	struct list_head	list;
@@ -115,5 +116,6 @@ int smc_ib_determine_gid(struct smc_ib_device *smcibdev, u8 ibport,
 int smc_ib_find_route(struct net *net, __be32 saddr, __be32 daddr,
 		      u8 nexthop_mac[], u8 *uses_gateway);
 bool smc_ib_is_valid_local_systemid(void);
+bool smc_ib_is_iwarp(struct ib_device *ibdev, u8 ibport);
 int smcr_nl_get_device(struct sk_buff *skb, struct netlink_callback *cb);
 #endif

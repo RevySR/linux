@@ -789,6 +789,72 @@ static void smcr_copy_dev_info_to_link(struct smc_link *link)
 	link->ndev_ifidx = smcibdev->ndev_ifidx[link->ibport - 1];
 }
 
+int smcr_iw_net_reserve_ports(struct net *net)
+{
+	int ports_base = rsvd_ports_base;
+	struct sockaddr_in laddr;
+	int rc = 0, i, j;
+
+	for (i = 0; i < SMC_IWARP_RSVD_PORTS_NUM; i++) {
+		rc = __sock_create(net, AF_INET, SOCK_STREAM, IPPROTO_TCP,
+				   &net->smc.rsvd_sock[i], 1);
+		if (rc < 0)
+			goto release;
+		memset(&laddr, 0, sizeof(laddr));
+		laddr.sin_port = htons(ports_base + i);
+		/* keep the rsvd ports */
+		rc = kernel_bind(net->smc.rsvd_sock[i], (struct sockaddr *)&laddr,
+				 sizeof(struct sockaddr_in));
+		if (rc) {
+			sock_release(net->smc.rsvd_sock[i]);
+			net->smc.rsvd_sock[i] = NULL;
+			goto release;
+		}
+	}
+	pr_info_ratelimited("smc: netns [%u] reserved ports [%d ~ %d] for eRDMA OOB\n",
+			    net->ns.inum, ports_base, ports_base + SMC_IWARP_RSVD_PORTS_NUM - 1);
+	return 0;
+
+release:
+	pr_warn_ratelimited("warning: smc: netns [%u] reserved ports %d FAIL for eRDMA OOB\n",
+			    net->ns.inum, ports_base + i);
+	for (j = 0; j < i; j++) {
+		sock_release(net->smc.rsvd_sock[j]);
+		net->smc.rsvd_sock[j] = NULL;
+	}
+	return rc;
+}
+
+void smcr_iw_net_release_ports(struct net *net)
+{
+	int i;
+
+	for (i = 0; i < SMC_IWARP_RSVD_PORTS_NUM; i++) {
+		sock_release(net->smc.rsvd_sock[i]);
+		net->smc.rsvd_sock[i] = NULL;
+	}
+	pr_info_ratelimited("smc: netns [%u] released ports [%d ~ %d] used by eRDMA OOB\n",
+			    net->ns.inum, rsvd_ports_base,
+			    rsvd_ports_base + SMC_IWARP_RSVD_PORTS_NUM - 1);
+}
+
+static void smcr_link_iw_extension(struct iw_ext_conn_param *iw_param, struct sock *clcsk)
+{
+	iw_param->sk_addr.family = clcsk->sk_family;
+	if (iw_param->sk_addr.family == PF_INET) {
+		iw_param->sk_addr.saddr_v4 = clcsk->sk_rcv_saddr;
+		iw_param->sk_addr.daddr_v4 = clcsk->sk_daddr;
+#if IS_ENABLED(CONFIG_IPV6)
+	} else {
+		iw_param->sk_addr.saddr_v6 = clcsk->sk_v6_rcv_saddr;
+		iw_param->sk_addr.daddr_v6 = clcsk->sk_v6_daddr;
+#endif
+	}
+
+	iw_param->sk_addr.sport = clcsk->sk_num;
+	iw_param->sk_addr.dport = clcsk->sk_dport;
+}
+
 int smcr_link_init(struct smc_link_group *lgr, struct smc_link *lnk,
 		   u8 link_idx, struct smc_init_info *ini)
 {
@@ -972,6 +1038,8 @@ static int smc_lgr_create(struct smc_sock *smc, struct smc_init_info *ini)
 
 		link_idx = SMC_SINGLE_LINK;
 		lnk = &lgr->lnk[link_idx];
+		smcr_link_iw_extension(&lnk->iw_conn_param, smc->clcsock->sk);
+
 		rc = smcr_link_init(lgr, lnk, link_idx, ini);
 		if (rc) {
 			smc_wr_free_lgr_mem(lgr);

@@ -4,6 +4,8 @@
 #include <linux/mutex.h>
 #include <linux/percpu.h>
 
+#define SMC_IWARP_RSVD_PORTS_NUM	16 /* must be 16 */
+
 struct smc_stats_rsn;
 struct smc_stats;
 struct netns_smc {
@@ -24,6 +26,9 @@ struct netns_smc {
 	int				sysctl_rmem;
 	int				sysctl_max_links_per_lgr;
 	int				sysctl_max_conns_per_lgr;
+
+	atomic_t			iwarp_cnt;
+	struct socket			*rsvd_sock[SMC_IWARP_RSVD_PORTS_NUM];
 
 	CK_KABI_RESERVE(1)
 	CK_KABI_RESERVE(2)

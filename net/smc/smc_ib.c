@@ -44,6 +44,48 @@ struct smc_ib_devices smc_ib_devices = {	/* smc-registered ib devices */
 
 u8 local_systemid[SMC_SYSTEMID_LEN];		/* unique system identifier */
 
+static void smc_ib_modify_qp_iw_extension(struct smc_link *lnk)
+{
+	struct iw_ext_conn_param *iw_param = &lnk->iw_conn_param;
+	__be32 saddr_v4, daddr_v4;
+	bool use_rsvd_ports;
+
+	/* IPs are stored as union, treat them as IPv4
+	 * for easy comparison.
+	 */
+	saddr_v4 = iw_param->sk_addr.saddr_v4;
+	daddr_v4 = iw_param->sk_addr.daddr_v4;
+
+	if (saddr_v4 < daddr_v4) {
+		use_rsvd_ports = true;
+	} else if (saddr_v4 > daddr_v4) {
+		use_rsvd_ports = false;
+	} else {
+		/* if sip == dip, then lqpn must be
+		 * different from rqpn.
+		 */
+		if (lnk->roce_qp->qp_num < lnk->peer_qpn)
+			use_rsvd_ports = true;
+		else
+			use_rsvd_ports = false;
+	}
+
+	/* eRDMA iWARP MAX qp_num is 128K, that is a maximum of 128K
+	 * RC links can be formed. So here we reserve 2^4 ports in
+	 * one side, and with maximum of 2^16 ports in another side
+	 * to form 2^20 different 5-tuples for eRDMA iWARP RC link.
+	 */
+	if (use_rsvd_ports) {
+		iw_param->sk_addr.sport =
+			rsvd_ports_base + ((lnk->peer_qpn >> 16) & 0xF);
+		iw_param->sk_addr.dport = htons(lnk->peer_qpn & 0xFFFF);
+	} else {
+		iw_param->sk_addr.sport = lnk->roce_qp->qp_num & 0xFFFF;
+		iw_param->sk_addr.dport = htons(rsvd_ports_base +
+			      ((lnk->roce_qp->qp_num >> 16) & 0xF));
+	}
+}
+
 static int smc_ib_modify_qp_init(struct smc_link *lnk)
 {
 	struct ib_qp_attr qp_attr;
@@ -88,6 +130,12 @@ static int smc_ib_modify_qp_rtr(struct smc_link *lnk)
 					 * requests
 					 */
 	qp_attr.min_rnr_timer = SMC_QP_MIN_RNR_TIMER;
+
+	if (reserve_mode &&
+	    smc_ib_is_iwarp(lnk->smcibdev->ibdev, lnk->ibport)) {
+		smc_ib_modify_qp_iw_extension(lnk);
+		qp_attr_mask |= IB_QP_RESERVED1;
+	}
 
 	return ib_modify_qp(lnk->roce_qp, &qp_attr, qp_attr_mask);
 }
@@ -681,7 +729,11 @@ int smc_ib_create_queue_pair(struct smc_link *lnk)
 		.sq_sig_type = IB_SIGNAL_REQ_WR,
 		.qp_type = IB_QPT_RC,
 	};
+	struct ib_device *ib_dev = lnk->smcibdev->ibdev;
 	int rc;
+
+	if (smc_ib_is_iwarp(ib_dev, lnk->ibport))
+		qp_attr.create_flags |= IB_QP_CREATE_IWARP_WITHOUT_CM;
 
 	lnk->roce_qp = ib_create_qp(lnk->roce_pd, &qp_attr);
 	rc = PTR_ERR_OR_ZERO(lnk->roce_qp);
@@ -935,12 +987,88 @@ void smc_ib_ndev_change(struct net_device *ndev, unsigned long event)
 	mutex_unlock(&smc_ib_devices.mutex);
 }
 
+bool smc_ib_is_iwarp(struct ib_device *ibdev, u8 ibport)
+{
+	return rdma_protocol_iwarp(ibdev, ibport);
+}
+
+/* Reserve socket ports of each net namespace which can be accessed
+ * by eRDMA (iWARP) device for out-bound RC establishment.
+ */
+static int smc_iw_reserve_ports(struct smc_ib_device *smcibdev)
+{
+	struct ib_device *ibdev = smcibdev->ibdev;
+	struct net *net, *_net;
+	int rc;
+
+	if (!reserve_mode)
+		return 0;
+	if (!smc_ib_is_iwarp(ibdev, 1))
+		return 0;
+
+	down_read(&net_rwsem);
+	for_each_net(net) {
+		/* for net can access ibdev */
+		if (!rdma_dev_access_netns(ibdev, net))
+			continue;
+		/* check if already reserved*/
+		if (atomic_inc_return(&net->smc.iwarp_cnt) > 1)
+			continue;
+
+		rc = smcr_iw_net_reserve_ports(net);
+		if (rc) {
+			atomic_dec(&net->smc.iwarp_cnt);
+			goto release;
+		}
+	}
+	up_read(&net_rwsem);
+	return 0;
+
+release:
+	/* release ports and recover */
+	for_each_net(_net) {
+		if (_net == net)
+			break;
+		if (!rdma_dev_access_netns(ibdev, _net))
+			continue;
+		if (!atomic_dec_and_test(&_net->smc.iwarp_cnt))
+			continue;
+		smcr_iw_net_release_ports(_net);
+	}
+	up_read(&net_rwsem);
+	return rc;
+}
+
+static void smc_iw_release_ports(struct smc_ib_device *smcibdev)
+{
+	struct ib_device *ibdev = smcibdev->ibdev;
+	struct net *net;
+
+	if (!reserve_mode)
+		return;
+	if (!smc_ib_is_iwarp(ibdev, 1))
+		return;
+
+	down_read(&net_rwsem);
+	for_each_net(net) {
+		/* for net can access ibdev */
+		if (!rdma_dev_access_netns(ibdev, net))
+			continue;
+		/* check if need release */
+		if (!atomic_dec_and_test(&net->smc.iwarp_cnt))
+			continue;
+
+		smcr_iw_net_release_ports(net);
+	}
+	up_read(&net_rwsem);
+}
+
 /* callback function for ib_register_client() */
 static int smc_ib_add_dev(struct ib_device *ibdev)
 {
 	struct smc_ib_device *smcibdev;
+	int i, rc = 0;
 	u8 port_cnt;
-	int i;
 
 	if (ibdev->node_type != RDMA_NODE_IB_CA)
 		return -EOPNOTSUPP;
@@ -950,6 +1078,11 @@ static int smc_ib_add_dev(struct ib_device *ibdev)
 		return -ENOMEM;
 
 	smcibdev->ibdev = ibdev;
+	rc = smc_iw_reserve_ports(smcibdev);
+	if (rc) {
+		kfree(smcibdev);
+		return rc;
+	}
 	INIT_WORK(&smcibdev->port_event_work, smc_ib_port_event_work);
 	atomic_set(&smcibdev->lnk_cnt, 0);
 	init_waitqueue_head(&smcibdev->lnks_deleted);
@@ -998,6 +1131,7 @@ static void smc_ib_remove_dev(struct ib_device *ibdev, void *client_data)
 	pr_warn_ratelimited("smc: removing ib device %s\n",
 			    smcibdev->ibdev->name);
 	smc_smcr_terminate_all(smcibdev);
+	smc_iw_release_ports(smcibdev);
 	smc_ib_cleanup_per_ibdev(smcibdev);
 	ib_unregister_event_handler(&smcibdev->event_handler);
 	cancel_work_sync(&smcibdev->port_event_work);

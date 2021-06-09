@@ -34,6 +34,9 @@
 extern struct proto smc_proto;
 extern struct proto smc_proto6;
 
+extern bool reserve_mode;
+extern u16 rsvd_ports_base;
+
 /* smc sock initialization */
 void smc_sk_init(struct net *net, struct sock *sk, int protocol);
 /* clcsock initialization */

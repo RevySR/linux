@@ -69,6 +69,14 @@ struct workqueue_struct	*smc_close_wq;	/* wq for close work */
 static void smc_tcp_listen_work(struct work_struct *);
 static void smc_connect_work(struct work_struct *);
 
+/* default use reserve_mode */
+bool reserve_mode = true;
+
+/* rsvd_ports_base must less than (u16 MAX - 8) */
+u16 rsvd_ports_base = SMC_IWARP_RSVD_PORTS_BASE;
+module_param(rsvd_ports_base, ushort, 0444);
+MODULE_PARM_DESC(rsvd_ports_base, "base of rsvd ports for reserve_mode");
+
 int smc_nl_dump_hs_limitation(struct sk_buff *skb, struct netlink_callback *cb)
 {
 	struct smc_nl_dmp_ctx *cb_ctx = smc_nl_dmp_ctx(cb);
@@ -3459,20 +3467,71 @@ static struct tcp_ulp_ops smc_ulp_ops __read_mostly = {
 	.clone		= smc_ulp_clone,
 };
 
+static int smc_net_reserve_ports(struct net *net)
+{
+	struct smc_ib_device *smcibdev;
+	struct ib_device *ibdev;
+	int rc = 0;
+
+	if (!reserve_mode)
+		return 0;
+	atomic_set(&net->smc.iwarp_cnt, 0);
+	memset(net->smc.rsvd_sock, 0, sizeof(net->smc.rsvd_sock));
+
+	mutex_lock(&smc_ib_devices.mutex);
+	list_for_each_entry(smcibdev, &smc_ib_devices.list, list) {
+		ibdev = smcibdev->ibdev;
+		if (!smc_ib_is_iwarp(ibdev, 1))
+			continue;
+		if (!rdma_dev_access_netns(ibdev, net))
+			continue;
+		if (atomic_inc_return(&net->smc.iwarp_cnt) > 1)
+			continue;
+		/* first iwarp device */
+		rc = smcr_iw_net_reserve_ports(net);
+		if (rc) {
+			atomic_set(&net->smc.iwarp_cnt, 0);
+			break;
+		}
+	}
+	mutex_unlock(&smc_ib_devices.mutex);
+	return rc;
+}
+
+static void smc_net_release_ports(struct net *net)
+{
+	if (!reserve_mode)
+		return;
+	if (atomic_read(&net->smc.iwarp_cnt) &&
+	    net->smc.rsvd_sock[0])
+		smcr_iw_net_release_ports(net);
+}
+
 unsigned int smc_net_id;
 
 static __net_init int smc_net_init(struct net *net)
 {
 	int rc;
 
-	rc = smc_sysctl_net_init(net);
+	rc = smc_net_reserve_ports(net);
 	if (rc)
 		return rc;
-	return smc_pnet_net_init(net);
+	rc = smc_sysctl_net_init(net);
+	if (rc)
+		goto release_ports;
+	rc = smc_pnet_net_init(net);
+	if (rc)
+		goto release_ports;
+	return 0;
+
+release_ports:
+	smc_net_release_ports(net);
+	return rc;
 }
 
 static void __net_exit smc_net_exit(struct net *net)
 {
+	smc_net_release_ports(net);
 	smc_sysctl_net_exit(net);
 	smc_pnet_net_exit(net);
 }
@@ -3502,6 +3561,16 @@ static struct pernet_operations smc_net_stat_ops = {
 static int __init smc_init(void)
 {
 	int rc;
+
+	if (reserve_mode) {
+		pr_info_ratelimited("smc: load SMC module with reserve_mode\n");
+		if (rsvd_ports_base >
+		    (U16_MAX - SMC_IWARP_RSVD_PORTS_NUM)) {
+			pr_info_ratelimited("smc: reserve_mode with invalid "
+					    "ports base\n");
+			return -EINVAL;
+		}
+	}
 
 	rc = register_pernet_subsys(&smc_net_ops);
 	if (rc)
