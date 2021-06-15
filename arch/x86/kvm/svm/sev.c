@@ -3989,3 +3989,22 @@ err_free_ring_buffer:
 
 	return ret;
 }
+
+int sev_es_ghcb_map(struct vcpu_svm *svm, u64 ghcb_gpa)
+{
+	if (kvm_vcpu_map(&svm->vcpu, ghcb_gpa >> PAGE_SHIFT, &svm->sev_es.ghcb_map)) {
+		/* Unable to map GHCB from guest */
+		vcpu_unimpl(&svm->vcpu, "Missing GHCB [%#llx] from guest\n",
+			    ghcb_gpa);
+
+		svm->sev_es.receiver_ghcb_map_fail = true;
+		return -EINVAL;
+	}
+
+	svm->sev_es.ghcb = svm->sev_es.ghcb_map.hva;
+	svm->sev_es.receiver_ghcb_map_fail = false;
+
+	pr_info("Mapping GHCB [%#llx] from guest at recipient\n", ghcb_gpa);
+
+	return 0;
+}
