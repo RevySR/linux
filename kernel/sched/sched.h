@@ -3617,4 +3617,7 @@ static inline bool async_load_calc_enabled(void)
 }
 #endif
 
+long tg_get_cfs_quota(struct task_group *tg);
+long tg_get_cfs_period(struct task_group *tg);
+
 #endif /* _KERNEL_SCHED_SCHED_H */
