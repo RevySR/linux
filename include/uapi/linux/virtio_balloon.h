@@ -42,6 +42,7 @@
 #define VIRTIO_BALLOON_F_FILL_H_OOM	8 /* Handle OOM when fill balloon */
 #define VIRTIO_BALLOON_F_FILL_A_OC	9 /* Auto set overcommit when fill balloon */
 #define VIRTIO_BALLOON_F_TELL_64BIT	10 /* use 64bit pfns tell host */
+#define VIRTIO_BALLOON_F_HUGE_PAGES	11 /* report huge pages not less to 2M */
 
 /* Size of a PFN in the balloon interface. */
 #define VIRTIO_BALLOON_PFN_SHIFT 12

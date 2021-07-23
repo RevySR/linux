@@ -44,6 +44,9 @@
 						    1 - PAGE_SHIFT), (MAX_ORDER-1))
 #define VIRTIO_BALLOON_DEFLATE_MAX_PAGES_NUM (((__virtio32)~0U) >> PAGE_SHIFT)
 
+/* Minimum page order when using huge pages */
+#define VIRTIO_BALLOON_INFLATE_HUGE_MIN_ORDER 9
+
 /* Maximum number of (4k) pages to deflate on fill balloon OOM notifications. */
 #define VIRTIO_BALLOON_FILL_OOM_NR_PAGES 256
 #define VIRTIO_BALLOON_FILL_OOM_NOTIFY_PRIORITY 80
@@ -284,10 +287,14 @@ static unsigned int fill_balloon(struct virtio_balloon *vb, size_t num)
 	gfp_t gfp;
 	bool is_oom = false;
 	unsigned int current_pages_order = 0;
+	unsigned int min_pages_order = 0;
 
 	if (virtio_has_feature(vb->vdev, VIRTIO_BALLOON_F_CONT_PAGES)) {
 		current_pages_order = VIRTIO_BALLOON_INFLATE_MAX_ORDER;
 		is_cont = true;
+		/* F_HUGE_PAGES should be used together with F_CONT_PAGES */
+		if (virtio_has_feature(vb->vdev, VIRTIO_BALLOON_F_HUGE_PAGES))
+			min_pages_order = VIRTIO_BALLOON_INFLATE_HUGE_MIN_ORDER;
 	}
 
 	if (virtio_has_feature(vb->vdev, VIRTIO_BALLOON_F_ALLOC_RETRY))
@@ -306,7 +313,7 @@ static unsigned int fill_balloon(struct virtio_balloon *vb, size_t num)
 	     num_allocated_pages += VIRTIO_BALLOON_PAGES_PER_PAGE << current_pages_order) {
 		struct page *page = NULL;
 
-		for (; current_pages_order >= 0; current_pages_order--) {
+		for (; current_pages_order >= min_pages_order; current_pages_order--) {
 			if (current_pages_order &&
 			    num - num_allocated_pages <
 				VIRTIO_BALLOON_PAGES_PER_PAGE << current_pages_order)
@@ -1452,6 +1459,7 @@ static unsigned int features[] = {
 	VIRTIO_BALLOON_F_FILL_H_OOM,
 	VIRTIO_BALLOON_F_FILL_A_OC,
 	VIRTIO_BALLOON_F_TELL_64BIT,
+	VIRTIO_BALLOON_F_HUGE_PAGES,
 };
 
 static struct virtio_driver virtio_balloon_driver = {
