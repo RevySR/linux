@@ -75,6 +75,8 @@ static unsigned int nr_asids;
 static unsigned long *sev_asid_bitmap;
 static unsigned long *sev_reclaim_asid_bitmap;
 
+static DEFINE_MUTEX(csv_cmd_batch_mutex);
+
 static const char sev_vm_mnonce[] = "VM_ATTESTATION";
 
 struct enc_region {
@@ -325,6 +327,28 @@ static int sev_issue_cmd(struct kvm *kvm, int id, void *data, int *error)
 	struct kvm_sev_info *sev = &to_kvm_svm(kvm)->sev_info;
 
 	return __sev_issue_cmd(sev->fd, id, data, error);
+}
+
+static int __csv_issue_ringbuf_cmds(int fd, int *psp_ret)
+{
+	struct fd f;
+	int ret;
+
+	f = fdget(fd);
+	if (!f.file)
+		return -EBADF;
+
+	ret = csv_issue_ringbuf_cmds_external_user(f.file, psp_ret);
+
+	fdput(f);
+	return ret;
+}
+
+static int csv_issue_ringbuf_cmds(struct kvm *kvm, int *psp_ret)
+{
+	struct kvm_sev_info *sev = &to_kvm_svm(kvm)->sev_info;
+
+	return __csv_issue_ringbuf_cmds(sev->fd, psp_ret);
 }
 
 static int sev_launch_start(struct kvm *kvm, struct kvm_sev_cmd *argp)
@@ -1869,6 +1893,8 @@ out_fput:
 	return ret;
 }
 
+static int csv_command_batch(struct kvm *kvm, struct kvm_sev_cmd *argp);
+
 int sev_mem_enc_ioctl(struct kvm *kvm, void __user *argp)
 {
 	struct kvm_sev_cmd sev_cmd;
@@ -1953,6 +1979,14 @@ int sev_mem_enc_ioctl(struct kvm *kvm, void __user *argp)
 	case KVM_SEV_RECEIVE_FINISH:
 		r = sev_receive_finish(kvm, &sev_cmd);
 		break;
+	case KVM_CSV_COMMAND_BATCH:
+		if (boot_cpu_data.x86_vendor == X86_VENDOR_HYGON) {
+			mutex_lock(&csv_cmd_batch_mutex);
+			r = csv_command_batch(kvm, &sev_cmd);
+			mutex_unlock(&csv_cmd_batch_mutex);
+			break;
+		}
+		fallthrough;
 	default:
 		r = -EINVAL;
 		goto out;
@@ -3249,5 +3283,147 @@ e_free:
 	kfree(data);
 e_unpin_memory:
 	sev_unpin_memory(kvm, pages, n);
+	return ret;
+}
+
+static int csv_ringbuf_infos_free(struct kvm *kvm,
+				  struct csv_ringbuf_infos *ringbuf_infos)
+{
+	int i;
+
+	for (i = 0; i < ringbuf_infos->num; i++) {
+		struct csv_ringbuf_info_item *item = ringbuf_infos->item[i];
+
+		if (item) {
+			if (item->data_vaddr)
+				kfree((void *)item->data_vaddr);
+
+			if (item->hdr_vaddr)
+				kfree((void *)item->hdr_vaddr);
+
+			if (item->pages)
+				sev_unpin_memory(kvm, item->pages, item->n);
+
+			kfree(item);
+
+			ringbuf_infos->item[i] = NULL;
+		}
+	}
+
+	return 0;
+}
+
+typedef int (*csv_ringbuf_input_fn)(struct kvm *kvm, int prio,
+				    uintptr_t data_ptr,
+				    struct csv_ringbuf_infos *ringbuf_infos);
+typedef int (*csv_ringbuf_output_fn)(struct kvm *kvm,
+				     struct csv_ringbuf_infos *ringbuf_infos);
+
+static int get_cmd_helpers(__u32 cmd,
+			   csv_ringbuf_input_fn *to_ringbuf_fn,
+			   csv_ringbuf_output_fn *to_user_fn)
+{
+	int ret = 0;
+
+	/* copy commands to ring buffer*/
+	switch (cmd) {
+	default:
+		ret = -EINVAL;
+		break;
+	}
+
+	return ret;
+}
+
+static int csv_command_batch(struct kvm *kvm, struct kvm_sev_cmd *argp)
+{
+	int ret;
+	struct kvm_csv_command_batch params;
+	uintptr_t node_addr;
+	struct csv_ringbuf_infos *ringbuf_infos;
+	csv_ringbuf_input_fn csv_cmd_to_ringbuf_fn = NULL;
+	csv_ringbuf_output_fn csv_copy_to_user_fn = NULL;
+	int prio = CSV_COMMAND_PRIORITY_HIGH;
+
+	if (!sev_guest(kvm))
+		return -ENOTTY;
+
+	if (copy_from_user(&params, (void __user *)(uintptr_t)argp->data,
+			sizeof(struct kvm_csv_command_batch)))
+		return -EFAULT;
+
+	/* return directly if node list is NULL */
+	if (!params.csv_batch_list_uaddr)
+		return 0;
+
+	/* ring buffer init */
+	if (csv_ring_buffer_queue_init())
+		return -EINVAL;
+
+	if (get_cmd_helpers(params.command_id,
+			    &csv_cmd_to_ringbuf_fn, &csv_copy_to_user_fn)) {
+		ret = -EINVAL;
+		goto err_free_ring_buffer;
+	}
+
+	ringbuf_infos = kzalloc(sizeof(*ringbuf_infos), GFP_KERNEL);
+	if (!ringbuf_infos) {
+		ret = -ENOMEM;
+		goto err_free_ring_buffer;
+	}
+
+	node_addr = (uintptr_t)params.csv_batch_list_uaddr;
+	while (node_addr) {
+		struct kvm_csv_batch_list_node node;
+
+		if (copy_from_user(&node, (void __user *)node_addr,
+				sizeof(struct kvm_csv_batch_list_node))) {
+			ret = -EFAULT;
+			goto err_free_ring_buffer_infos_items;
+		}
+
+		if (ringbuf_infos->num > SVM_RING_BUFFER_MAX) {
+			pr_err("%s: ring num is too large:%d, cmd:0x%x\n",
+				__func__, ringbuf_infos->num, params.command_id);
+
+			ret = -EINVAL;
+			goto err_free_ring_buffer_infos_items;
+		}
+
+		if (csv_cmd_to_ringbuf_fn(kvm, prio,
+					  (uintptr_t)node.cmd_data_addr,
+					  ringbuf_infos)) {
+			ret = -EFAULT;
+			goto err_free_ring_buffer_infos_items;
+		}
+
+		/* 1st half set to HIGH queue, 2nd half set to LOW queue */
+		if (ringbuf_infos->num == SVM_RING_BUFFER_MAX / 2)
+			prio = CSV_COMMAND_PRIORITY_LOW;
+
+		node_addr = node.next_cmd_addr;
+	}
+
+	/* ring buffer process */
+	ret = csv_issue_ringbuf_cmds(kvm, &argp->error);
+	if (ret)
+		goto err_free_ring_buffer_infos_items;
+
+	ret = csv_check_stat_queue_status(&argp->error);
+	if (ret)
+		goto err_free_ring_buffer_infos_items;
+
+	if (csv_copy_to_user_fn && csv_copy_to_user_fn(kvm, ringbuf_infos)) {
+		ret = -EFAULT;
+		goto err_free_ring_buffer_infos_items;
+	}
+
+err_free_ring_buffer_infos_items:
+	csv_ringbuf_infos_free(kvm, ringbuf_infos);
+	kfree(ringbuf_infos);
+
+err_free_ring_buffer:
+	csv_ring_buffer_queue_free();
+
 	return ret;
 }
