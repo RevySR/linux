@@ -1383,6 +1383,28 @@ free_cmdptr:
 	return ret;
 }
 
+int csv_fill_cmd_queue(int prio, int cmd, void *data, uint16_t flags)
+{
+	struct psp_device *psp = psp_master;
+	struct sev_device *sev;
+	struct csv_cmdptr_entry cmdptr = { };
+
+	if (!psp || !psp->sev_data)
+		return -ENODEV;
+
+	sev = psp->sev_data;
+
+	cmdptr.cmd_buf_ptr = __psp_pa(data);
+	cmdptr.cmd_id = cmd;
+	cmdptr.cmd_flags = flags;
+
+	if (csv_enqueue_cmd(&sev->ring_buffer[prio].cmd_ptr, &cmdptr, 1) != 1)
+		return -EFAULT;
+
+	return 0;
+}
+EXPORT_SYMBOL_GPL(csv_fill_cmd_queue);
+
 int csv_ring_buffer_queue_init(void)
 {
 	struct psp_device *psp = psp_master;
