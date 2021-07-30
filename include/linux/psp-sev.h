@@ -754,6 +754,12 @@ int csv_fill_cmd_queue(int prio, int cmd, void *data, uint16_t flags);
 
 int csv_check_stat_queue_status(int *psp_ret);
 
+/**
+ * csv_issue_ringbuf_cmds_external_user - issue CSV commands into a ring
+ * buffer.
+ */
+int csv_issue_ringbuf_cmds_external_user(struct file *filep, int *psp_ret);
+
 #else	/* !CONFIG_CRYPTO_DEV_SP_PSP */
 
 static inline int
@@ -785,6 +791,9 @@ static inline
 int csv_fill_cmd_queue(int prio, int cmd, void *data, uint16_t flags) { return -ENODEV; }
 
 static inline int csv_check_stat_queue_status(int *psp_ret) { return -ENODEV; }
+
+static inline int
+csv_issue_ringbuf_cmds_external_user(struct file *filep, int *psp_ret) { return -ENODEV; }
 
 #endif	/* CONFIG_CRYPTO_DEV_SP_PSP */
 
