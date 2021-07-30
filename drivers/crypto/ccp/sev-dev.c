@@ -1350,6 +1350,93 @@ int sev_guest_df_flush(int *error)
 }
 EXPORT_SYMBOL_GPL(sev_guest_df_flush);
 
+int csv_ring_buffer_queue_free(void);
+
+static int __csv_ring_buffer_queue_init(struct csv_ringbuffer_queue *ring_buffer)
+{
+	int ret = 0;
+	void *cmd_ptr_buffer = NULL;
+	void *stat_val_buffer = NULL;
+
+	memset((void *)ring_buffer, 0, sizeof(struct csv_ringbuffer_queue));
+
+	cmd_ptr_buffer = kzalloc(CSV_RING_BUFFER_LEN, GFP_KERNEL);
+	if (!cmd_ptr_buffer)
+		return -ENOMEM;
+
+	csv_queue_init(&ring_buffer->cmd_ptr, cmd_ptr_buffer,
+		       CSV_RING_BUFFER_LEN, CSV_RING_BUFFER_ESIZE);
+
+	stat_val_buffer = kzalloc(CSV_RING_BUFFER_LEN, GFP_KERNEL);
+	if (!stat_val_buffer) {
+		ret = -ENOMEM;
+		goto free_cmdptr;
+	}
+
+	csv_queue_init(&ring_buffer->stat_val, stat_val_buffer,
+		       CSV_RING_BUFFER_LEN, CSV_RING_BUFFER_ESIZE);
+	return 0;
+
+free_cmdptr:
+	kfree(cmd_ptr_buffer);
+
+	return ret;
+}
+
+int csv_ring_buffer_queue_init(void)
+{
+	struct psp_device *psp = psp_master;
+	struct sev_device *sev;
+	int i, ret = 0;
+
+	if (!psp || !psp->sev_data)
+		return -ENODEV;
+
+	sev = psp->sev_data;
+
+	for (i = CSV_COMMAND_PRIORITY_HIGH; i < CSV_COMMAND_PRIORITY_NUM; i++) {
+		ret = __csv_ring_buffer_queue_init(&sev->ring_buffer[i]);
+		if (ret)
+			goto e_free;
+	}
+
+	return 0;
+
+e_free:
+	csv_ring_buffer_queue_free();
+	return ret;
+}
+EXPORT_SYMBOL_GPL(csv_ring_buffer_queue_init);
+
+int csv_ring_buffer_queue_free(void)
+{
+	struct psp_device *psp = psp_master;
+	struct sev_device *sev;
+	struct csv_ringbuffer_queue *ring_buffer;
+	int i;
+
+	if (!psp || !psp->sev_data)
+		return -ENODEV;
+
+	sev = psp->sev_data;
+
+	for (i = 0; i < CSV_COMMAND_PRIORITY_NUM; i++) {
+		ring_buffer = &sev->ring_buffer[i];
+
+		if (ring_buffer->cmd_ptr.data) {
+			kfree((void *)ring_buffer->cmd_ptr.data);
+			ring_buffer->cmd_ptr.data = 0;
+		}
+
+		if (ring_buffer->stat_val.data) {
+			kfree((void *)ring_buffer->stat_val.data);
+			ring_buffer->stat_val.data = 0;
+		}
+	}
+	return 0;
+}
+EXPORT_SYMBOL_GPL(csv_ring_buffer_queue_free);
+
 static void sev_exit(struct kref *ref)
 {
 	misc_deregister(&misc_dev->misc);

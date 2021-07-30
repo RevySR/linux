@@ -89,6 +89,18 @@ enum csv_cmd {
 };
 
 /**
+ * Ring Buffer Mode regions:
+ *   There are 4 regions and every region is a 4K area that must be 4K aligned.
+ *   To accomplish this allocate an amount that is the size of area and the
+ *   required alignment.
+ *   The aligned address will be calculated from the returned address.
+ */
+#define CSV_RING_BUFFER_SIZE		(32 * 1024)
+#define CSV_RING_BUFFER_ALIGN		(4 * 1024)
+#define CSV_RING_BUFFER_LEN		(CSV_RING_BUFFER_SIZE + CSV_RING_BUFFER_ALIGN)
+#define CSV_RING_BUFFER_ESIZE		16
+
+/**
  * struct sev_data_init - INIT command parameters
  *
  * @flags: processing flags
@@ -546,6 +558,24 @@ struct csv_data_hgsc_cert_import {
 	u32 hgsc_cert_len;		/* In */
 } __packed;
 
+#define CSV_COMMAND_PRIORITY_HIGH	0
+#define CSV_COMMAND_PRIORITY_LOW	1
+#define CSV_COMMAND_PRIORITY_NUM	2
+
+struct csv_queue {
+	u32 head;
+	u32 tail;
+	u32 mask; /* mask = (size - 1), inicates the elements max count */
+	u32 esize; /* size of an element */
+	u64 data;
+	u64 data_align;
+} __packed;
+
+struct csv_ringbuffer_queue {
+	struct csv_queue cmd_ptr;
+	struct csv_queue stat_val;
+} __packed;
+
 #ifdef CONFIG_CRYPTO_DEV_SP_PSP
 
 /**
@@ -662,6 +692,10 @@ int sev_guest_decommission(struct sev_data_decommission *data, int *error);
 
 void *psp_copy_user_blob(u64 uaddr, u32 len);
 
+int csv_ring_buffer_queue_init(void);
+
+int csv_ring_buffer_queue_free(void);
+
 #else	/* !CONFIG_CRYPTO_DEV_SP_PSP */
 
 static inline int
@@ -684,6 +718,10 @@ static inline int
 sev_issue_cmd_external_user(struct file *filep, unsigned int id, void *data, int *error) { return -ENODEV; }
 
 static inline void *psp_copy_user_blob(u64 __user uaddr, u32 len) { return ERR_PTR(-EINVAL); }
+
+static inline int csv_ring_buffer_queue_init(void) { return -ENODEV; }
+
+static inline int csv_ring_buffer_queue_free(void) { return -ENODEV; }
 
 #endif	/* CONFIG_CRYPTO_DEV_SP_PSP */
 
