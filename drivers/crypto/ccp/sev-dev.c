@@ -65,6 +65,8 @@ MODULE_FIRMWARE("amd/amd_sev_fam19h_model1xh.sbin"); /* 4th gen EPYC */
 static bool psp_dead;
 static int psp_timeout;
 
+static int csv_comm_mode = CSV_COMM_MAILBOX_ON;
+
 /* Trusted Memory Region (TMR):
  *   The TMR is a 1MB area that must be 1MB aligned.  Use the page allocator
  *   to allocate the memory, which will return aligned memory for the specified
@@ -144,6 +146,8 @@ static int sev_cmd_buffer_len(int cmd)
 		switch (cmd) {
 		case CSV_CMD_HGSC_CERT_IMPORT:
 			return sizeof(struct csv_data_hgsc_cert_import);
+		case CSV_CMD_RING_BUFFER:
+			return sizeof(struct csv_data_ring_buffer);
 		default:
 			break;
 		}
@@ -411,6 +415,48 @@ static int __sev_do_cmd_locked(int cmd, void *data, int *psp_ret)
 	return ret;
 }
 
+static int __csv_ring_buffer_enter_locked(int *error)
+{
+	struct psp_device *psp = psp_master;
+	struct sev_device *sev;
+	struct csv_data_ring_buffer *data;
+	struct csv_ringbuffer_queue *low_queue;
+	struct csv_ringbuffer_queue *hi_queue;
+	int ret = 0;
+
+	if (!psp || !psp->sev_data)
+		return -ENODEV;
+
+	sev = psp->sev_data;
+
+	if (csv_comm_mode == CSV_COMM_RINGBUFFER_ON)
+		return -EEXIST;
+
+	data = kzalloc(sizeof(*data), GFP_KERNEL);
+	if (!data)
+		return -ENOMEM;
+
+	low_queue = &sev->ring_buffer[CSV_COMMAND_PRIORITY_LOW];
+	hi_queue = &sev->ring_buffer[CSV_COMMAND_PRIORITY_HIGH];
+
+	data->queue_lo_cmdptr_address = __psp_pa(low_queue->cmd_ptr.data_align);
+	data->queue_lo_statval_address = __psp_pa(low_queue->stat_val.data_align);
+	data->queue_hi_cmdptr_address = __psp_pa(hi_queue->cmd_ptr.data_align);
+	data->queue_hi_statval_address = __psp_pa(hi_queue->stat_val.data_align);
+	data->queue_lo_size = 1;
+	data->queue_hi_size = 1;
+	data->int_on_empty = 1;
+
+	ret = __sev_do_cmd_locked(CSV_CMD_RING_BUFFER, data, error);
+	if (!ret) {
+		iowrite32(0, sev->io_regs + sev->vdata->cmdbuff_addr_hi_reg);
+		csv_comm_mode = CSV_COMM_RINGBUFFER_ON;
+	}
+
+	kfree(data);
+	return ret;
+}
+
 static int sev_do_cmd(int cmd, void *data, int *psp_ret)
 {
 	int rc;
@@ -561,6 +607,11 @@ static int __sev_platform_shutdown_locked(int *error)
 	ret = __sev_do_cmd_locked(SEV_CMD_SHUTDOWN, NULL, error);
 	if (ret)
 		return ret;
+
+	if (boot_cpu_data.x86_vendor == X86_VENDOR_HYGON) {
+		csv_comm_mode = CSV_COMM_MAILBOX_ON;
+		csv_ring_buffer_queue_free();
+	}
 
 	sev->state = SEV_STATE_UNINIT;
 	dev_dbg(sev->dev, "SEV firmware shutdown\n");
