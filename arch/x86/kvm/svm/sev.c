@@ -79,6 +79,9 @@ static DEFINE_MUTEX(csv_cmd_batch_mutex);
 
 static const char sev_vm_mnonce[] = "VM_ATTESTATION";
 
+static int alloc_trans_mempool(void);
+static void free_trans_mempool(void);
+
 struct enc_region {
 	struct list_head list;
 	unsigned long npages;
@@ -2285,6 +2288,16 @@ void __init sev_hardware_setup(void)
 		goto out;
 	}
 
+	if (boot_cpu_data.x86_vendor == X86_VENDOR_HYGON) {
+		if (alloc_trans_mempool()) {
+			bitmap_free(sev_asid_bitmap);
+			sev_asid_bitmap = NULL;
+			bitmap_free(sev_reclaim_asid_bitmap);
+			sev_reclaim_asid_bitmap = NULL;
+			goto out;
+		}
+	}
+
 	if (min_sev_asid <= max_sev_asid) {
 		sev_asid_count = max_sev_asid - min_sev_asid + 1;
 		WARN_ON_ONCE(misc_cg_set_capacity(MISC_CG_RES_SEV, sev_asid_count));
@@ -2351,6 +2364,9 @@ void sev_hardware_unsetup(void)
 
 	/* No need to take sev_bitmap_lock, all VMs have been destroyed. */
 	sev_flush_asids(1, max_sev_asid);
+
+	if (boot_cpu_data.x86_vendor == X86_VENDOR_HYGON)
+		free_trans_mempool();
 
 	bitmap_free(sev_asid_bitmap);
 	bitmap_free(sev_reclaim_asid_bitmap);
@@ -3286,6 +3302,91 @@ e_unpin_memory:
 	return ret;
 }
 
+/*--1024--1023--1024--1023--*/
+#define TRANS_MEMPOOL_1ST_BLOCK_OFFSET		0
+#define TRANS_MEMPOOL_2ND_BLOCK_OFFSET		(1024 << PAGE_SHIFT)
+#define TRANS_MEMPOOL_3RD_BLOCK_OFFSET		(2047 << PAGE_SHIFT)
+#define TRANS_MEMPOOL_4TH_BLOCK_OFFSET		(3071 << PAGE_SHIFT)
+#define TRANS_MEMPOOL_BLOCKS_MAX_OFFSET		(4094 << PAGE_SHIFT)
+#define TRANS_MEMPOOL_BLOCK_NUM			4
+#define TRANS_MEMPOOL_BLOCK_SIZE		(1024 * PAGE_SIZE)
+
+static size_t g_mempool_offset;
+void *g_trans_mempool[TRANS_MEMPOOL_BLOCK_NUM] = { 0, };
+
+static void reset_mempool_offset(void)
+{
+	g_mempool_offset = 0;
+}
+
+static int alloc_trans_mempool(void)
+{
+	int i;
+
+	for (i = 0; i < TRANS_MEMPOOL_BLOCK_NUM; i++) {
+		WARN_ONCE(g_trans_mempool[i],
+			  "CSV: g_trans_mempool[%d] was tainted\n", i);
+
+		g_trans_mempool[i] = kzalloc(TRANS_MEMPOOL_BLOCK_SIZE, GFP_KERNEL);
+		if (!g_trans_mempool[i])
+			goto free_trans_mempool;
+	}
+
+	g_mempool_offset = 0;
+	return 0;
+
+free_trans_mempool:
+	for (i = 0; i < TRANS_MEMPOOL_BLOCK_NUM; i++) {
+		kfree(g_trans_mempool[i]);
+		g_trans_mempool[i] = NULL;
+	}
+
+	return -ENOMEM;
+}
+
+static void free_trans_mempool(void)
+{
+	int i;
+
+	for (i = 0; i < TRANS_MEMPOOL_BLOCK_NUM; i++) {
+		kfree(g_trans_mempool[i]);
+		g_trans_mempool[i] = NULL;
+	}
+
+	g_mempool_offset = 0;
+}
+
+static void __maybe_unused *get_trans_data_from_mempool(size_t size)
+{
+	void *trans = NULL;
+	char *trans_data = NULL;
+	int i;
+	size_t offset;
+
+	if (g_mempool_offset < TRANS_MEMPOOL_2ND_BLOCK_OFFSET) {
+		i = 0;
+		offset = g_mempool_offset - TRANS_MEMPOOL_1ST_BLOCK_OFFSET;
+	} else if (g_mempool_offset < TRANS_MEMPOOL_3RD_BLOCK_OFFSET) {
+		i = 1;
+		offset = g_mempool_offset - TRANS_MEMPOOL_2ND_BLOCK_OFFSET;
+	} else if (g_mempool_offset < TRANS_MEMPOOL_4TH_BLOCK_OFFSET) {
+		i = 2;
+		offset = g_mempool_offset - TRANS_MEMPOOL_3RD_BLOCK_OFFSET;
+	} else if (g_mempool_offset < TRANS_MEMPOOL_BLOCKS_MAX_OFFSET) {
+		i = 3;
+		offset = g_mempool_offset - TRANS_MEMPOOL_4TH_BLOCK_OFFSET;
+	} else {
+		pr_err("CSV: mempool is full (offset: %lu)\n", g_mempool_offset);
+		return NULL;
+	}
+
+	trans_data = (char *)g_trans_mempool[i];
+	trans = &trans_data[offset];
+	g_mempool_offset += size;
+
+	return trans;
+}
+
 static int csv_ringbuf_infos_free(struct kvm *kvm,
 				  struct csv_ringbuf_infos *ringbuf_infos)
 {
@@ -3421,6 +3522,7 @@ static int csv_command_batch(struct kvm *kvm, struct kvm_sev_cmd *argp)
 err_free_ring_buffer_infos_items:
 	csv_ringbuf_infos_free(kvm, ringbuf_infos);
 	kfree(ringbuf_infos);
+	reset_mempool_offset();
 
 err_free_ring_buffer:
 	csv_ring_buffer_queue_free();
