@@ -569,6 +569,13 @@ struct csv_cmdptr_entry {
 	u64 cmd_buf_ptr;
 } __packed;
 
+struct csv_statval_entry {
+	u16 status;
+	u16 reserved0;
+	u32 reserved1;
+	u64 reserved2;
+} __packed;
+
 struct csv_queue {
 	u32 head;
 	u32 tail;
@@ -705,6 +712,8 @@ int csv_ring_buffer_queue_free(void);
 
 int csv_fill_cmd_queue(int prio, int cmd, void *data, uint16_t flags);
 
+int csv_check_stat_queue_status(int *psp_ret);
+
 #else	/* !CONFIG_CRYPTO_DEV_SP_PSP */
 
 static inline int
@@ -734,6 +743,8 @@ static inline int csv_ring_buffer_queue_free(void) { return -ENODEV; }
 
 static inline
 int csv_fill_cmd_queue(int prio, int cmd, void *data, uint16_t flags) { return -ENODEV; }
+
+static inline int csv_check_stat_queue_status(int *psp_ret) { return -ENODEV; }
 
 #endif	/* CONFIG_CRYPTO_DEV_SP_PSP */
 
