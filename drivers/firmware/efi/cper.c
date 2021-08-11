@@ -630,6 +630,9 @@ void cper_estatus_print(const char *pfx,
 	int sec_no = 0;
 	char newpfx[64];
 	__u16 severity;
+	struct raw_data_header *r_data_header;
+	struct ras_reg_common *reg_common;
+	int sub_record_no = 0;
 
 	severity = estatus->error_severity;
 	if (severity == CPER_SEV_CORRECTED)
@@ -642,6 +645,31 @@ void cper_estatus_print(const char *pfx,
 	apei_estatus_for_each_section(estatus, gdata) {
 		cper_estatus_print_section(newpfx, gdata, sec_no);
 		sec_no++;
+	}
+
+	r_data_header = (struct raw_data_header *)((void *)estatus +
+						   estatus->raw_data_offset);
+	/*
+	 * ONLY processor, CMN, GIC, and SMMU has raw error data which follow
+	 * any Generic Error Data Entries. The raw error data format is vendor
+	 * implementation defined.
+	 */
+	if (!r_data_header->ras_count)
+		return;
+
+	pr_info("%s type: 0x%x, ras_count: %d\n", pfx, r_data_header->type,
+	       r_data_header->ras_count);
+
+	apei_estatus_for_each_raw_reg_common(r_data_header, reg_common) {
+		pr_info("%s sub_type: 0x%x\n", pfx,
+		       r_data_header->sub_type[sub_record_no]);
+		pr_info("%s fr: 0x%llx, ctrl: 0x%llx, status: 0x%llx, addr: 0x%llx\n",
+		       pfx, reg_common->fr, reg_common->ctrl,
+		       reg_common->status, reg_common->addr);
+		pr_info("%s misc0: 0x%llx, misc1: 0x%llx, misc2: 0x%llx, misc3: 0x%llx\n",
+		       pfx, reg_common->misc0, reg_common->misc1,
+		       reg_common->misc2, reg_common->misc3);
+		sub_record_no++;
 	}
 }
 EXPORT_SYMBOL_GPL(cper_estatus_print);
