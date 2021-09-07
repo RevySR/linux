@@ -892,6 +892,7 @@ xfs_break_layouts(
 {
 	bool			retry;
 	int			error;
+	struct xfs_inode	*ip = XFS_I(inode);
 
 	ASSERT(xfs_isilocked(XFS_I(inode), XFS_IOLOCK_SHARED|XFS_IOLOCK_EXCL));
 
@@ -899,6 +900,17 @@ xfs_break_layouts(
 		retry = false;
 		switch (reason) {
 		case BREAK_UNMAP:
+			/*
+			 * For inodes flagged with XFS_REFLINK_{PRIMARY, SECONDARY}, users
+			 * can ensure there are no inflight dio operations on these inodes,
+			 * so we can bypass xfs_break_dax_layouts(BREAK_UNMAP) safely.
+			 */
+			if (ip->i_reflink_flags & (XFS_REFLINK_PRIMARY |
+						   XFS_REFLINK_SECONDARY)) {
+				error = 0;
+				break;
+			}
+
 			error = xfs_break_dax_layouts(inode, &retry);
 			if (error || retry)
 				break;
