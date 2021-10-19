@@ -145,6 +145,9 @@ int sched_core_share_pid(unsigned int cmd, pid_t pid, enum pid_type type,
 	    (cmd != PR_SCHED_CORE_GET && uaddr))
 		return -EINVAL;
 
+	if (cmd > PR_SCHED_CORE_SHARE_FROM && cmd < PR_SCHED_CORE_CLEAR)
+		return -EINVAL;
+
 	rcu_read_lock();
 	if (pid == 0) {
 		task = current;
@@ -201,6 +204,10 @@ int sched_core_share_pid(unsigned int cmd, pid_t pid, enum pid_type type,
 		cookie = sched_core_clone_cookie(task);
 		__sched_core_set(current, cookie);
 		goto out;
+
+	case PR_SCHED_CORE_CLEAR:
+		cookie = 0;
+		break;
 
 	default:
 		err = -EINVAL;
