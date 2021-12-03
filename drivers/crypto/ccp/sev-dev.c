@@ -1190,6 +1190,9 @@ static long sev_ioctl(struct file *file, unsigned int ioctl, unsigned long arg)
 		case CSV_PLATFORM_INIT:
 			ret = __sev_platform_init_locked(&input.error);
 			goto result_to_user;
+		case CSV_PLATFORM_SHUTDOWN:
+			ret = __sev_platform_shutdown_locked(&input.error);
+			goto result_to_user;
 		case CSV_HGSC_CERT_IMPORT:
 			ret = csv_ioctl_do_hgsc_import(&input);
 			goto result_to_user;
