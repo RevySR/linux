@@ -16,6 +16,8 @@
 
 #define SEV_FW_BLOB_MAX_SIZE	0x4000	/* 16KB */
 
+#define CSV_FW_MAX_SIZE		0x80000	/* 512KB */
+
 /**
  * SEV platform state
  */
