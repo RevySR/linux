@@ -1187,6 +1187,9 @@ static long sev_ioctl(struct file *file, unsigned int ioctl, unsigned long arg)
 
 	if (boot_cpu_data.x86_vendor == X86_VENDOR_HYGON) {
 		switch (input.cmd) {
+		case CSV_PLATFORM_INIT:
+			ret = __sev_platform_init_locked(&input.error);
+			goto result_to_user;
 		case CSV_HGSC_CERT_IMPORT:
 			ret = csv_ioctl_do_hgsc_import(&input);
 			goto result_to_user;
