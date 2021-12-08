@@ -148,6 +148,8 @@ struct smc_link {
 	enum smc_wr_reg_state	wr_reg_state;	/* state of wr_reg request */
 
 	u8			gid[SMC_GID_SIZE];/* gid matching used vlan id*/
+	u8			eiwarp_gid[SMC_GID_SIZE];
+						/* gid of eRDMA iWARP device */
 	u8			sgid_index;	/* gid index for vlan id      */
 	u32			peer_qpn;	/* QP number of peer */
 	enum ib_mtu		path_mtu;	/* used mtu */
@@ -393,6 +395,7 @@ struct smc_init_info_smcrv2 {
 	struct smc_ib_device	*ib_dev_v2;
 	u8			ib_port_v2;
 	u8			ib_gid_v2[SMC_GID_SIZE];
+	u8			eiwarp_gid[SMC_GID_SIZE];
 
 	/* Additional output fields when clc_sk and daddr is set as well */
 	u8			uses_gateway;

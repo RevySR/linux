@@ -903,6 +903,10 @@ int smcr_link_init(struct smc_link_group *lgr, struct smc_link *lnk,
 						  &ini->smcrv2 : NULL);
 	if (rc)
 		goto out;
+
+	if (smc_ib_is_iwarp(lnk->smcibdev->ibdev, lnk->ibport))
+		memcpy(lnk->eiwarp_gid, ini->smcrv2.eiwarp_gid, SMC_GID_SIZE);
+
 	rc = smc_llc_link_init(lnk);
 	if (rc)
 		goto out;

@@ -202,12 +202,25 @@ out:
 
 static int smc_ib_fill_mac(struct smc_ib_device *smcibdev, u8 ibport)
 {
+	struct ib_device *ibdev = smcibdev->ibdev;
 	const struct ib_gid_attr *attr;
+	struct net_device *ndev;
 	int rc;
 
 	attr = rdma_get_gid_attr(smcibdev->ibdev, ibport, 0);
 	if (IS_ERR(attr))
 		return -ENODEV;
+
+	if (smc_ib_is_iwarp(ibdev, ibport)) {
+		if (!ibdev->ops.get_netdev)
+			return -ENODEV;
+		ndev = ibdev->ops.get_netdev(ibdev, ibport);
+		if (!ndev)
+			return -ENODEV;
+		ether_addr_copy(smcibdev->mac[ibport - 1], ndev->dev_addr);
+		dev_put(ndev);
+		return 0;
+	}
 
 	rc = rdma_read_gid_l2_fields(attr, NULL, smcibdev->mac[ibport - 1]);
 	rdma_put_gid_attr(attr);
@@ -285,6 +298,56 @@ static int smc_ib_determine_gid_rcu(const struct net_device *ndev,
 			*sgid_index = attr->index;
 		return 0;
 	}
+
+	/* Note: This is a tricky workaround for eRDMA iWARP.
+	 *
+	 * eRDAM iWARP has only one GID of type IB_GID_TYPE_IB which is
+	 * converted from the MAC address. But RoCEv2 device have GID of
+	 * type IB_GID_TYPE_ROCE_UDP_ENCAP which is converted from the
+	 * IPv4 or IPv6 address. The IPv4 GID is used by SMCRv2 protocol
+	 * to record IPv4 address of peer.
+	 *
+	 * So in order to make SMCRv2 works well with eRDMA iWARP, we
+	 * do not record the real MAC GID of eRDMA iWARP, but convert the
+	 * IPv4 address of the net_device corresponding to eRDMA iWARP
+	 * into an IPv4 GID and record it.
+	 *
+	 * A prerequisite for this is that eRDMA iWARP will only be selected
+	 * for the reason that its corresponding net_device is the net_device
+	 * of clcsock, which means that we are not allowed to bind an eRDMA
+	 * iWARP device with another ethernet device through pnet_id.
+	 */
+	if (smcrv2 && attr->gid_type == IB_GID_TYPE_IB) {
+		struct in_device *in_dev = __in_dev_get_rcu(ndev);
+		struct net *net = dev_net(ndev);
+		const struct in_ifaddr *ifa;
+		bool ip_match = false;
+
+		if (!in_dev || smcrv2->saddr == cpu_to_be32(INADDR_NONE))
+			goto out;
+		in_dev_for_each_ifa_rcu(ifa, in_dev) {
+			if (ifa->ifa_address != smcrv2->saddr)
+				continue;
+			ip_match = true;
+			break;
+		}
+		if (!ip_match)
+			goto out;
+		if (smcrv2->daddr && smc_ib_find_route(net, smcrv2->saddr,
+						       smcrv2->daddr,
+						       smcrv2->nexthop_mac,
+						       &smcrv2->uses_gateway))
+			goto out;
+
+		if (gid)
+			ipv6_addr_set_v4mapped(smcrv2->saddr, (struct in6_addr *)gid);
+		if (sgid_index)
+			*sgid_index = attr->index;
+
+		memcpy(smcrv2->eiwarp_gid, &attr->gid, SMC_GID_SIZE);
+		return 0;
+	}
+
 	if (smcrv2 && attr->gid_type == IB_GID_TYPE_ROCE_UDP_ENCAP &&
 	    smc_ib_gid_to_ipv4((u8 *)&attr->gid) != cpu_to_be32(INADDR_NONE)) {
 		struct in_device *in_dev = __in_dev_get_rcu(ndev);
@@ -323,28 +386,40 @@ int smc_ib_determine_gid(struct smc_ib_device *smcibdev, u8 ibport,
 			 unsigned short vlan_id, u8 gid[], u8 *sgid_index,
 			 struct smc_init_info_smcrv2 *smcrv2)
 {
+	struct ib_device *ibdev = smcibdev->ibdev;
 	const struct ib_gid_attr *attr;
 	const struct net_device *ndev;
+	bool iwarp_ndev = false;
 	int i;
 
+	iwarp_ndev = smc_ib_is_iwarp(ibdev, ibport) && ibdev->ops.get_netdev;
+
 	for (i = 0; i < smcibdev->pattr[ibport - 1].gid_tbl_len; i++) {
-		attr = rdma_get_gid_attr(smcibdev->ibdev, ibport, i);
+		attr = rdma_get_gid_attr(ibdev, ibport, i);
 		if (IS_ERR(attr))
 			continue;
 
 		rcu_read_lock();
-		ndev = rdma_read_gid_attr_ndev_rcu(attr);
-		if (!IS_ERR(ndev) &&
+		if (iwarp_ndev)
+			ndev = ibdev->ops.get_netdev(ibdev, ibport);
+		else
+			ndev = rdma_read_gid_attr_ndev_rcu(attr);
+
+		if (ndev && !IS_ERR(ndev) &&
 		    ((!vlan_id && !is_vlan_dev(ndev)) ||
 		     (vlan_id && is_vlan_dev(ndev) &&
 		      vlan_dev_vlan_id(ndev) == vlan_id))) {
 			if (!smc_ib_determine_gid_rcu(ndev, attr, gid,
 						      sgid_index, smcrv2)) {
+				if (iwarp_ndev)
+					dev_put((struct net_device *)ndev);
 				rcu_read_unlock();
 				rdma_put_gid_attr(attr);
 				return 0;
 			}
 		}
+		if (ndev && iwarp_ndev)
+			dev_put((struct net_device *)ndev);
 		rcu_read_unlock();
 		rdma_put_gid_attr(attr);
 	}
@@ -365,7 +440,9 @@ static bool smc_ib_check_link_gid(u8 gid[SMC_GID_SIZE], bool smcrv2,
 			continue;
 
 		rcu_read_lock();
-		if ((!smcrv2 && attr->gid_type == IB_GID_TYPE_ROCE) ||
+		if ((smcrv2 && attr->gid_type == IB_GID_TYPE_IB &&
+		     smc_ib_is_iwarp(smcibdev->ibdev, ibport)) ||
+		    (!smcrv2 && attr->gid_type == IB_GID_TYPE_ROCE) ||
 		    (smcrv2 && attr->gid_type == IB_GID_TYPE_ROCE_UDP_ENCAP &&
 		     !(ipv6_addr_type((const struct in6_addr *)&attr->gid)
 				     & IPV6_ADDR_LINKLOCAL)))
@@ -380,6 +457,7 @@ static bool smc_ib_check_link_gid(u8 gid[SMC_GID_SIZE], bool smcrv2,
 /* check all links if the gid is still defined on smcibdev */
 static void smc_ib_gid_check(struct smc_ib_device *smcibdev, u8 ibport)
 {
+	bool is_iwarp = smc_ib_is_iwarp(smcibdev->ibdev, ibport);
 	struct smc_link_group *lgr;
 	int i;
 
@@ -394,7 +472,9 @@ static void smc_ib_gid_check(struct smc_ib_device *smcibdev, u8 ibport)
 			if (lgr->lnk[i].state == SMC_LNK_UNUSED ||
 			    lgr->lnk[i].smcibdev != smcibdev)
 				continue;
-			if (!smc_ib_check_link_gid(lgr->lnk[i].gid,
+			if (!smc_ib_check_link_gid(is_iwarp ?
+						   lgr->lnk[i].eiwarp_gid :
+						   lgr->lnk[i].gid,
 						   lgr->smc_version == SMC_V2,
 						   smcibdev, ibport))
 				smcr_port_err(smcibdev, ibport);
@@ -1070,7 +1150,8 @@ static int smc_ib_add_dev(struct ib_device *ibdev)
 	int i, rc = 0;
 	u8 port_cnt;
 
-	if (ibdev->node_type != RDMA_NODE_IB_CA)
+	if (ibdev->node_type != RDMA_NODE_IB_CA &&
+	    ibdev->node_type != RDMA_NODE_RNIC)
 		return -EOPNOTSUPP;
 
 	smcibdev = kzalloc(sizeof(*smcibdev), GFP_KERNEL);
