@@ -1167,6 +1167,12 @@ struct rq {
 	call_single_data_t	cfsb_csd;
 	struct list_head	cfsb_csd_list;
 #endif
+
+#ifdef CONFIG_SCHED_ACPU
+	u64 acpu_idle_sum;
+	u64 sibidle_sum;
+	u64 last_acpu_update_time;
+#endif
 };
 
 #ifdef CONFIG_FAIR_GROUP_SCHED
