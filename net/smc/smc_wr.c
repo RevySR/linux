@@ -137,25 +137,28 @@ static void smc_wr_tx_tasklet_fn(struct tasklet_struct *t)
 {
 	struct smc_ib_cq *smcibcq = from_tasklet(smcibcq, t, tasklet);
 	struct ib_wc wc[SMC_WR_MAX_POLL_CQE];
-	int i = 0, rc;
-	int polled = 0;
+	int i, rc;
 
 again:
-	polled++;
 	do {
 		memset(&wc, 0, sizeof(wc));
 		rc = ib_poll_cq(smcibcq->ib_cq, SMC_WR_MAX_POLL_CQE, wc);
-		if (polled == 1) {
-			ib_req_notify_cq(smcibcq->ib_cq,
-					 IB_CQ_NEXT_COMP |
-					 IB_CQ_REPORT_MISSED_EVENTS);
-		}
-		if (!rc)
-			break;
 		for (i = 0; i < rc; i++)
 			smc_wr_tx_process_cqe(&wc[i]);
+		if (rc < SMC_WR_MAX_POLL_CQE)
+			/* If < SMC_WR_MAX_POLL_CQE, the CQ should have been
+			 * drained, no need to poll again.
+			 */
+			break;
 	} while (rc > 0);
-	if (polled == 1)
+
+	/* With IB_CQ_REPORT_MISSED_EVENTS, if ib_req_notify_cq() returns 0,
+	 * then it is safe to wait for the next event; else we must poll the
+	 * CQ again to make sure we won't miss any event.
+	 */
+	if (ib_req_notify_cq(smcibcq->ib_cq,
+			     IB_CQ_NEXT_COMP |
+			     IB_CQ_REPORT_MISSED_EVENTS) > 0)
 		goto again;
 }
 
@@ -478,24 +481,28 @@ static void smc_wr_rx_tasklet_fn(struct tasklet_struct *t)
 {
 	struct smc_ib_cq *smcibcq = from_tasklet(smcibcq, t, tasklet);
 	struct ib_wc wc[SMC_WR_MAX_POLL_CQE];
-	int polled = 0;
 	int rc;
 
 again:
-	polled++;
 	do {
 		memset(&wc, 0, sizeof(wc));
 		rc = ib_poll_cq(smcibcq->ib_cq, SMC_WR_MAX_POLL_CQE, wc);
-		if (polled == 1) {
-			ib_req_notify_cq(smcibcq->ib_cq,
-					 IB_CQ_SOLICITED_MASK
-					 | IB_CQ_REPORT_MISSED_EVENTS);
-		}
-		if (!rc)
+		if (rc > 0)
+			smc_wr_rx_process_cqes(&wc[0], rc);
+		if (rc < SMC_WR_MAX_POLL_CQE)
+			/* If < SMC_WR_MAX_POLL_CQE, the CQ should have been
+			 * drained, no need to poll again.
+			 */
 			break;
-		smc_wr_rx_process_cqes(&wc[0], rc);
 	} while (rc > 0);
-	if (polled == 1)
+
+	/* With IB_CQ_REPORT_MISSED_EVENTS, if ib_req_notify_cq() returns 0,
+	 * then it is safe to wait for the next event; else we must poll the
+	 * CQ again to make sure we won't miss any event.
+	 */
+	if (ib_req_notify_cq(smcibcq->ib_cq,
+			     IB_CQ_NEXT_COMP |
+			     IB_CQ_REPORT_MISSED_EVENTS) > 0)
 		goto again;
 }
 
