@@ -98,6 +98,8 @@ static const int six_hundred_forty_kb = 640 * 1024;
 
 #ifdef CONFIG_USER_NS
 extern int unprivileged_userns_clone;
+extern int userns_max_level;
+extern int userns_max_level_max;
 #endif
 
 static const int ngroups_max = NGROUPS_MAX;
@@ -2053,6 +2055,15 @@ static struct ctl_table kern_table[] = {
 		.maxlen		= sizeof(int),
 		.mode		= 0644,
 		.proc_handler	= proc_dointvec,
+	},
+	{
+		.procname	= "userns_max_level",
+		.data		= &userns_max_level,
+		.maxlen		= sizeof(int),
+		.mode		= 0644,
+		.proc_handler	= proc_dointvec_minmax,
+		.extra1		= SYSCTL_ZERO,
+		.extra2		= &userns_max_level_max,
 	},
 #endif
 	{ }
