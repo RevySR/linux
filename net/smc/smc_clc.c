@@ -835,7 +835,13 @@ int smc_clc_send_decline(struct smc_sock *smc, u32 peer_diag_info, u8 version)
 	memset(&msg, 0, sizeof(msg));
 	vec.iov_base = &dclc;
 	vec.iov_len = send_len;
+	mutex_lock(&smc->clcsock_release_lock);
+	if (!smc->clcsock || !smc->clcsock->sk) {
+		mutex_unlock(&smc->clcsock_release_lock);
+		return -EPROTO;
+	}
 	len = kernel_sendmsg(smc->clcsock, &msg, &vec, 1, send_len);
+	mutex_unlock(&smc->clcsock_release_lock);
 	if (len < 0 || len < send_len)
 		len = -EPROTO;
 	return len > 0 ? 0 : len;
