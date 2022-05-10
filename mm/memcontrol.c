@@ -8976,9 +8976,9 @@ void memcg_meminfo(struct mem_cgroup *memcg,
 	ext->writeback = memcg_page_state(memcg, NR_WRITEBACK);
 	ext->anon_mapped = memcg_page_state(memcg, NR_ANON_MAPPED);
 	ext->file_mapped = memcg_page_state(memcg, NR_FILE_MAPPED);
-	ext->slab_reclaimable = memcg_page_state(memcg, NR_SLAB_RECLAIMABLE_B);
+	ext->slab_reclaimable = memcg_page_state(memcg, NR_SLAB_RECLAIMABLE_B) >> PAGE_SHIFT;
 	ext->slab_unreclaimable =
-		memcg_page_state(memcg, NR_SLAB_UNRECLAIMABLE_B);
+		memcg_page_state(memcg, NR_SLAB_UNRECLAIMABLE_B) >> PAGE_SHIFT;
 	ext->kernel_stack_kb = memcg_page_state(memcg, NR_KERNEL_STACK_KB);
 	ext->writeback_temp = 0;
 #ifdef CONFIG_TRANSPARENT_HUGEPAGE
