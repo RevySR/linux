@@ -53,6 +53,7 @@
 #include <asm/efi.h>
 #include <asm/xen/hypervisor.h>
 #include <asm/mmu_context.h>
+#include <asm-generic/orc_lookup.h>
 
 static int num_standard_resources;
 static struct resource *standard_resources;
@@ -390,6 +391,7 @@ void __init __no_sanitize_address setup_arch(char **cmdline_p)
 			"This indicates a broken bootloader or old kernel\n",
 			boot_args[1], boot_args[2], boot_args[3]);
 	}
+	orc_lookup_init();
 }
 
 static inline bool cpu_can_disable(unsigned int cpu)

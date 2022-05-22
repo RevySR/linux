@@ -25,6 +25,7 @@
 #include <asm/insn.h>
 #include <asm/scs.h>
 #include <asm/sections.h>
+#include <asm-generic/orc_lookup.h>
 
 static u64 module_direct_base __ro_after_init = 0;
 static u64 module_plt_base __ro_after_init = 0;
@@ -587,7 +588,8 @@ int module_finalize(const Elf_Ehdr *hdr,
 		    const Elf_Shdr *sechdrs,
 		    struct module *me)
 {
-	const Elf_Shdr *s;
+	const Elf_Shdr *s, *orc, *orc_ip;;
+
 	s = find_section(hdr, sechdrs, ".altinstructions");
 	if (s)
 		apply_alternatives_module((void *)s->sh_addr, s->sh_size);
@@ -596,6 +598,15 @@ int module_finalize(const Elf_Ehdr *hdr,
 		s = find_section(hdr, sechdrs, ".init.eh_frame");
 		if (s)
 			scs_patch((void *)s->sh_addr, s->sh_size);
+	}
+
+	orc = find_section(hdr, sechdrs, ".orc_unwind");
+	orc_ip = find_section(hdr, sechdrs, ".orc_unwind_ip");
+
+	if (orc && orc_ip) {
+		orc_lookup_module_init(me,
+				       (void *)orc_ip->sh_addr, orc_ip->sh_size,
+				       (void *)orc->sh_addr, orc->sh_size);
 	}
 
 	return module_init_ftrace_plt(hdr, sechdrs, me);
