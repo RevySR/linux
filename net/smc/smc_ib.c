@@ -181,12 +181,12 @@ int smc_ib_ready_link(struct smc_link *lnk)
 	if (rc)
 		goto out;
 	smc_wr_remember_qp_attr(lnk);
-	rc = ib_req_notify_cq(lnk->smcibcq_recv->ib_cq,
+	rc = ib_req_notify_cq(lnk->smcibcq->ib_cq,
 			      IB_CQ_SOLICITED_MASK);
 	if (rc)
 		goto out;
 
-	rc = ib_req_notify_cq(lnk->smcibcq_send->ib_cq,
+	rc = ib_req_notify_cq(lnk->smcibcq->ib_cq,
 			      IB_CQ_NEXT_COMP | IB_CQ_REPORT_MISSED_EVENTS);
 	if (rc)
 		goto out;
@@ -768,21 +768,16 @@ int smcr_nl_get_device(struct sk_buff *skb, struct netlink_callback *cb)
 	return skb->len;
 }
 
-static struct smc_ib_cq *smc_ib_get_least_used_cq(struct smc_ib_device *smcibdev,
-						  bool is_send)
+static struct smc_ib_cq *smc_ib_get_least_used_cq(struct smc_ib_device *smcibdev)
 {
 	struct smc_ib_cq *smcibcq, *cq;
 	int min, i;
 
-	if (is_send)
-		smcibcq = smcibdev->smcibcq_send;
-	else
-		smcibcq = smcibdev->smcibcq_recv;
-
+	smcibcq = smcibdev->smcibcq;
 	cq = smcibcq;
 	min = cq->load;
 
-	for (i = 0; i < smcibdev->num_cq_peer; i++) {
+	for (i = 0; i < smcibdev->num_cq; i++) {
 		if (smcibcq[i].load < min) {
 			cq = &smcibcq[i];
 			min = cq->load;
@@ -823,26 +818,21 @@ void smc_ib_destroy_queue_pair(struct smc_link *lnk)
 {
 	if (lnk->roce_qp) {
 		ib_destroy_qp(lnk->roce_qp);
-		smc_ib_put_cq(lnk->smcibcq_send);
-		smc_ib_put_cq(lnk->smcibcq_recv);
+		smc_ib_put_cq(lnk->smcibcq);
 	}
 	lnk->roce_qp = NULL;
-	lnk->smcibcq_send = NULL;
-	lnk->smcibcq_recv = NULL;
+	lnk->smcibcq = NULL;
 }
 
 /* create a queue pair within the protection domain for a link */
 int smc_ib_create_queue_pair(struct smc_link *lnk)
 {
-	struct smc_ib_cq *smcibcq_send = smc_ib_get_least_used_cq(lnk->smcibdev,
-								  true);
-	struct smc_ib_cq *smcibcq_recv = smc_ib_get_least_used_cq(lnk->smcibdev,
-								  false);
+	struct smc_ib_cq *smcibcq = smc_ib_get_least_used_cq(lnk->smcibdev);
 	struct ib_qp_init_attr qp_attr = {
 		.event_handler = smc_ib_qp_event_handler,
 		.qp_context = lnk,
-		.send_cq = smcibcq_send->ib_cq,
-		.recv_cq = smcibcq_recv->ib_cq,
+		.send_cq = smcibcq->ib_cq,
+		.recv_cq = smcibcq->ib_cq,
 		.srq = NULL,
 		.cap = {
 				/* include unsolicited rdma_writes as well,
@@ -868,8 +858,7 @@ int smc_ib_create_queue_pair(struct smc_link *lnk)
 	if (IS_ERR(lnk->roce_qp)) {
 		lnk->roce_qp = NULL;
 	} else {
-		lnk->smcibcq_send = smcibcq_send;
-		lnk->smcibcq_recv = smcibcq_recv;
+		lnk->smcibcq = smcibcq;
 		smc_wr_remember_qp_attr(lnk);
 	}
 	return rc;
@@ -1022,17 +1011,13 @@ static void smc_ib_cleanup_cq(struct smc_ib_device *smcibdev)
 {
 	int i;
 
-	for (i = 0; i < smcibdev->num_cq_peer; i++) {
-		if (smcibdev->smcibcq_send[i].ib_cq)
-			ib_destroy_cq(smcibdev->smcibcq_send[i].ib_cq);
-
-		if (smcibdev->smcibcq_recv[i].ib_cq)
-			ib_destroy_cq(smcibdev->smcibcq_recv[i].ib_cq);
+	for (i = 0; i < smcibdev->num_cq; i++) {
+		if (smcibdev->smcibcq[i].ib_cq)
+			ib_destroy_cq(smcibdev->smcibcq[i].ib_cq);
 	}
 	smc_wr_remove_dev(smcibdev);
 
-	kfree(smcibdev->smcibcq_send);
-	kfree(smcibdev->smcibcq_recv);
+	kfree(smcibdev->smcibcq);
 }
 
 long smc_ib_setup_per_ibdev(struct smc_ib_device *smcibdev)
@@ -1040,7 +1025,7 @@ long smc_ib_setup_per_ibdev(struct smc_ib_device *smcibdev)
 	struct ib_cq_init_attr cqattr = { .cqe = SMC_MAX_CQE };
 	int cqe_size_order, smc_order;
 	struct smc_ib_cq *smcibcq;
-	int i, num_cq_peer;
+	int i, num_cq;
 	long rc;
 
 	mutex_lock(&smcibdev->mutex);
@@ -1052,42 +1037,22 @@ long smc_ib_setup_per_ibdev(struct smc_ib_device *smcibdev)
 	smc_order = MAX_ORDER - cqe_size_order;
 	if (SMC_MAX_CQE + 2 > (0x00000001 << smc_order) * PAGE_SIZE)
 		cqattr.cqe = (0x00000001 << smc_order) * PAGE_SIZE - 2;
-	num_cq_peer = min_t(int, smcibdev->ibdev->num_comp_vectors,
-			    num_online_cpus());
-	smcibdev->num_cq_peer = num_cq_peer;
-	smcibdev->smcibcq_send = kcalloc(num_cq_peer, sizeof(*smcibcq),
-					 GFP_KERNEL);
-	if (!smcibdev->smcibcq_send) {
-		rc = -ENOMEM;
-		goto err;
-	}
-	smcibdev->smcibcq_recv = kcalloc(num_cq_peer, sizeof(*smcibcq),
-					 GFP_KERNEL);
-	if (!smcibdev->smcibcq_recv) {
+	num_cq = min_t(int, smcibdev->ibdev->num_comp_vectors,
+		       num_online_cpus());
+	smcibdev->num_cq = num_cq;
+	smcibdev->smcibcq = kcalloc(num_cq, sizeof(*smcibcq), GFP_KERNEL);
+	if (!smcibdev->smcibcq) {
 		rc = -ENOMEM;
 		goto err;
 	}
 
 	/* initialize CQs */
-	for (i = 0; i < num_cq_peer; i++) {
-		/* initialize send CQ */
-		smcibcq = &smcibdev->smcibcq_send[i];
+	for (i = 0; i < num_cq; i++) {
+		smcibcq = &smcibdev->smcibcq[i];
 		smcibcq->smcibdev = smcibdev;
-		smcibcq->is_send = 1;
 		cqattr.comp_vector = i;
 		smcibcq->ib_cq = ib_create_cq(smcibdev->ibdev,
-					      smc_wr_tx_cq_handler, NULL,
-					      smcibcq, &cqattr);
-		rc = PTR_ERR_OR_ZERO(smcibcq->ib_cq);
-		if (IS_ERR(smcibcq->ib_cq))
-			goto err;
-
-		/* initialize recv CQ */
-		smcibcq = &smcibdev->smcibcq_recv[i];
-		smcibcq->smcibdev = smcibdev;
-		cqattr.comp_vector = num_cq_peer - 1 - i; /* reverse to spread snd/rcv */
-		smcibcq->ib_cq = ib_create_cq(smcibdev->ibdev,
-					      smc_wr_rx_cq_handler, NULL,
+					      smc_wr_cq_handler, NULL,
 					      smcibcq, &cqattr);
 		rc = PTR_ERR_OR_ZERO(smcibcq->ib_cq);
 		if (IS_ERR(smcibcq->ib_cq))

@@ -37,7 +37,6 @@ struct smc_ib_cq {				/* ib_cq wrapper for smc */
 	struct smc_ib_device	*smcibdev;	/* parent ib device */
 	struct ib_cq		*ib_cq;		/* real ib_cq for link */
 	struct tasklet_struct	tasklet;	/* tasklet for wr */
-	bool			is_send;	/* send for recv cq */
 	int			load;		/* load of current cq */
 };
 
@@ -46,9 +45,8 @@ struct smc_ib_device {				/* ib-device infos for smc */
 	struct ib_device	*ibdev;
 	struct ib_port_attr	pattr[SMC_MAX_PORTS];	/* ib dev. port attrs */
 	struct ib_event_handler	event_handler;	/* global ib_event handler */
-	int			num_cq_peer;	/* num of snd/rcv cq peer */
-	struct smc_ib_cq	*smcibcq_send;  /* send cqs */
-	struct smc_ib_cq	*smcibcq_recv;  /* recv cqs */
+	int			num_cq;	/* num of snd/rcv cq */
+	struct smc_ib_cq	*smcibcq;  /* send & recv cqs */
 	char			mac[SMC_MAX_PORTS][ETH_ALEN];
 						/* mac address per port*/
 	u8			pnetid[SMC_MAX_PORTS][SMC_MAX_PNETID_LEN];

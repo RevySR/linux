@@ -128,12 +128,11 @@ int smc_wr_tx_v2_send(struct smc_link *link,
 		      struct smc_wr_tx_pend_priv *priv, int len);
 int smc_wr_tx_send_wait(struct smc_link *link, struct smc_wr_tx_pend_priv *priv,
 			unsigned long timeout);
-void smc_wr_tx_cq_handler(struct ib_cq *ib_cq, void *cq_context);
+void smc_wr_cq_handler(struct ib_cq *ib_cq, void *cq_context);
 void smc_wr_tx_wait_no_pending_sends(struct smc_link *link);
 
 int smc_wr_rx_register_handler(struct smc_wr_rx_handler *handler);
 int smc_wr_rx_post_init(struct smc_link *link);
-void smc_wr_rx_cq_handler(struct ib_cq *ib_cq, void *cq_context);
 int smc_wr_reg_send(struct smc_link *link, struct ib_mr *mr);
 
 #endif /* SMC_WR_H */
