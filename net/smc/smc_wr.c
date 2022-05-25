@@ -447,32 +447,28 @@ static inline void smc_wr_rx_demultiplex(struct ib_wc *wc)
 	}
 }
 
-static inline void smc_wr_rx_process_cqes(struct ib_wc wc[], int num)
+static inline void smc_wr_rx_process_cqe(struct ib_wc *wc)
 {
-	struct smc_link *link;
-	int i;
+	struct smc_link *link = wc->qp->qp_context;
 
-	for (i = 0; i < num; i++) {
-		link = wc[i].qp->qp_context;
-		link->wr_rx_id_compl = wc[i].wr_id;
-		if (wc[i].status == IB_WC_SUCCESS) {
-			link->wr_rx_tstamp = jiffies;
-			smc_wr_rx_demultiplex(&wc[i]);
+	link->wr_rx_id_compl = wc->wr_id;
+	if (wc->status == IB_WC_SUCCESS) {
+		link->wr_rx_tstamp = jiffies;
+		smc_wr_rx_demultiplex(wc);
+		smc_wr_rx_post(link); /* refill WR RX */
+	} else {
+		/* handle status errors */
+		switch (wc->status) {
+		case IB_WC_RETRY_EXC_ERR:
+		case IB_WC_RNR_RETRY_EXC_ERR:
+		case IB_WC_WR_FLUSH_ERR:
+			smcr_link_down_cond_sched(link);
+			if (link->wr_rx_id_compl == link->wr_rx_id)
+				wake_up(&link->wr_rx_empty_wait);
+			break;
+		default:
 			smc_wr_rx_post(link); /* refill WR RX */
-		} else {
-			/* handle status errors */
-			switch (wc[i].status) {
-			case IB_WC_RETRY_EXC_ERR:
-			case IB_WC_RNR_RETRY_EXC_ERR:
-			case IB_WC_WR_FLUSH_ERR:
-				smcr_link_down_cond_sched(link);
-				if (link->wr_rx_id_compl == link->wr_rx_id)
-					wake_up(&link->wr_rx_empty_wait);
-				break;
-			default:
-				smc_wr_rx_post(link); /* refill WR RX */
-				break;
-			}
+			break;
 		}
 	}
 }
@@ -481,14 +477,14 @@ static void smc_wr_rx_tasklet_fn(struct tasklet_struct *t)
 {
 	struct smc_ib_cq *smcibcq = from_tasklet(smcibcq, t, tasklet);
 	struct ib_wc wc[SMC_WR_MAX_POLL_CQE];
-	int rc;
+	int i, rc;
 
 again:
 	do {
 		memset(&wc, 0, sizeof(wc));
 		rc = ib_poll_cq(smcibcq->ib_cq, SMC_WR_MAX_POLL_CQE, wc);
-		if (rc > 0)
-			smc_wr_rx_process_cqes(&wc[0], rc);
+		for (i = 0; i < rc; i++)
+			smc_wr_rx_process_cqe(&wc[i]);
 		if (rc < SMC_WR_MAX_POLL_CQE)
 			/* If < SMC_WR_MAX_POLL_CQE, the CQ should have been
 			 * drained, no need to poll again.
