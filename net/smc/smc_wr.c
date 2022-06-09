@@ -453,11 +453,6 @@ again:
 			else
 				smc_wr_tx_process_cqe(&wc[i]);
 		}
-		if (rc < SMC_WR_MAX_POLL_CQE)
-			/* If < SMC_WR_MAX_POLL_CQE, the CQ should have been
-			 * drained, no need to poll again.
-			 */
-			break;
 	} while (rc > 0);
 
 	/* With IB_CQ_REPORT_MISSED_EVENTS, if ib_req_notify_cq() returns 0,
