@@ -288,8 +288,6 @@ int smc_wr_tx_v2_send(struct smc_link *link, struct smc_wr_tx_pend_priv *priv,
 	int rc;
 
 	link->wr_tx_v2_ib->sg_list[0].length = len;
-	ib_req_notify_cq(link->smcibcq->ib_cq,
-			 IB_CQ_NEXT_COMP | IB_CQ_REPORT_MISSED_EVENTS);
 	rc = ib_post_send(link->roce_qp, link->wr_tx_v2_ib, NULL);
 	if (rc) {
 		smc_wr_tx_put_slot(link, priv);
@@ -332,8 +330,6 @@ int smc_wr_reg_send(struct smc_link *link, struct ib_mr *mr)
 {
 	int rc;
 
-	ib_req_notify_cq(link->smcibcq->ib_cq,
-			 IB_CQ_NEXT_COMP | IB_CQ_REPORT_MISSED_EVENTS);
 	link->wr_reg_state = POSTED;
 	link->wr_reg.wr.wr_id = (u64)(uintptr_t)mr;
 	link->wr_reg.mr = mr;

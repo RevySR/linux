@@ -181,10 +181,6 @@ int smc_ib_ready_link(struct smc_link *lnk)
 	if (rc)
 		goto out;
 	smc_wr_remember_qp_attr(lnk);
-	rc = ib_req_notify_cq(lnk->smcibcq->ib_cq,
-			      IB_CQ_NEXT_COMP | IB_CQ_REPORT_MISSED_EVENTS);
-	if (rc)
-		goto out;
 
 	rc = smc_wr_rx_post_init(lnk);
 	if (rc)
@@ -1055,6 +1051,9 @@ long smc_ib_setup_per_ibdev(struct smc_ib_device *smcibdev)
 			goto err;
 		}
 
+		rc = ib_req_notify_cq(smcibcq->ib_cq, IB_CQ_NEXT_COMP);
+		if (rc)
+			goto err;
 	}
 	smc_wr_add_dev(smcibdev);
 	smcibdev->initialized = 1;
