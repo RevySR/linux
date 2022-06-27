@@ -535,8 +535,7 @@ static void smc_wr_init_sge(struct smc_link *lnk)
 		lnk->wr_tx_ibs[i].sg_list = &lnk->wr_tx_sges[i];
 		lnk->wr_tx_ibs[i].num_sge = 1;
 		lnk->wr_tx_ibs[i].opcode = IB_WR_SEND;
-		lnk->wr_tx_ibs[i].send_flags =
-			IB_SEND_SIGNALED | IB_SEND_SOLICITED;
+		lnk->wr_tx_ibs[i].send_flags = IB_SEND_SIGNALED;
 		if (send_inline)
 			lnk->wr_tx_ibs[i].send_flags |= IB_SEND_INLINE;
 		lnk->wr_tx_rdmas[i].wr_tx_rdma[0].wr.opcode = IB_WR_RDMA_WRITE;
@@ -556,8 +555,7 @@ static void smc_wr_init_sge(struct smc_link *lnk)
 		lnk->wr_tx_v2_ib->sg_list = lnk->wr_tx_v2_sge;
 		lnk->wr_tx_v2_ib->num_sge = 1;
 		lnk->wr_tx_v2_ib->opcode = IB_WR_SEND;
-		lnk->wr_tx_v2_ib->send_flags =
-			IB_SEND_SIGNALED | IB_SEND_SOLICITED;
+		lnk->wr_tx_v2_ib->send_flags = IB_SEND_SIGNALED;
 	}
 
 	/* With SMC-Rv2 there can be messages larger than SMC_WR_TX_SIZE.
