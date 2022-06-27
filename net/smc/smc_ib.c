@@ -1050,8 +1050,11 @@ long smc_ib_setup_per_ibdev(struct smc_ib_device *smcibdev)
 					      smc_wr_cq_handler, NULL,
 					      smcibcq, &cqattr);
 		rc = PTR_ERR_OR_ZERO(smcibcq->ib_cq);
-		if (IS_ERR(smcibcq->ib_cq))
+		if (IS_ERR(smcibcq->ib_cq)) {
+			smcibcq->ib_cq = NULL;
 			goto err;
+		}
+
 	}
 	smc_wr_add_dev(smcibdev);
 	smcibdev->initialized = 1;
