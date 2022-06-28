@@ -11,7 +11,9 @@
 #include <linux/miscdevice.h>
 #include <linux/virtfuse.h>
 #include <linux/file.h>
+#include <linux/path.h>
 #include "fuse_i.h"
+#include "../mount.h"
 
 static uint virtfuse_dev_count = 64;
 module_param_named(max_devices, virtfuse_dev_count, uint, 0644);
@@ -191,6 +193,147 @@ static int virtfuse_reset(struct file *file)
 	return 0;
 }
 
+static int fillbuf(char *buf, unsigned int len, unsigned int *pcount,
+		   const char *fmt, ...)
+{
+	va_list args;
+	unsigned int count = *pcount;
+	int step;
+
+	va_start(args, fmt);
+	step = vsnprintf(buf + count, len - count, fmt, args);
+	va_end(args);
+	if (step >= len - count)
+		return -EMSGSIZE;
+
+	*pcount += step;
+	return 0;
+}
+
+static int virtfuse_get_mounts(struct file *file, unsigned long arg)
+{
+	struct virtfuse_mounts_buf vbuf, __user *u_vbuf;
+	struct virtfuse_dev *vfud = virtfuse_dev_get(file);
+	struct fuse_conn *fc = NULL;
+	struct fuse_mount *fm;
+	struct super_block *sb;
+	struct mount *mnt;
+	unsigned int count = 0, len;
+	int order, step, ret = 0;
+	char *buf, *name, *p;
+	void __user *u_buf;
+
+	if (!vfud)
+		return -EUCLEAN;
+
+	u_vbuf = (struct virtfuse_mounts_buf __user *)arg;
+	u_buf = (void __user *)u_vbuf->buf;
+	if (copy_from_user(&vbuf, u_vbuf, sizeof(vbuf)) != 0)
+		return -EFAULT;
+
+	len = vbuf.len;
+	if (len <= 1)
+		return -EMSGSIZE;
+
+	/* init the user buffer as an empty string */
+	if (clear_user(u_buf, 1) != 0)
+		return -EFAULT;
+
+	spin_lock(&vfud->lock);
+	if (vfud->fc)
+		fc = fuse_conn_get(vfud->fc);
+	spin_unlock(&vfud->lock);
+	if (!fc)
+		return 0;
+
+	down_read(&fc->killsb);
+	fm = list_first_entry_or_null(&fc->mounts, struct fuse_mount, fc_entry);
+	if (!fm || !fm->sb)
+		goto out_up_killsb;
+	sb = fm->sb;
+
+	name = __getname();
+	if (!name) {
+		ret = -ENOMEM;
+		goto out_up_killsb;
+	}
+
+	order = get_order(len);
+	buf = (void *)__get_free_pages(GFP_KERNEL, order);
+	if (!buf) {
+		ret = -ENOMEM;
+		goto out_putname;
+	}
+
+	/* connection state */
+	ret = fillbuf(buf, len, &count, "%s\n",
+		      fc->connected ? "Connected" : "Aborted");
+	if (ret)
+		goto out_free_pages;
+
+	/* open coded lock_mount_hash() */
+	write_seqlock(&mount_lock);
+
+	list_for_each_entry(mnt, &sb->s_mounts, mnt_instance) {
+		/* skip slave mounts */
+		if (mnt->mnt_master)
+			continue;
+
+		/* skip private mounts, e.g. from clone_private_mount() */
+		if (!mnt->mnt_ns)
+			continue;
+
+		/* mountpoint */
+		p = dentry_path_raw(mnt->mnt_mountpoint, name, PATH_MAX);
+		if (IS_ERR(p)) {
+			ret = PTR_ERR(p);
+			break;
+		}
+		ret = fillbuf(buf, len, &count, "%s %s",
+			      mnt->mnt_devname ? : "none", p);
+		if (ret)
+			break;
+
+		/* fstype */
+		if (sb->s_subtype && sb->s_subtype[0])
+			sprintf(name, "%s.%s", sb->s_type->name, sb->s_subtype);
+		else
+			sprintf(name, "%s", sb->s_type->name);
+		ret = fillbuf(buf, len, &count, " %s", name);
+		if (ret)
+			break;
+
+		/* mount options */
+		step = sprintf(name, "%s,user_id=%u,group_id=%u",
+				__mnt_is_readonly(&mnt->mnt) ? "ro" : "rw",
+				from_kuid_munged(fc->user_ns, fc->user_id),
+				from_kgid_munged(fc->user_ns, fc->group_id));
+		if (fc->default_permissions)
+			step += sprintf(name + step, ",default_permissions");
+		if (fc->allow_other)
+			step += sprintf(name + step, ",allow_other");
+		ret = fillbuf(buf, len, &count, " %s\n", name);
+		if (ret)
+			break;
+	}
+
+	/* open coded unlock_mount_hash() */
+	write_sequnlock(&mount_lock);
+
+	/* also copy the trailing null (ensured by vsnprintf) */
+	if (!ret && (copy_to_user(u_buf, buf, count + 1) != 0))
+		ret = -EFAULT;
+
+out_free_pages:
+	free_pages((unsigned long)buf, order);
+out_putname:
+	__putname(name);
+out_up_killsb:
+	up_read(&fc->killsb);
+	fuse_conn_put(fc);
+	return ret;
+}
+
 static long virtfuse_dev_ioctl(struct file *file, unsigned int cmd,
 			   unsigned long arg)
 {
@@ -201,6 +344,8 @@ static long virtfuse_dev_ioctl(struct file *file, unsigned int cmd,
 		return virtfuse_clone(file);
 	case VIRTFUSE_IOC_RESET:
 		return virtfuse_reset(file);
+	case VIRTFUSE_IOC_GET_MOUNTS:
+		return virtfuse_get_mounts(file, arg);
 	default:
 		return fuse_dev_operations.unlocked_ioctl(file, cmd, arg);
 	}

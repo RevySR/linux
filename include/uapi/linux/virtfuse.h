@@ -17,4 +17,17 @@
 /* Reset the specified virtual device */
 #define VIRTFUSE_IOC_RESET		_IO(0x99, 2)
 
+/* Print all mountinfo of the specified virtual device. */
+#define VIRTFUSE_IOC_GET_MOUNTS		_IO(0x99, 3)
+
+/*
+ * @len	indicates the size of the buffer indicated by @buf
+ * @buf	indicates a buffer to contain the output mountinfo of the specified
+ * virtual device.
+ */
+struct virtfuse_mounts_buf {
+	__u32	len;
+	__u8	buf[];
+};
+
 #endif
