@@ -1134,3 +1134,63 @@ int acpi_pptt_get_cpumask_from_cache_id(u32 cache_id, cpumask_t *cpus)
 	acpi_put_table(table);
 	return 0;
 }
+
+/**
+ * acpi_pptt_get_cpumask_from_cache_id_and_level() - Get the cpus associated with the
+ *						     cache specified by id and level
+ * @cache_id: The id field of the unified cache
+ * @cache_level: The level of the unified cache
+ * @cpus: Where to buidl the cpumask
+ *
+ * Determine which CPUs are below this cache in the PPTT. This allows the property
+ * to be found even if the CPUs are offline.
+ *
+ * The PPTT table must be rev 3 or later,
+ *
+ * Return: -ENOENT if the PPTT doesn't exist, or the cache cannot be found.
+ * Otherwise returns 0 and sets the cpus in the provided cpumask.
+ */
+int acpi_pptt_get_cpumask_from_cache_id_and_level(u32 cache_id, u32 cache_level,
+						  cpumask_t *cpus)
+{
+	u32 acpi_cpu_id;
+	acpi_status status;
+	int cpu;
+	struct acpi_table_header *table;
+	struct acpi_pptt_cache *cache_node;
+	struct acpi_pptt_processor *cpu_node;
+
+	cpumask_clear(cpus);
+
+	status = acpi_get_table(ACPI_SIG_PPTT, 0, &table);
+	if (ACPI_FAILURE(status)) {
+		acpi_pptt_warn_missing();
+		return -ENOENT;
+	}
+
+	if (table->revision < 3) {
+		acpi_put_table(table);
+		return -ENOENT;
+	}
+
+	for_each_possible_cpu(cpu) {
+		acpi_cpu_id = get_acpi_id_for_cpu(cpu);
+		cpu_node = acpi_find_processor_node(table, acpi_cpu_id);
+		if (!cpu_node)
+			continue;
+
+		cache_node = acpi_find_cache_node(table, acpi_cpu_id,
+						  ACPI_PPTT_CACHE_TYPE_UNIFIED,
+						  cache_level, &cpu_node);
+
+		if (!cache_node)
+			continue;
+
+		cpu_node = acpi_pptt_find_cache_backwards(table, cache_node);
+		if (cpu_node->acpi_processor_id == cache_id)
+			cpumask_set_cpu(cpu, cpus);
+	}
+
+	acpi_put_table(table);
+	return 0;
+}
