@@ -136,15 +136,15 @@ extern void ghes_unregister_report_chain(struct notifier_block *nb);
 
 #ifdef CONFIG_YITIAN_CPER_RAWDATA
 #pragma pack(1)
-struct raw_data_header {
+struct yitian_raw_data_header {
 	uint32_t signature; /* 'r' 'a' 'w' 'd' */
 	uint8_t type;
-	uint8_t ras_count;
+	uint8_t common_reg_nr;
 	/* one record may have multiple sub-record (up to 6) */
 	uint8_t sub_type[6];
 };
 
-struct ras_reg_common {
+struct yitian_ras_common_reg {
 	uint64_t fr;
 	uint64_t ctrl;
 	uint64_t status;
@@ -155,7 +155,7 @@ struct ras_reg_common {
 	uint64_t misc3;
 };
 
-enum ras_type {
+enum yitian_ras_type {
 	ERR_TYPE_GENERIC = 0x40,
 	ERR_TYPE_CORE = 0x41,
 	ERR_TYPE_GIC = 0x42,
@@ -190,10 +190,10 @@ enum cmn_node_type {
 };
 #pragma pack()
 
-#define apei_estatus_for_each_raw_reg_common(r_data_header, reg_common) \
-	for (reg_common = (struct ras_reg_common *)(r_data_header + 1); \
-	     (void *)(reg_common) - (void *)(r_data_header + 1) < r_data_header->ras_count; \
-	     reg_common = (((void *)(reg_common)) + 1))
+#define yitian_estatus_for_each_raw_reg_common(header, reg) \
+	for (reg = (struct yitian_ras_common_reg *)(header + 1); \
+	     (void *)(reg) - (void *)(header + 1) < header->common_reg_nr; \
+	     reg = (((void *)(reg)) + 1))
 #endif /* CONFIG_YITIAN_CPER_RAWDATA */
 
 #endif /* GHES_H */

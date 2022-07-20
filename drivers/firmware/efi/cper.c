@@ -624,17 +624,76 @@ err_section_too_small:
 }
 
 #ifdef CONFIG_YITIAN_CPER_RAWDATA
-static char *cper_raw_err_type_str(u64 type)
+static char *yitian_raw_err_type_str(u64 type)
 {
 	switch (type) {
-	case 0x40:	return "GENERIC";
-	case 0x41:	return "CORE";
-	case 0x42:	return "GIC";
-	case 0x43:	return "CMN";
-	case 0x44:	return "SMMU";
-	case 0x50:	return "DDR";
-	case 0x60:	return "PCI";
+	case ERR_TYPE_GENERIC:	return "GENERIC";
+	case ERR_TYPE_CORE:	return "CORE";
+	case ERR_TYPE_GIC:	return "GIC";
+	case ERR_TYPE_CMN:	return "CMN";
+	case ERR_TYPE_SMMU:	return "SMMU";
+	case ERR_TYPE_DDR:	return "DDR";
+	case ERR_TYPE_PCI:	return "PCI";
 	default:	return "Reserved";
+	}
+}
+
+void yitian_platform_raw_data_print(const char *pfx,
+				struct yitian_raw_data_header *header)
+{
+	struct yitian_ras_common_reg *common_reg;
+	int sub_record_no = 0;
+
+	yitian_estatus_for_each_raw_reg_common(header, common_reg) {
+		pr_info("%s sub_type: 0x%x\n", pfx,
+		       header->sub_type[sub_record_no]);
+		pr_info("%s fr: 0x%llx, ctrl: 0x%llx, status: 0x%llx, addr: 0x%llx\n",
+		       pfx, common_reg->fr, common_reg->ctrl,
+		       common_reg->status, common_reg->addr);
+		pr_info("%s misc0: 0x%llx, misc1: 0x%llx, misc2: 0x%llx, misc3: 0x%llx\n",
+		       pfx, common_reg->misc0, common_reg->misc1,
+		       common_reg->misc2, common_reg->misc3);
+		sub_record_no++;
+	}
+}
+
+void yitian_raw_data_print(const char *pfx,
+			const struct acpi_hest_generic_status *estatus)
+{
+	struct yitian_raw_data_header *header;
+
+	if (estatus->raw_data_length < sizeof(*header))
+		return;
+
+	header = (struct yitian_raw_data_header *)((void *)estatus +
+						   estatus->raw_data_offset);
+
+#define YITIAN_SIGNATURE_16(A, B)		((A) | (B << 8))
+#define YITIAN_SIGNATURE_32(A, B, C, D)		\
+	(YITIAN_SIGNATURE_16(A, B) | (YITIAN_SIGNATURE_16(C, D) << 16))
+
+	if (header->signature != YITIAN_SIGNATURE_32('r', 'a', 'w', 'd'))
+		return;
+
+	/*
+	 * ONLY processor, CMN, GIC, and SMMU has raw error data which follow
+	 * any Generic Error Data Entries. The raw error data format is vendor
+	 * implementation defined.
+	 */
+	if (!header->common_reg_nr)
+		return;
+
+	pr_info("%s type: %s (0x%x), common_reg_nr:%d\n", pfx,
+	       yitian_raw_err_type_str(header->type), header->type,
+	       header->common_reg_nr);
+
+	switch (header->type) {
+	case ERR_TYPE_CORE:
+	case ERR_TYPE_GIC:
+	case ERR_TYPE_CMN:
+	case ERR_TYPE_SMMU:
+		yitian_platform_raw_data_print(pfx, header);
+		break;
 	}
 }
 #endif /* CONFIG_YITIAN_CPER_RAWDATA */
@@ -646,9 +705,6 @@ void cper_estatus_print(const char *pfx,
 	int sec_no = 0;
 	char newpfx[64];
 	__u16 severity;
-	struct raw_data_header *r_data_header;
-	struct ras_reg_common *reg_common;
-	int sub_record_no = 0;
 
 	severity = estatus->error_severity;
 	if (severity == CPER_SEV_CORRECTED)
@@ -664,41 +720,8 @@ void cper_estatus_print(const char *pfx,
 	}
 
 #ifdef CONFIG_YITIAN_CPER_RAWDATA
-	r_data_header = (struct raw_data_header *)((void *)estatus +
-						   estatus->raw_data_offset);
-	if (estatus->raw_data_length < sizeof(struct raw_data_header))
-		return;
-
-#define YITIAN_SIGNATURE_16(A, B)		((A) | (B << 8))
-#define YITIAN_SIGNATURE_32(A, B, C, D)		\
-	(YITIAN_SIGNATURE_16(A, B) | (YITIAN_SIGNATURE_16(C, D) << 16))
-
-	if (r_data_header->signature != YITIAN_SIGNATURE_32('r', 'a', 'w', 'd'))
-		return;
-
-	/*
-	 * ONLY processor, CMN, GIC, and SMMU has raw error data which follow
-	 * any Generic Error Data Entries. The raw error data format is vendor
-	 * implementation defined.
-	 */
-	if (!r_data_header->ras_count)
-		return;
-
-	pr_info("%s type: %s (0x%x), ras_count:%d\n", pfx,
-	       cper_raw_err_type_str(r_data_header->type), r_data_header->type,
-	       r_data_header->ras_count);
-
-	apei_estatus_for_each_raw_reg_common(r_data_header, reg_common) {
-		pr_info("%s sub_type: 0x%x\n", pfx,
-		       r_data_header->sub_type[sub_record_no]);
-		pr_info("%s fr: 0x%llx, ctrl: 0x%llx, status: 0x%llx, addr: 0x%llx\n",
-		       pfx, reg_common->fr, reg_common->ctrl,
-		       reg_common->status, reg_common->addr);
-		pr_info("%s misc0: 0x%llx, misc1: 0x%llx, misc2: 0x%llx, misc3: 0x%llx\n",
-		       pfx, reg_common->misc0, reg_common->misc1,
-		       reg_common->misc2, reg_common->misc3);
-		sub_record_no++;
-	}
+	if (estatus->raw_data_length)
+		yitian_raw_data_print(pfx, estatus);
 #endif /* CONFIG_YITIAN_CPER_RAWDATA */
 }
 EXPORT_SYMBOL_GPL(cper_estatus_print);
