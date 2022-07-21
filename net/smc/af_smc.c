@@ -1877,6 +1877,11 @@ static void smc_accept_unlink(struct sock *sk)
 	sock_put(sk); /* sock_hold in smc_accept_enqueue */
 }
 
+static inline bool smc_accept_queue_empty(struct sock *sk)
+{
+	return list_empty(&smc_sk(sk)->accept_q);
+}
+
 /* remove a sock from the accept queue to bind it to a new socket created
  * for a socket accept call from user space
  */
@@ -2962,17 +2967,12 @@ out:
 	return rc;
 }
 
-static __poll_t smc_accept_poll(struct sock *parent)
+static inline __poll_t smc_accept_poll(struct sock *parent)
 {
-	struct smc_sock *isk = smc_sk(parent);
-	__poll_t mask = 0;
+	if (!smc_accept_queue_empty(parent))
+		return EPOLLIN | EPOLLRDNORM;
 
-	spin_lock(&isk->accept_q_lock);
-	if (!list_empty(&isk->accept_q))
-		mask = EPOLLIN | EPOLLRDNORM;
-	spin_unlock(&isk->accept_q_lock);
-
-	return mask;
+	return 0;
 }
 
 static __poll_t smc_poll(struct file *file, struct socket *sock,
