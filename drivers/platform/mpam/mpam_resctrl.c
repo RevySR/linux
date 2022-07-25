@@ -790,7 +790,7 @@ static int mpam_resctrl_resource_init(struct mpam_resctrl_res *res)
 		struct mpam_props *cprops = &class->props;
 
 		/* TODO: kill these properties off as they are derivatives */
-		r->format_str = "%d=%0*u";
+		r->format_str = "%d=%*u";
 		r->fflags = RFTYPE_RES_MB;
 		r->default_ctrl = MAX_MBA_BW;
 		r->data_width = 3;
