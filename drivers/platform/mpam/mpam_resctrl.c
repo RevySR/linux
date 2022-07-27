@@ -568,10 +568,16 @@ static u32 percent_to_mbw_pbm(u8 pc, struct mpam_props *cprops)
 static u16 percent_to_mbw_max(u8 pc, struct mpam_props *cprops)
 {
 	u8 bit;
-	u32 pc_ls, divisor = 2, value = 0;
+	u32 granularity, pc_ls, divisor = 2, value = 0;
 
 	if (WARN_ON_ONCE(cprops->bwa_wd > 15))
 		return MAX_MBA_BW;
+
+	/* Set the pc value to be a multiple of granularity. */
+	granularity = get_mba_granularity(cprops);
+	pc = roundup(pc, (u8) granularity);
+	if (pc > 100)
+		pc = 100;
 
 	/*
 	 * Left shift by 16 bits to preserve the precision of the division
@@ -811,6 +817,7 @@ static int mpam_resctrl_resource_init(struct mpam_resctrl_res *res)
 		r->membw.delay_linear = true;
 		r->membw.throttle_mode = THREAD_THROTTLE_UNDEFINED;
 		r->membw.bw_gran = get_mba_granularity(cprops);
+		r->membw.min_bw = r->membw.bw_gran;
 
 		/* Round up to at least 1% */
 		if (!r->membw.bw_gran)
