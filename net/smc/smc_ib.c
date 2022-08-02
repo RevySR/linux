@@ -29,6 +29,7 @@
 #include "smc_wr.h"
 #include "smc.h"
 #include "smc_netlink.h"
+#include "smc_dim.h"
 
 #define SMC_MAX_CQE 32766	/* max. # of completion queue elements */
 
@@ -1011,8 +1012,10 @@ static void smc_ib_cleanup_cq(struct smc_ib_device *smcibdev)
 	int i;
 
 	for (i = 0; i < smcibdev->num_cq; i++) {
-		if (smcibdev->smcibcq[i].ib_cq)
+		if (smcibdev->smcibcq[i].ib_cq) {
+			smc_dim_destroy(smcibdev->smcibcq[i].ib_cq);
 			ib_destroy_cq(smcibdev->smcibcq[i].ib_cq);
+		}
 	}
 	smc_wr_remove_dev(smcibdev);
 
@@ -1059,6 +1062,7 @@ long smc_ib_setup_per_ibdev(struct smc_ib_device *smcibdev)
 			goto err;
 		}
 
+		smc_dim_init(smcibcq->ib_cq);
 		rc = ib_req_notify_cq(smcibcq->ib_cq, IB_CQ_NEXT_COMP);
 		if (rc)
 			goto err;
