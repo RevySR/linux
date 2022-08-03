@@ -188,6 +188,43 @@ enum cmn_node_type {
 	NODE_TYPE_CCHA = 0x104,
 	NODE_TYPE_CCLA = 0x105,
 };
+
+struct yitian_ddr_sys_reg {
+	uint64_t esr;
+	uint64_t elr;
+	uint64_t far;
+	uint64_t scr;
+	uint64_t sctlr;
+	uint64_t lr;
+};
+
+struct yitian_ddr_ecc_data {
+	uint32_t eccerrcnt;
+	uint32_t eccstat;
+	uint32_t adveccstat;
+	uint32_t eccsymbol;
+	uint32_t eccerrcntstat;
+	uint32_t eccerrcnt0;
+	uint32_t eccerrcnt1;
+	uint32_t ecccaddr0;
+	uint32_t ecccaddr1;
+	uint32_t ecccdata0;
+	uint32_t ecccdata1;
+	uint32_t eccuaddr0;
+	uint32_t eccuaddr1;
+	uint32_t eccudata0;
+	uint32_t eccudata1;
+};
+
+struct yitian_ddr_raw_data {
+	uint32_t intr; /* interrupt num, valid for interrupt only, for exception intr=0 */
+	uint8_t ex_type; /* 1:sync exception 2:interrupt 3:Serror */
+	uint8_t el_nr; /* error el, only valid for ex_type==1, 0:el0 1:el1 2:el2 */
+	uint8_t err_type; /* 1:ecc 2:CA parity 3:R/W CRC */
+	struct yitian_ddr_sys_reg sys_regs; /* Only valid for ex_type==1 */
+	struct yitian_ddr_ecc_data ecc_data; /* Only valid for err_type==1 */
+};
+
 #pragma pack()
 
 #define yitian_estatus_for_each_raw_reg_common(header, reg) \

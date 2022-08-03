@@ -657,6 +657,52 @@ void yitian_platform_raw_data_print(const char *pfx,
 	}
 }
 
+static void yitian_ddr_raw_data_print(const char *pfx,
+				struct yitian_raw_data_header *header)
+{
+	struct yitian_ddr_raw_data *data;
+
+	data = (struct yitian_ddr_raw_data *)(header + 1);
+
+	switch (data->ex_type) {
+	case 0x1:
+		pr_info("%s Synchronous Exception taken in EL%d\n", pfx, data->el_nr);
+		break;
+	case 0x2:
+		pr_info("%s Interrupt: %d\n", pfx, data->intr);
+		break;
+	case 0x3:
+		pr_info("%s SError\n", pfx);
+		break;
+	default:
+		pr_info("%s Unknown interrupt type\n", pfx);
+	}
+
+	/* System regs is valid only when it's a synchronous exception */
+	if (data->ex_type == 1) {
+		struct yitian_ddr_sys_reg *sys_regs = &data->sys_regs;
+
+		pr_info("%s ESR: 0x%llx, ELR: 0x%llx, FAR: 0x%llx, SCR: 0x%llx, SCTLR: 0x%llx, LR: 0x%llx\n",
+			pfx, sys_regs->esr, sys_regs->elr, sys_regs->far,
+			sys_regs->scr, sys_regs->sctlr, sys_regs->lr);
+	}
+
+	/* ECC Data is valid only when it's a ECC error */
+	if (data->err_type == 1) {
+		struct yitian_ddr_ecc_data *ecc_data = &data->ecc_data;
+
+		pr_info("%s ECCERRCNT: 0x%x, ECCSTAT: 0x%x, ADVECCSTAT: 0x%x, ECCSYMBOL: 0x%x, ECCERRCNTSTAT: 0x%x, ECCERRCNT0: 0x%x, ECCERRCNT1: 0x%x, ECCCADDR0: 0x%x, ECCCADDR1: 0x%x, ECCCDATA0: 0x%x, ECCCDATA1: 0x%x, ECCUADDR0: 0x%x, ECCUADDR1: 0x%x, ECCUDATA0: 0x%x, ECCUDATA1: 0x%x\n",
+			pfx, ecc_data->eccerrcnt, ecc_data->eccstat,
+			ecc_data->adveccstat, ecc_data->eccsymbol,
+			ecc_data->eccerrcntstat, ecc_data->eccerrcnt0,
+			ecc_data->eccerrcnt1, ecc_data->ecccaddr0,
+			ecc_data->ecccaddr1, ecc_data->ecccdata0,
+			ecc_data->ecccdata1, ecc_data->eccuaddr0,
+			ecc_data->eccuaddr1, ecc_data->eccudata0,
+			ecc_data->eccudata1);
+	}
+}
+
 void yitian_raw_data_print(const char *pfx,
 			const struct acpi_hest_generic_status *estatus)
 {
@@ -693,6 +739,9 @@ void yitian_raw_data_print(const char *pfx,
 	case ERR_TYPE_CMN:
 	case ERR_TYPE_SMMU:
 		yitian_platform_raw_data_print(pfx, header);
+		break;
+	case ERR_TYPE_DDR:
+		yitian_ddr_raw_data_print(pfx, header);
 		break;
 	}
 }
