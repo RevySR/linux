@@ -666,6 +666,16 @@ void cper_estatus_print(const char *pfx,
 #ifdef CONFIG_YITIAN_CPER_RAWDATA
 	r_data_header = (struct raw_data_header *)((void *)estatus +
 						   estatus->raw_data_offset);
+	if (estatus->raw_data_length < sizeof(struct raw_data_header))
+		return;
+
+#define YITIAN_SIGNATURE_16(A, B)		((A) | (B << 8))
+#define YITIAN_SIGNATURE_32(A, B, C, D)		\
+	(YITIAN_SIGNATURE_16(A, B) | (YITIAN_SIGNATURE_16(C, D) << 16))
+
+	if (r_data_header->signature != YITIAN_SIGNATURE_32('r', 'a', 'w', 'd'))
+		return;
+
 	/*
 	 * ONLY processor, CMN, GIC, and SMMU has raw error data which follow
 	 * any Generic Error Data Entries. The raw error data format is vendor
