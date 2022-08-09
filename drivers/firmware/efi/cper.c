@@ -623,6 +623,7 @@ err_section_too_small:
 	pr_err(FW_WARN "error section length is too small\n");
 }
 
+#ifdef CONFIG_YITIAN_CPER_RAWDATA
 static char *cper_raw_err_type_str(u64 type)
 {
 	switch (type) {
@@ -636,6 +637,7 @@ static char *cper_raw_err_type_str(u64 type)
 	default:	return "Reserved";
 	}
 }
+#endif /* CONFIG_YITIAN_CPER_RAWDATA */
 
 void cper_estatus_print(const char *pfx,
 			const struct acpi_hest_generic_status *estatus)
@@ -661,6 +663,7 @@ void cper_estatus_print(const char *pfx,
 		sec_no++;
 	}
 
+#ifdef CONFIG_YITIAN_CPER_RAWDATA
 	r_data_header = (struct raw_data_header *)((void *)estatus +
 						   estatus->raw_data_offset);
 	/*
@@ -686,6 +689,7 @@ void cper_estatus_print(const char *pfx,
 		       reg_common->misc2, reg_common->misc3);
 		sub_record_no++;
 	}
+#endif /* CONFIG_YITIAN_CPER_RAWDATA */
 }
 EXPORT_SYMBOL_GPL(cper_estatus_print);
 
