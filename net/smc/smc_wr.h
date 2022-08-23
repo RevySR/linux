@@ -51,7 +51,7 @@ struct smc_wr_rx_handler {
  */
 static inline long smc_wr_tx_get_next_wr_id(struct smc_link *link)
 {
-	return atomic_long_inc_return(&link->wr_tx_id);
+	return atomic_long_add_return(2, &link->wr_tx_id);
 }
 
 static inline void smc_wr_tx_set_wr_id(atomic_long_t *wr_tx_id, long val)
@@ -94,12 +94,18 @@ static inline int smc_wr_rx_post(struct smc_link *link)
 	u64 wr_id, temp_wr_id;
 	u32 index;
 
-	wr_id = ++link->wr_rx_id; /* tasklet context, thus not atomic */
-	temp_wr_id = wr_id;
+	link->wr_rx_id += 2;
+	wr_id = link->wr_rx_id; /* tasklet context, thus not atomic */
+	temp_wr_id = wr_id / 2;
 	index = do_div(temp_wr_id, link->wr_rx_cnt);
 	link->wr_rx_ibs[index].wr_id = wr_id;
 	rc = ib_post_recv(link->roce_qp, &link->wr_rx_ibs[index], NULL);
 	return rc;
+}
+
+static inline bool smc_wr_id_is_rx(u64 wr_id)
+{
+	return wr_id % 2;
 }
 
 int smc_wr_create_link(struct smc_link *lnk);

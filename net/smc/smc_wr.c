@@ -402,7 +402,7 @@ static inline void smc_wr_rx_demultiplex(struct ib_wc *wc)
 
 	if (wc->byte_len < sizeof(*wr_rx))
 		return; /* short message */
-	temp_wr_id = wc->wr_id;
+	temp_wr_id = wc->wr_id / 2;
 	index = do_div(temp_wr_id, link->wr_rx_cnt);
 	wr_rx = (struct smc_wr_rx_hdr *)(link->wr_rx_bufs + index * link->wr_rx_buflen);
 	hash_for_each_possible(smc_wr_rx_hash, handler, list, wr_rx->type) {
@@ -448,19 +448,10 @@ again:
 		memset(&wc, 0, sizeof(wc));
 		rc = ib_poll_cq(smcibcq->ib_cq, SMC_WR_MAX_POLL_CQE, wc);
 		for (i = 0; i < rc; i++) {
-			switch (wc[i].opcode) {
-			case IB_WC_REG_MR:
-			case IB_WC_SEND:
-				smc_wr_tx_process_cqe(&wc[i]);
-				break;
-			case IB_WC_RECV:
+			if (smc_wr_id_is_rx(wc[i].wr_id))
 				smc_wr_rx_process_cqe(&wc[i]);
-				break;
-			default:
-				pr_warn("smc: unexpected wc opcode %d, status %d, wr_id %llu.\n",
-					wc[i].opcode, wc[i].status, wc[i].wr_id);
-				break;
-			}
+			else
+				smc_wr_tx_process_cqe(&wc[i]);
 		}
 		if (rc < SMC_WR_MAX_POLL_CQE)
 			/* If < SMC_WR_MAX_POLL_CQE, the CQ should have been
@@ -852,7 +843,7 @@ int smc_wr_create_link(struct smc_link *lnk)
 	int rc = 0;
 
 	smc_wr_tx_set_wr_id(&lnk->wr_tx_id, 0);
-	lnk->wr_rx_id = 0;
+	lnk->wr_rx_id = 1;
 	lnk->wr_rx_dma_addr = ib_dma_map_single(
 		ibdev, lnk->wr_rx_bufs,	lnk->wr_rx_buflen * lnk->wr_rx_cnt,
 		DMA_FROM_DEVICE);
