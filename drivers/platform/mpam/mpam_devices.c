@@ -1964,13 +1964,15 @@ static irqreturn_t __mpam_irq_handler(int irq, struct mpam_msc *msc)
 	pr_err("error irq from msc:%u '%s', partid:%u, pmg: %u, ris: %u\n",
 	       msc->id, mpam_errcode_names[errcode], partid, pmg, ris);
 
-	if (irq_is_percpu(irq)) {
-		mpam_disable_msc_ecr(msc);
-		schedule_work(&mpam_broken_work);
-		return IRQ_HANDLED;
-	}
+	/*
+	 * To prevent this interrupt from repeatedly cancelling the scheduled
+	 * work to disable mpam, disable the error interrupt.
+	 */
+	mpam_disable_msc_ecr(msc);
 
-	return IRQ_WAKE_THREAD;
+	schedule_work(&mpam_broken_work);
+
+	return IRQ_HANDLED;
 }
 
 static irqreturn_t mpam_ppi_handler(int irq, void *dev_id)
@@ -1986,8 +1988,6 @@ static irqreturn_t mpam_spi_handler(int irq, void *dev_id)
 
 	return __mpam_irq_handler(irq, msc);
 }
-
-static irqreturn_t mpam_disable_thread(int irq, void *dev_id);
 
 static int mpam_register_irqs(void)
 {
@@ -2018,11 +2018,9 @@ static int mpam_register_irqs(void)
 					       true);
 			mutex_unlock(&msc->lock);
 		} else {
-			err = devm_request_threaded_irq(&msc->pdev->dev, irq,
-							&mpam_spi_handler,
-							&mpam_disable_thread,
-							IRQF_SHARED,
-							"mpam:msc:error", msc);
+			err = devm_request_irq(&msc->pdev->dev, irq,
+					       &mpam_spi_handler, IRQF_SHARED,
+					       "mpam:msc:error", msc);
 			if (err)
 				return err;
 		}
@@ -2228,7 +2226,7 @@ void mpam_reset_class(struct mpam_class *class)
  * All of MPAMs errors indicate a software bug, restore any modified
  * controls to their reset values.
  */
-static irqreturn_t mpam_disable_thread(int irq, void *dev_id)
+void mpam_disable(struct work_struct *ignored)
 {
 	int idx;
 	struct mpam_class *class;
@@ -2250,13 +2248,6 @@ static irqreturn_t mpam_disable_thread(int irq, void *dev_id)
 	list_for_each_entry_rcu(class, &mpam_classes, classes_list)
 		mpam_reset_class(class);
 	srcu_read_unlock(&mpam_srcu, idx);
-
-	return IRQ_HANDLED;
-}
-
-void mpam_disable(struct work_struct *ignored)
-{
-	mpam_disable_thread(0, NULL);
 }
 
 /*
