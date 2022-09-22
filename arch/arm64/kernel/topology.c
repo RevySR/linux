@@ -21,6 +21,7 @@
 #include <asm/cpu.h>
 #include <asm/cputype.h>
 #include <asm/topology.h>
+#include <asm/arch_timer.h>
 
 #ifdef CONFIG_ACPI
 static bool __init acpi_cpu_is_threaded(int cpu)
@@ -71,6 +72,13 @@ int __init parse_acpi_topology(void)
 }
 #endif
 
+static unsigned int cpufreq_khz;
+
+unsigned int arch_cpufreq_get_khz(int cpu)
+{
+	return cpufreq_khz;
+}
+
 #ifdef CONFIG_ARM64_AMU_EXTN
 #define read_corecnt()	read_sysreg_s(SYS_AMEVCNTR0_CORE_EL0)
 #define read_constcnt()	read_sysreg_s(SYS_AMEVCNTR0_CONST_EL0)
@@ -81,11 +89,77 @@ int __init parse_acpi_topology(void)
 
 #undef pr_fmt
 #define pr_fmt(fmt) "AMU: " fmt
+#define ARCH_FREQ_THRESHOLD_MS	10
 
 static DEFINE_PER_CPU_READ_MOSTLY(unsigned long, arch_max_freq_scale);
 static DEFINE_PER_CPU(u64, arch_const_cycles_prev);
 static DEFINE_PER_CPU(u64, arch_core_cycles_prev);
 static cpumask_var_t amu_fie_cpus;
+
+/*
+ * Sample cpu freq.
+ *
+ * The register SYS_AMEVCNTR0_EL0(1) increases at the fixed
+ * rate of arch_timer_get_cntfrq() and can be used as timekeeper.
+ * While The register SYS_AMEVCNTR0_EL0(0) counte the cpu
+ * cycle elapsed. With the two registers, we can sample cpu
+ * freq:
+ *   delta(cycle) / delta(timekeeper)
+ *
+ * But these registers are halted by wfe/wfi and can't
+ * in/out of the idle state synchronously, which is different
+ * from x86 MSR_IA32_APERF/MSR_IA32_MPERF.
+ *
+ * NOTE:
+ * ALL core use same freq by default(ignore big.LITTLE)
+ */
+static void __init __arch_cpufreq_init(void *dummy)
+{
+	unsigned long flags;
+	u64 stable_cnt;
+	u64 nonstable_cnt;
+	u32 freq = arch_timer_get_cntfrq();
+	u64 delta = freq / 1000 * ARCH_FREQ_THRESHOLD_MS;
+	u64 counter;
+
+	local_irq_save(flags);
+	counter = stable_cnt = read_sysreg_s(SYS_AMEVCNTR0_EL0(1));
+	nonstable_cnt = read_sysreg_s(SYS_AMEVCNTR0_EL0(0));
+	local_irq_restore(flags);
+
+	/*
+	 * Meaningless operations & keep cpu out of
+	 * wfe/wfi idle state.
+	 *
+	 * While sampling core freq, detecting time taking
+	 * may be more than 10 miliseconds by default.
+	 * REFER to: intel x86 APERFMPERF_CACHE_THRESHOLD_MS
+	 */
+	while (counter - stable_cnt < delta)
+		counter = read_sysreg_s(SYS_AMEVCNTR0_EL0(1));
+
+	local_irq_save(flags);
+	stable_cnt = read_sysreg_s(SYS_AMEVCNTR0_EL0(1)) - stable_cnt;
+	nonstable_cnt = read_sysreg_s(SYS_AMEVCNTR0_EL0(0)) - nonstable_cnt;
+	local_irq_restore(flags);
+
+	cpufreq_khz = div64_u64(freq * nonstable_cnt, stable_cnt) / 1000;
+}
+
+static int __init arch_cpufreq_init(void)
+{
+	int cpu;
+
+	for_each_possible_cpu(cpu) {
+		if (cpu_has_amu_feat(cpu)) {
+			smp_call_function_single(cpu, __arch_cpufreq_init, NULL, 1);
+			return 0;
+		}
+	}
+	return 0;
+}
+
+late_initcall(arch_cpufreq_init);
 
 void update_freq_counters_refs(void)
 {

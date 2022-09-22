@@ -960,6 +960,7 @@ extern struct arm64_ftr_override arm64_sw_feature_override;
 
 u32 get_kvm_ipa_limit(void);
 void dump_cpu_features(void);
+unsigned int arch_cpufreq_get_khz(int cpu);
 
 #endif /* __ASSEMBLY__ */
 
