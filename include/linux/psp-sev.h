@@ -81,6 +81,11 @@ enum sev_cmd {
 	SEV_CMD_MAX,
 };
 
+enum csv_cmd {
+	CSV_CMD_HGSC_CERT_IMPORT	= 0x300,
+	CSV_CMD_MAX,
+};
+
 /**
  * struct sev_data_init - INIT command parameters
  *
@@ -521,6 +526,22 @@ struct sev_data_attestation_report {
 	u64 address;				/* In */
 	u8 mnonce[16];				/* In */
 	u32 len;				/* In/Out */
+} __packed;
+
+/**
+ * struct csv_data_hgsc_cert_import - HGSC_CERT_IMPORT command parameters
+ *
+ * @hgscsk_cert_address: HGSCSK certificate chain
+ * @hgscsk_cert_len: len of HGSCSK certificate
+ * @hgsc_cert_address: HGSC certificate chain
+ * @hgsc_cert_len: len of HGSC certificate
+ */
+struct csv_data_hgsc_cert_import {
+	u64 hgscsk_cert_address;	/* In */
+	u32 hgscsk_cert_len;		/* In */
+	u32 reserved;			/* In */
+	u64 hgsc_cert_address;		/* In */
+	u32 hgsc_cert_len;		/* In */
 } __packed;
 
 #ifdef CONFIG_CRYPTO_DEV_SP_PSP

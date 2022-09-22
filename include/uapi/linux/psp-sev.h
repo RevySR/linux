@@ -33,6 +33,15 @@ enum {
 };
 
 /**
+ * CSV platform commands
+ */
+enum {
+	CSV_HGSC_CERT_IMPORT = 201,
+
+	CSV_MAX,
+};
+
+/**
  * SEV Firmware status code
  */
 typedef enum {
@@ -152,6 +161,21 @@ struct sev_user_data_get_id {
 struct sev_user_data_get_id2 {
 	__u64 address;				/* In */
 	__u32 length;				/* In/Out */
+} __packed;
+
+/**
+ * struct csv_user_data_hgsc_cert_import - HGSC_CERT_IMPORT command parameters
+ *
+ * @hgscsk_cert_address: HGSCSK certificate chain
+ * @hgscsk_cert_len: length of HGSCSK certificate
+ * @hgsc_cert_address: HGSC certificate chain
+ * @hgsc_cert_len: length of HGSC certificate
+ */
+struct csv_user_data_hgsc_cert_import {
+	__u64 hgscsk_cert_address;		/* In */
+	__u32 hgscsk_cert_len;			/* In */
+	__u64 hgsc_cert_address;		/* In */
+	__u32 hgsc_cert_len;			/* In */
 } __packed;
 
 /**
