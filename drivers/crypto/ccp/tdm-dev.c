@@ -9,7 +9,7 @@
  */
 #include <linux/module.h>
 #include <linux/miscdevice.h>
-#include <linux/psp-sev.h>
+#include <linux/psp-hygon.h>
 #include <linux/spinlock.h>
 #include <linux/rwlock.h>
 #include <linux/err.h>

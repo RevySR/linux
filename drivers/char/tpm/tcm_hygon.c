@@ -15,7 +15,7 @@
 #include <linux/types.h>
 #include <linux/uaccess.h>
 #include <linux/err.h>
-#include <linux/psp-sev.h>
+#include <linux/psp-hygon.h>
 #include <linux/platform_device.h>
 #include <linux/pm.h>
 #include <linux/tpm.h>

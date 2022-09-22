@@ -11,6 +11,7 @@
  * published by the Free Software Foundation.
  */
 
+#include <linux/psp-hygon.h>
 #include "psp-ringbuf.h"
 
 static void enqueue_data(struct csv_queue *queue,

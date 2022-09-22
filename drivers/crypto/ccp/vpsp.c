@@ -10,7 +10,7 @@
 #include <linux/kvm_types.h>
 #include <linux/slab.h>
 #include <linux/kvm_host.h>
-#include <linux/psp-sev.h>
+#include <linux/psp-hygon.h>
 #include <linux/psp.h>
 
 #ifdef pr_fmt

@@ -14,7 +14,7 @@
 #include <linux/slab.h>
 #include <linux/psp.h>
 #include <linux/psp-sev.h>
-#include <linux/psp-csv.h>
+#include <linux/psp-hygon.h>
 #include "sev-dev.h"
 #include "csv-dev.h"
 

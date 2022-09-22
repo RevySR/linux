@@ -14,6 +14,7 @@
 #include <linux/sort.h>
 #include <linux/bsearch.h>
 #include <linux/rwlock.h>
+#include <linux/psp-hygon.h>
 
 #include "sp-dev.h"
 #include "psp-dev.h"

@@ -26,7 +26,8 @@
 #include <linux/fs.h>
 #include <linux/fs_struct.h>
 #include <linux/psp.h>
-#include <linux/psp-csv.h>
+#include <linux/psp-hygon.h>
+#include <uapi/linux/psp-hygon.h>
 
 #include <asm/smp.h>
 #include <asm/cacheflush.h>

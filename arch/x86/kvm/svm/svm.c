@@ -28,6 +28,7 @@
 #include <linux/rwsem.h>
 #include <linux/cc_platform.h>
 #include <linux/smp.h>
+#include <linux/psp-hygon.h>
 
 #include <asm/apic.h>
 #include <asm/perf_event.h>
