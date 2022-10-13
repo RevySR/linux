@@ -227,10 +227,10 @@ struct yitian_ddr_raw_data {
 
 #pragma pack()
 
-#define yitian_estatus_for_each_raw_reg_common(header, reg) \
+#define yitian_estatus_for_each_raw_reg_common(header, reg, nr) \
 	for (reg = (struct yitian_ras_common_reg *)(header + 1); \
-	     (void *)(reg) - (void *)(header + 1) < header->common_reg_nr; \
-	     reg = (((void *)(reg)) + 1))
+	     nr < header->common_reg_nr; \
+	     reg++, nr++)
 #endif /* CONFIG_YITIAN_CPER_RAWDATA */
 
 #endif /* GHES_H */

@@ -644,7 +644,7 @@ void yitian_platform_raw_data_print(const char *pfx,
 	struct yitian_ras_common_reg *common_reg;
 	int sub_record_no = 0;
 
-	yitian_estatus_for_each_raw_reg_common(header, common_reg) {
+	yitian_estatus_for_each_raw_reg_common(header, common_reg, sub_record_no) {
 		pr_info("%s sub_type: 0x%x\n", pfx,
 		       header->sub_type[sub_record_no]);
 		pr_info("%s fr: 0x%llx, ctrl: 0x%llx, status: 0x%llx, addr: 0x%llx\n",
@@ -653,7 +653,6 @@ void yitian_platform_raw_data_print(const char *pfx,
 		pr_info("%s misc0: 0x%llx, misc1: 0x%llx, misc2: 0x%llx, misc3: 0x%llx\n",
 		       pfx, common_reg->misc0, common_reg->misc1,
 		       common_reg->misc2, common_reg->misc3);
-		sub_record_no++;
 	}
 }
 
