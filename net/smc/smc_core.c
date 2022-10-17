@@ -1276,8 +1276,9 @@ static void smcr_buf_unuse(struct smc_buf_desc *buf_desc, bool is_rmb,
 
 		smc_buf_free(lgr, is_rmb, buf_desc);
 	} else {
-		/* memzero_explicit provides potential memory barrier semantics */
-		memzero_explicit(buf_desc->cpu_addr, buf_desc->len);
+		if (is_rmb)
+			/* memzero_explicit provides potential memory barrier semantics */
+			memzero_explicit(buf_desc->cpu_addr, buf_desc->len);
 		WRITE_ONCE(buf_desc->used, 0);
 	}
 }
@@ -1308,7 +1309,6 @@ static void smc_buf_unuse(struct smc_connection *conn,
 		if (!is_smcd && conn->sndbuf_desc->is_vm) {
 			smcr_buf_unuse(conn->sndbuf_desc, false, lgr);
 		} else {
-			memzero_explicit(conn->sndbuf_desc->cpu_addr, conn->sndbuf_desc->len);
 			WRITE_ONCE(conn->sndbuf_desc->used, 0);
 		}
 		SMC_STAT_RMB_SIZE(smc, is_smcd, false, false, bufsize);
