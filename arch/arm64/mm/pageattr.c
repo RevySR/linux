@@ -168,6 +168,18 @@ int set_memory_valid(unsigned long addr, int numpages, int enable)
 					__pgprot(PTE_VALID));
 }
 
+int set_memory_np(unsigned long addr, int numpages)
+{
+	/*
+	 * If the addr belongs to linear mapping range, split it to pte level
+	 * before changing the attribute of the page table.
+	 */
+	if (can_set_block_and_cont_map() && __is_lm_address(addr))
+		split_linear_mapping_after_init(addr, PAGE_SIZE * numpages, PAGE_KERNEL);
+
+	return set_memory_valid(addr, numpages, 0);
+}
+
 int set_direct_map_invalid_noflush(struct page *page)
 {
 	struct page_change_data data = {
