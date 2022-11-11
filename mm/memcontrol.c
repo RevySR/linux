@@ -7682,6 +7682,12 @@ static struct cftype memory_files[] = {
 		.write = memory_max_write,
 	},
 	{
+		.name = "wmark_min_adj",
+		.flags = CFTYPE_NOT_ON_ROOT,
+		.seq_show = memory_wmark_min_adj_show,
+		.write = memory_wmark_min_adj_write,
+	},
+	{
 		.name = "priority",
 		.flags = CFTYPE_NOT_ON_ROOT,
 		.read_u64 = mem_cgroup_priority_read,
