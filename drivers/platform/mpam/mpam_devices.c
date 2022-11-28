@@ -1769,8 +1769,13 @@ static int mpam_msc_drv_probe(struct platform_device *pdev)
 				err = PTR_ERR(io);
 				break;
 			}
-			msc->mapped_hwpage_sz = msc_res->end - msc_res->start;
+			msc->mapped_hwpage_sz = msc_res->end - msc_res->start + 1;
 			msc->mapped_hwpage = io;
+			if (msc->mapped_hwpage_sz < MPAM_MIN_MMIO_SIZE) {
+				pr_err("MSC MMIO space size is too small\n");
+				err = -EINVAL;
+				break;
+			}
 		} else if (msc->iface == MPAM_IFACE_PCC) {
 			msc->pcc_cl.dev = &pdev->dev;
 			msc->pcc_cl.rx_callback = mpam_pcc_rx_callback;
