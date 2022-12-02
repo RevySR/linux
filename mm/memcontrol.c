@@ -77,6 +77,9 @@
 #ifdef CONFIG_PAGECACHE_LIMIT
 #include <linux/pagecache_limit.h>
 #endif
+#ifdef CONFIG_TEXT_UNEVICTABLE
+#include <linux/unevictable.h>
+#endif
 
 #include <trace/events/vmscan.h>
 
@@ -4511,6 +4514,10 @@ static int memcg_exstat_show(struct seq_file *m, void *v)
 	seq_printf(m, "pagecache_limit_reclaimed_kb %llu\n",
 		   memcg_exstat_gather(memcg, MEMCG_PGCACHE_RECLAIM) * PAGE_SIZE >> 10);
 #endif
+#ifdef CONFIG_TEXT_UNEVICTABLE
+	seq_printf(m, "unevictable_text_size_kb %lu\n",
+		   memcg_exstat_text_unevict_gather(memcg) >> 10);
+#endif
 	return 0;
 }
 
@@ -5952,6 +5959,10 @@ static int mem_cgroup_allow_unevictable_write(struct cgroup_subsys_state *css,
 		return 0;
 
 	memcg->allow_unevictable = val;
+	if (val)
+		memcg_all_processes_unevict(memcg, true);
+	else
+		memcg_all_processes_unevict(memcg, false);
 
 	return 0;
 }
@@ -7407,6 +7418,10 @@ static int mem_cgroup_can_attach(struct cgroup_taskset *tset)
 	if (!p)
 		return 0;
 
+#ifdef CONFIG_TEXT_UNEVICTABLE
+	mem_cgroup_can_unevictable(p, memcg);
+#endif
+
 	/*
 	 * We are now committed to this value whatever it is. Changes in this
 	 * tunable will only affect upcoming migrations, not the current one.
@@ -7450,6 +7465,9 @@ static int mem_cgroup_can_attach(struct cgroup_taskset *tset)
 
 static void mem_cgroup_cancel_attach(struct cgroup_taskset *tset)
 {
+#ifdef CONFIG_TEXT_UNEVICTABLE
+	mem_cgroup_cancel_unevictable(tset);
+#endif
 	if (mc.to)
 		mem_cgroup_clear_mc();
 }
