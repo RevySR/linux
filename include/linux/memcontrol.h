@@ -402,6 +402,11 @@ struct mem_cgroup {
 	struct mutex lat_stat_notify_lock;
 #endif
 
+#ifdef CONFIG_TEXT_UNEVICTABLE
+	bool allow_unevictable;
+	unsigned int unevictable_percent;
+#endif
+
 #ifdef CONFIG_PAGECACHE_LIMIT
 	bool allow_pgcache_limit;
 	unsigned long pgcache_limit_size;
