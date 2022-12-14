@@ -115,7 +115,7 @@ static int write_orc_entry(struct elf *elf, struct section *orc_sec,
 	orc = (struct orc_entry *)orc_sec->data->d_buf + idx;
 	memcpy(orc, o, sizeof(*orc));
 	orc->sp_offset = bswap_if_needed(elf, orc->sp_offset);
-	orc->bp_offset = bswap_if_needed(elf, orc->bp_offset);
+	orc->fp_offset = bswap_if_needed(elf, orc->fp_offset);
 
 	/* populate reloc for ip */
 	if (!elf_init_reloc_text_sym(elf, ip_sec, idx * sizeof(int), idx,
@@ -164,7 +164,10 @@ int orc_create(struct objtool_file *file)
 	struct orc_list_entry *entry;
 	struct list_head orc_list;
 
-	struct orc_entry null = { .type = ORC_TYPE_UNDEFINED };
+	struct orc_entry null = {
+		.fp_reg	= ORC_REG_UNDEFINED,
+		.type	= UNWIND_HINT_TYPE_CALL,
+	};
 
 	/* Build a deduplicated list of ORC entries: */
 	INIT_LIST_HEAD(&orc_list);

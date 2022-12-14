@@ -8,6 +8,13 @@
 
 #include <linux/types.h>
 #include <linux/compiler.h>
+#include <linux/orc_entry.h>
+
+/*
+ * For x86, use the appripriate name for the frame pointer in orc_entry.
+ */
+#define bp_offset	fp_offset
+#define bp_reg		fp_reg
 
 /*
  * The ORC_REG_* registers are base registers which are used to find other
@@ -44,35 +51,5 @@
 #define ORC_TYPE_CALL			2
 #define ORC_TYPE_REGS			3
 #define ORC_TYPE_REGS_PARTIAL		4
-
-#ifndef __ASSEMBLY__
-#include <asm/byteorder.h>
-
-/*
- * This struct is more or less a vastly simplified version of the DWARF Call
- * Frame Information standard.  It contains only the necessary parts of DWARF
- * CFI, simplified for ease of access by the in-kernel unwinder.  It tells the
- * unwinder how to find the previous SP and BP (and sometimes entry regs) on
- * the stack for a given code address.  Each instance of the struct corresponds
- * to one or more code locations.
- */
-struct orc_entry {
-	s16		sp_offset;
-	s16		bp_offset;
-#if defined(__LITTLE_ENDIAN_BITFIELD)
-	unsigned	sp_reg:4;
-	unsigned	bp_reg:4;
-	unsigned	type:3;
-	unsigned	signal:1;
-#elif defined(__BIG_ENDIAN_BITFIELD)
-	unsigned	bp_reg:4;
-	unsigned	sp_reg:4;
-	unsigned	unused:4;
-	unsigned	signal:1;
-	unsigned	type:3;
-#endif
-} __packed;
-
-#endif /* __ASSEMBLY__ */
 
 #endif /* _ORC_TYPES_H */

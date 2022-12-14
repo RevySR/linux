@@ -18,6 +18,7 @@ arch/x86/include/asm/unwind_hints.h
 arch/x86/lib/x86-opcode-map.txt
 arch/x86/tools/gen-insn-attr-x86.awk
 include/linux/static_call_types.h
+include/linux/orc_entry.h
 "
 
 SYNC_CHECK_FILES='
