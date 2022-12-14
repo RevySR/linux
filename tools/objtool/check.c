@@ -27,13 +27,6 @@ struct alternative {
 	bool skip_orig;
 };
 
-static unsigned long nr_cfi, nr_cfi_reused, nr_cfi_cache;
-
-static struct cfi_init_state initial_func_cfi;
-static struct cfi_state init_cfi;
-static struct cfi_state func_cfi;
-static struct cfi_state force_undefined_cfi;
-
 struct instruction *find_insn(struct objtool_file *file,
 			      struct section *sec, unsigned long offset)
 {
@@ -261,19 +254,6 @@ static bool dead_end_function(struct objtool_file *file, struct symbol *func)
 	return __dead_end_function(file, func, 0);
 }
 
-static void init_cfi_state(struct cfi_state *cfi)
-{
-	int i;
-
-	for (i = 0; i < CFI_NUM_REGS; i++) {
-		cfi->regs[i].base = CFI_UNDEFINED;
-		cfi->vals[i].base = CFI_UNDEFINED;
-	}
-	cfi->cfa.base = CFI_UNDEFINED;
-	cfi->drap_reg = CFI_UNDEFINED;
-	cfi->drap_offset = -1;
-}
-
 static void init_insn_state(struct objtool_file *file, struct insn_state *state,
 			    struct section *sec)
 {
@@ -287,75 +267,6 @@ static void init_insn_state(struct objtool_file *file, struct insn_state *state,
 	 */
 	if (opts.link && opts.noinstr && sec)
 		state->noinstr = sec->noinstr;
-}
-
-static struct cfi_state *cfi_alloc(void)
-{
-	struct cfi_state *cfi = calloc(sizeof(struct cfi_state), 1);
-	if (!cfi) {
-		WARN("calloc failed");
-		exit(1);
-	}
-	nr_cfi++;
-	return cfi;
-}
-
-static int cfi_bits;
-static struct hlist_head *cfi_hash;
-
-static inline bool cficmp(struct cfi_state *cfi1, struct cfi_state *cfi2)
-{
-	return memcmp((void *)cfi1 + sizeof(cfi1->hash),
-		      (void *)cfi2 + sizeof(cfi2->hash),
-		      sizeof(struct cfi_state) - sizeof(struct hlist_node));
-}
-
-static inline u32 cfi_key(struct cfi_state *cfi)
-{
-	return jhash((void *)cfi + sizeof(cfi->hash),
-		     sizeof(*cfi) - sizeof(cfi->hash), 0);
-}
-
-static struct cfi_state *cfi_hash_find_or_add(struct cfi_state *cfi)
-{
-	struct hlist_head *head = &cfi_hash[hash_min(cfi_key(cfi), cfi_bits)];
-	struct cfi_state *obj;
-
-	hlist_for_each_entry(obj, head, hash) {
-		if (!cficmp(cfi, obj)) {
-			nr_cfi_cache++;
-			return obj;
-		}
-	}
-
-	obj = cfi_alloc();
-	*obj = *cfi;
-	hlist_add_head(&obj->hash, head);
-
-	return obj;
-}
-
-static void cfi_hash_add(struct cfi_state *cfi)
-{
-	struct hlist_head *head = &cfi_hash[hash_min(cfi_key(cfi), cfi_bits)];
-
-	hlist_add_head(&cfi->hash, head);
-}
-
-static void *cfi_hash_alloc(unsigned long size)
-{
-	cfi_bits = max(10, ilog2(size));
-	cfi_hash = mmap(NULL, sizeof(struct hlist_head) << cfi_bits,
-			PROT_READ|PROT_WRITE,
-			MAP_PRIVATE|MAP_ANON, -1, 0);
-	if (cfi_hash == (void *)-1L) {
-		WARN("mmap fail cfi_hash");
-		cfi_hash = NULL;
-	}  else if (opts.stats) {
-		printf("cfi_bits: %d\n", cfi_bits);
-	}
-
-	return cfi_hash;
 }
 
 static unsigned long nr_insns;
@@ -2199,15 +2110,6 @@ static int add_jump_table_alts(struct objtool_file *file)
 	}
 
 	return 0;
-}
-
-static void set_func_state(struct cfi_state *state)
-{
-	state->cfa = initial_func_cfi.cfa;
-	memcpy(&state->regs, &initial_func_cfi.regs,
-	       CFI_NUM_REGS * sizeof(struct cfi_reg));
-	state->stack_size = initial_func_cfi.cfa.offset;
-	state->type = UNWIND_HINT_TYPE_CALL;
 }
 
 static int read_unwind_hints(struct objtool_file *file)
