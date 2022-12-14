@@ -7,6 +7,7 @@
 #include <linux/linkage.h>
 #include <linux/bits.h>
 #include <linux/errno.h>
+#include <linux/objtool.h>
 
 #include "../../virt/vmx/tdx/tdxcall.S"
 
