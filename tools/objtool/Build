@@ -4,6 +4,7 @@ objtool-y += weak.o
 
 objtool-$(STATIC_CHECK) += check.o
 objtool-$(STATIC_CHECK) += special.o
+objtool-$(DYNAMIC_CHECK) += dcheck.o
 objtool-y += builtin-check.o
 objtool-y += cfi.o
 objtool-y += insn.o
