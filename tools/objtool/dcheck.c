@@ -9,8 +9,13 @@
 #include <sys/mman.h>
 
 #include <objtool/objtool.h>
+#include <objtool/builtin.h>
+#include <objtool/insn.h>
 
 int check(struct objtool_file *file)
 {
-	return 0;
+	if (!opts.stackval)
+		return 1;
+
+	return decode_instructions(file);
 }
