@@ -20,6 +20,18 @@
 /* ARM64 instructions are all 4 bytes wide. */
 #define INSN_SIZE	4
 
+/* --------------------- arch support functions ------------------------- */
+
+unsigned long arch_dest_reloc_offset(int addend)
+{
+	return addend;
+}
+
+unsigned long arch_jump_destination(struct instruction *insn)
+{
+	return insn->offset + insn->immediate;
+}
+
 /* --------------------- instruction decode structs ------------------------ */
 
 struct decode_var {
