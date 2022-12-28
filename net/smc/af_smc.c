@@ -351,8 +351,8 @@ static int smc_release(struct socket *sock)
 	else
 		lock_sock(sk);
 
-	if (old_state == SMC_INIT && sk->sk_state == SMC_ACTIVE &&
-	    !smc->use_fallback)
+	if ((old_state == SMC_INIT || smc->conn.killed) &&
+	    sk->sk_state == SMC_ACTIVE && !smc->use_fallback)
 		smc_close_active_abort(smc);
 
 	rc = __smc_release(smc);
