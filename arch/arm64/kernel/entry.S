@@ -28,6 +28,7 @@
 #include <asm/thread_info.h>
 #include <asm/asm-uaccess.h>
 #include <asm/unistd.h>
+#include <asm/unwind_hints.h>
 
 	.macro	clear_gp_regs
 	.irp	n,0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29
@@ -578,6 +579,7 @@ SYM_CODE_START_LOCAL(el\el\ht\()_\regsize\()_\label)
 	.if \el == 0
 	b	ret_to_user
 	.else
+	UNWIND_HINT_REGS PT_REGS_SIZE
 	b	ret_to_kernel
 	.endif
 SYM_CODE_END(el\el\ht\()_\regsize\()_\label)
@@ -888,6 +890,7 @@ SYM_FUNC_START(call_on_irq_stack)
 	/* Move to the new stack and call the function there */
 	add	sp, x16, #IRQ_STACK_SIZE
 	blr	x1
+	UNWIND_HINT_IRQ 16
 
 	/*
 	 * Restore the SP from the FP, and restore the FP and LR from the frame
