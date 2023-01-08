@@ -2,13 +2,13 @@ objtool-y += arch/$(SRCARCH)/
 
 objtool-y += weak.o
 
-objtool-y += check.o
-objtool-y += special.o
+objtool-$(STATIC_CHECK) += check.o
+objtool-$(STATIC_CHECK) += special.o
 objtool-y += builtin-check.o
 objtool-y += cfi.o
 objtool-y += insn.o
 objtool-y += decode.o
-objtool-y += unwind_hints.o
+objtool-$(STATIC_CHECK) += unwind_hints.o
 objtool-y += elf.o
 objtool-y += objtool.o
 
