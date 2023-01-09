@@ -72,6 +72,9 @@
 #include "swap.h"
 
 #include <linux/uaccess.h>
+#ifdef CONFIG_PAGECACHE_LIMIT
+#include <linux/pagecache_limit.h>
+#endif
 
 #include <trace/events/vmscan.h>
 
@@ -5505,6 +5508,58 @@ static int mem_cgroup_slab_show(struct seq_file *m, void *p)
 
 static int memory_stat_show(struct seq_file *m, void *v);
 
+#ifdef CONFIG_PAGECACHE_LIMIT
+static u64 mem_cgroup_allow_pgcache_limit_read(struct cgroup_subsys_state *css,
+					     struct cftype *cft)
+{
+	struct mem_cgroup *memcg = mem_cgroup_from_css(css);
+
+	return READ_ONCE(memcg->allow_pgcache_limit);
+}
+
+static int mem_cgroup_allow_pgcache_limit_write(struct cgroup_subsys_state *css,
+					      struct cftype *cft, u64 val)
+{
+	struct mem_cgroup *memcg = mem_cgroup_from_css(css);
+
+	if (val > 1)
+		return -EINVAL;
+
+	memcg->allow_pgcache_limit = val;
+
+	return 0;
+}
+
+static u64 mem_cgroup_pgcache_limit_size_read(struct cgroup_subsys_state *css,
+					       struct cftype *cft)
+{
+	unsigned long size;
+	struct mem_cgroup *memcg = mem_cgroup_from_css(css);
+
+	size = READ_ONCE(memcg->pgcache_limit_size);
+
+	return size;
+}
+
+static ssize_t mem_cgroup_pgcache_limit_size_write(struct kernfs_open_file *of,
+						   char *buf, size_t nbytes,
+						   loff_t off)
+{
+	struct mem_cgroup *memcg = mem_cgroup_from_css(of_css(of));
+	struct page_counter *counter = &memcg->memory;
+	unsigned long size, max = counter->max * PAGE_SIZE;
+
+	buf = strstrip(buf);
+	size = (unsigned long)memparse(buf, NULL);
+	if (size > max)
+		memcg->pgcache_limit_size = max;
+	else
+		memcg->pgcache_limit_size = size;
+
+	return nbytes;
+}
+#endif /* CONFIG_PAGECACHE_LIMIT */
+
 static struct cftype mem_cgroup_legacy_files[] = {
 	{
 		.name = "usage_in_bytes",
@@ -5688,6 +5743,18 @@ static struct cftype mem_cgroup_legacy_files[] = {
 		.read_u64 = memcg_reap_background_read,
 		.write_u64 = memcg_reap_background_write,
 	},
+#ifdef CONFIG_PAGECACHE_LIMIT
+	{
+		.name = "pagecache_limit.enable",
+		.read_u64 = mem_cgroup_allow_pgcache_limit_read,
+		.write_u64 = mem_cgroup_allow_pgcache_limit_write,
+	},
+	{
+		.name = "pagecache_limit.size",
+		.read_u64 = mem_cgroup_pgcache_limit_size_read,
+		.write = mem_cgroup_pgcache_limit_size_write,
+	},
+#endif
 	{ },	/* terminate */
 };
 

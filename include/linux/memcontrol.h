@@ -360,6 +360,11 @@ struct mem_cgroup {
 	struct deferred_split deferred_split_queue;
 #endif
 
+#ifdef CONFIG_PAGECACHE_LIMIT
+	bool allow_pgcache_limit;
+	unsigned long pgcache_limit_size;
+#endif
+
 #ifdef CONFIG_LRU_GEN
 	/* per-memcg mm_struct list */
 	struct lru_gen_mm_list mm_list;
