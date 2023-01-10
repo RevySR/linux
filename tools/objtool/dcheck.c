@@ -346,6 +346,10 @@ int check(struct objtool_file *file)
 
 	walk_sections(file);
 
+	ret = read_unwind_hints(file);
+	if (ret)
+		return ret;
+
 	if (opts.orc)
 		ret = orc_create(file);
 

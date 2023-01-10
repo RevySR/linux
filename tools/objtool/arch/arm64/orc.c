@@ -58,6 +58,10 @@ const char *orc_type_name(unsigned int type)
 	switch (type) {
 	case UNWIND_HINT_TYPE_CALL:
 		return "call";
+	case UNWIND_HINT_TYPE_REGS:
+		return "regs";
+	case UNWIND_HINT_TYPE_IRQ_STACK:
+		return "irqstack";
 	default:
 		return "?";
 	}

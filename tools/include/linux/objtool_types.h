@@ -43,6 +43,8 @@ struct unwind_hint {
  *
  * UNWIND_HINT_TYPE_{SAVE,RESTORE}: Save the unwind metadata at a certain
  * location so that it can be restored later.
+ *
+ * UNWIND_HINT_TYPE_IRQ_STACK: Used to unwind through the IRQ stack.
  */
 #define UNWIND_HINT_TYPE_UNDEFINED	0
 #define UNWIND_HINT_TYPE_END_OF_STACK	1
@@ -53,5 +55,6 @@ struct unwind_hint {
 #define UNWIND_HINT_TYPE_FUNC		5
 #define UNWIND_HINT_TYPE_SAVE		6
 #define UNWIND_HINT_TYPE_RESTORE	7
+#define UNWIND_HINT_TYPE_IRQ_STACK	8
 
 #endif /* _LINUX_OBJTOOL_TYPES_H */

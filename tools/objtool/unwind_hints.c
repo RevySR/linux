@@ -16,6 +16,7 @@ int read_unwind_hints(struct objtool_file *file)
 	struct unwind_hint *hint;
 	struct instruction *insn;
 	struct reloc *reloc;
+	u8 sp_reg, type;
 	int i;
 
 	sec = find_section_by_name(file->elf, ".discard.unwind_hints");
@@ -37,6 +38,9 @@ int read_unwind_hints(struct objtool_file *file)
 	for (i = 0; i < sec->sh.sh_size / sizeof(struct unwind_hint); i++) {
 		hint = (struct unwind_hint *)sec->data->d_buf + i;
 
+		sp_reg = bswap_if_needed(file->elf, hint->sp_reg);
+		type = bswap_if_needed(file->elf, hint->type);
+
 		reloc = find_reloc_by_dest(file->elf, sec, i * sizeof(*hint));
 		if (!reloc) {
 			WARN("can't find reloc for unwind_hints[%d]", i);
@@ -51,23 +55,23 @@ int read_unwind_hints(struct objtool_file *file)
 
 		insn->hint = true;
 
-		if (hint->type == UNWIND_HINT_TYPE_UNDEFINED) {
+		if (type == UNWIND_HINT_TYPE_UNDEFINED) {
 			insn->cfi = &force_undefined_cfi;
 			continue;
 		}
 
-		if (hint->type == UNWIND_HINT_TYPE_SAVE) {
+		if (type == UNWIND_HINT_TYPE_SAVE) {
 			insn->hint = false;
 			insn->save = true;
 			continue;
 		}
 
-		if (hint->type == UNWIND_HINT_TYPE_RESTORE) {
+		if (type == UNWIND_HINT_TYPE_RESTORE) {
 			insn->restore = true;
 			continue;
 		}
 
-		if (hint->type == UNWIND_HINT_TYPE_REGS_PARTIAL) {
+		if (type == UNWIND_HINT_TYPE_REGS_PARTIAL) {
 			struct symbol *sym = find_symbol_by_offset(insn->sec, insn->offset);
 
 			if (sym && sym->bind == STB_GLOBAL) {
@@ -77,7 +81,7 @@ int read_unwind_hints(struct objtool_file *file)
 			}
 		}
 
-		if (hint->type == UNWIND_HINT_TYPE_FUNC) {
+		if (type == UNWIND_HINT_TYPE_FUNC) {
 			insn->cfi = &func_cfi;
 			continue;
 		}
@@ -85,13 +89,13 @@ int read_unwind_hints(struct objtool_file *file)
 		if (insn->cfi)
 			cfi = *(insn->cfi);
 
-		if (arch_decode_hint_reg(hint->sp_reg, &cfi.cfa.base)) {
-			WARN_INSN(insn, "unsupported unwind_hint sp base reg %d", hint->sp_reg);
+		if (arch_decode_hint_reg(sp_reg, &cfi.cfa.base)) {
+			WARN_INSN(insn, "unsupported unwind_hint sp base reg %d", sp_reg);
 			return -1;
 		}
 
 		cfi.cfa.offset = bswap_if_needed(file->elf, hint->sp_offset);
-		cfi.type = hint->type;
+		cfi.type = type;
 		cfi.signal = hint->signal;
 
 		insn->cfi = cfi_hash_find_or_add(&cfi);

@@ -29,6 +29,8 @@ static inline bool need_bswap(struct elf *elf)
 		__ret = __need_bswap ? bswap_32(val) : (val); break;	\
 	case 2:								\
 		__ret = __need_bswap ? bswap_16(val) : (val); break;	\
+	case 1:								\
+		__ret = (val); break;					\
 	default:							\
 		BUILD_BUG(); break;					\
 	}								\

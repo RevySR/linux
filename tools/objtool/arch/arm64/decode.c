@@ -17,6 +17,8 @@
 #include <objtool/elf.h>
 #include <objtool/warn.h>
 
+#include <asm/orc_types.h>
+
 /* ARM64 instructions are all 4 bytes wide. */
 #define INSN_SIZE	4
 
@@ -45,6 +47,25 @@ unsigned long arch_dest_reloc_offset(int addend)
 unsigned long arch_jump_destination(struct instruction *insn)
 {
 	return insn->offset + insn->immediate;
+}
+
+int arch_decode_hint_reg(u8 sp_reg, int *base)
+{
+	switch (sp_reg) {
+	case ORC_REG_UNDEFINED:
+		*base = CFI_UNDEFINED;
+		break;
+	case ORC_REG_SP:
+		*base = CFI_SP;
+		break;
+	case ORC_REG_FP:
+		*base = CFI_FP;
+		break;
+	default:
+		return -1;
+	}
+
+	return 0;
 }
 
 /* --------------------- instruction decode structs ------------------------ */
