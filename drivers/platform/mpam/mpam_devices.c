@@ -1240,7 +1240,7 @@ static int mpam_reprogram_ris(void *_arg)
 	spin_lock(&partid_max_lock);
 	partid_max = mpam_partid_max;
 	spin_unlock(&partid_max_lock);
-	for (partid = 0; partid < partid_max; partid++)
+	for (partid = 0; partid <= partid_max; partid++)
 		mpam_reprogram_ris_partid(ris, partid, cfg);
 
 	return 0;
@@ -1396,7 +1396,7 @@ static void mpam_reprogram_msc(struct mpam_msc *msc)
 		}
 
 		reset = true;
-		for (partid = 0; partid < mpam_partid_max; partid++) {
+		for (partid = 0; partid <= mpam_partid_max; partid++) {
 			cfg = &ris->comp->cfg[partid];
 			if (cfg->features)
 				reset = false;
@@ -2119,7 +2119,7 @@ static int __allocate_component_cfg(struct mpam_component *comp)
 	if (comp->cfg)
 		return 0;
 
-	comp->cfg = kcalloc(mpam_partid_max, sizeof(*comp->cfg), GFP_KERNEL);
+	comp->cfg = kcalloc(mpam_partid_max + 1, sizeof(*comp->cfg), GFP_KERNEL);
 	if (!comp->cfg)
 		return -ENOMEM;
 
@@ -2220,7 +2220,7 @@ static void mpam_enable_once(void)
 	mpam_register_cpuhp_callbacks(mpam_cpu_online);
 
 	pr_info("MPAM enabled with %u partid and %u pmg\n",
-		READ_ONCE(mpam_partid_max) + 1, mpam_pmg_max + 1);
+		READ_ONCE(mpam_partid_max) + 1, READ_ONCE(mpam_pmg_max) + 1);
 }
 
 void mpam_reset_class(struct mpam_class *class)
@@ -2231,7 +2231,7 @@ void mpam_reset_class(struct mpam_class *class)
 
 	idx = srcu_read_lock(&mpam_srcu);
 	list_for_each_entry_rcu(comp, &class->components, class_list) {
-		memset(comp->cfg, 0, (mpam_partid_max * sizeof(*comp->cfg)));
+		memset(comp->cfg, 0, ((mpam_partid_max + 1) * sizeof(*comp->cfg)));
 
 		list_for_each_entry_rcu(ris, &comp->ris, comp_list) {
 			mutex_lock(&ris->msc->lock);
