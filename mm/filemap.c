@@ -47,6 +47,9 @@
 #include <linux/splice.h>
 #include <asm/pgalloc.h>
 #include <asm/tlbflush.h>
+#ifdef CONFIG_PAGECACHE_LIMIT
+#include <linux/pagecache_limit.h>
+#endif
 #include "internal.h"
 
 #define CREATE_TRACE_POINTS
@@ -857,6 +860,9 @@ noinline int __filemap_add_folio(struct address_space *mapping,
 		if (error)
 			return error;
 		charged = true;
+#ifdef CONFIG_PAGECACHE_LIMIT
+		memcg_pagecache_shrink(folio_memcg(folio), gfp);
+#endif
 	}
 
 	VM_BUG_ON_FOLIO(index & (folio_nr_pages(folio) - 1), folio);
