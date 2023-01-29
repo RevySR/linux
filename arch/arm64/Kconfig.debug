@@ -45,6 +45,7 @@ config FRAME_POINTER_VALIDATION
 	bool "Dynamic Frame pointer validation"
 	select UNWINDER_FRAME_POINTER
 	select UNWINDER_ORC
+	select HAVE_DYNAMIC_FTRACE_WITH_ARGS
 	help
 		This invokes objtool on every object file causing it to
 		generate ORC data for the object file. ORC data is in a custom
