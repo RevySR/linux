@@ -6,7 +6,9 @@
 
 #ifdef CONFIG_OBJTOOL
 
+#ifndef CONFIG_ARM64
 #include <asm/asm.h>
+#endif
 
 #ifndef __ASSEMBLY__
 
