@@ -245,7 +245,8 @@ static int c_show(struct seq_file *m, void *v)
 		seq_printf(m, "CPU part\t: 0x%03x\n", MIDR_PARTNUM(midr));
 		seq_printf(m, "CPU revision\t: %d\n", MIDR_REVISION(midr));
 		seq_printf(m, "address sizes\t: %u bits physical, %u bits virtual\n",
-			   id_aa64mmfr0_pa_range_bits(), id_aa64mmfr2_va_range_bits());
+			   id_aa64mmfr0_pa_range_bits(cpuinfo->reg_id_aa64mmfr0),
+			   id_aa64mmfr2_va_range_bits(cpuinfo->reg_id_aa64mmfr2));
 
 		freq = cpufreq_get(cpu);
 		if (freq == 0)
