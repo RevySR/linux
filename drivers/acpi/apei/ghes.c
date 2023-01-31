@@ -671,6 +671,33 @@ static void ghes_defer_non_standard_event(struct acpi_hest_generic_data *gdata,
 	schedule_work(&entry->work);
 }
 
+#ifdef CONFIG_YITIAN_CPER_RAWDATA
+/*
+ * Check if the event is synchronous exception by Yitian DDR Raw data
+ * NOTE: only works for Yitian 710 now
+ */
+static bool is_sync_event(const struct acpi_hest_generic_status *estatus)
+{
+	struct yitian_raw_data_header *header;
+	struct yitian_ddr_raw_data *data;
+
+	if (!yitian_estatus_check_header(estatus))
+		return false;
+
+	header = (struct yitian_raw_data_header *)((void *)estatus +
+						   estatus->raw_data_offset);
+	if (header->type != ERR_TYPE_DDR)
+		return false;
+
+	data = (struct yitian_ddr_raw_data *)(header + 1);
+	/* 1 for synchronous exception */
+	if (data->ex_type == 1)
+		return true;
+
+	return false;
+}
+#endif /* CONFIG_YITIAN_CPER_RAWDATA */
+
 static bool ghes_do_proc(struct ghes *ghes,
 			 const struct acpi_hest_generic_status *estatus)
 {
@@ -683,6 +710,10 @@ static bool ghes_do_proc(struct ghes *ghes,
 	bool sync = is_hest_sync_notify(ghes);
 
 	sev = ghes_severity(estatus->error_severity);
+#ifdef CONFIG_YITIAN_CPER_RAWDATA
+	if (estatus->raw_data_length)
+		sync = is_sync_event(estatus);
+#endif /* CONFIG_YITIAN_CPER_RAWDATA */
 	apei_estatus_for_each_section(estatus, gdata) {
 		sec_type = (guid_t *)gdata->section_type;
 		sec_sev = ghes_severity(gdata->error_severity);
