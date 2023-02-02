@@ -322,12 +322,10 @@ void wilds_cpus_allowed(struct cpumask *pmask)
 
 void update_wilds_cpumask(cpumask_var_t new_allowed, cpumask_var_t old_allowed)
 {
-	struct css_task_iter it;
-	struct task_struct *task;
-	struct task_group *tg = &root_task_group;
+	struct task_struct *g, *task;
 
-	css_task_iter_start(&tg->css, 0, &it);
-	while ((task = css_task_iter_next(&it))) {
+	rcu_read_lock();
+	for_each_process_thread(g, task) {
 		if (task->flags & PF_KTHREAD)
 			continue;
 
@@ -336,7 +334,7 @@ void update_wilds_cpumask(cpumask_var_t new_allowed, cpumask_var_t old_allowed)
 
 		set_cpus_allowed_ptr(task, new_allowed);
 	}
-	css_task_iter_end(&it);
+	rcu_read_unlock();
 }
 
 static DEFINE_MUTEX(dyn_isolcpus_mutex);
