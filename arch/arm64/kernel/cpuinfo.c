@@ -248,9 +248,7 @@ static int c_show(struct seq_file *m, void *v)
 			   id_aa64mmfr0_pa_range_bits(cpuinfo->reg_id_aa64mmfr0),
 			   id_aa64mmfr2_va_range_bits(cpuinfo->reg_id_aa64mmfr2));
 
-		freq = cpufreq_get(cpu);
-		if (freq == 0)
-			freq = arch_cpufreq_get_khz(cpu);
+		freq = arch_cpufreq_get_khz(cpu);
 		if (freq)
 			seq_printf(m, "CPU MHz\t\t: %u.%03u\n", freq / 1000, freq % 1000);
 		seq_puts(m, "\n");

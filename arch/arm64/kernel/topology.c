@@ -74,9 +74,44 @@ int __init parse_acpi_topology(void)
 
 static unsigned int cpufreq_khz;
 
+struct arch_cpufreq_sample {
+	unsigned int khz;
+	ktime_t time;
+};
+
+static DEFINE_PER_CPU(struct arch_cpufreq_sample, samples);
+
+#define ARCH_CPUFREQ_CACHE_THRESHOLD_MS	100
+
+static void arch_cpufreq_snapshot_cpu(int cpu, ktime_t now)
+{
+	s64 time_delta = ktime_ms_delta(now, per_cpu(samples.time, cpu));
+	struct arch_cpufreq_sample *s;
+
+	/* Don't bother re-computing within the cache threshold time. */
+	if (time_delta < ARCH_CPUFREQ_CACHE_THRESHOLD_MS)
+		return;
+
+	s = per_cpu_ptr(&samples, cpu);
+
+	s->khz = cpufreq_get(cpu);
+	if (s->khz)
+		s->time = ktime_get();
+}
+
 unsigned int arch_cpufreq_get_khz(int cpu)
 {
-	return cpufreq_khz;
+	unsigned int new_cpufreq;
+
+	arch_cpufreq_snapshot_cpu(cpu, ktime_get());
+
+	new_cpufreq = per_cpu(samples.khz, cpu);
+
+	/*
+	 * If the cpufreq driver can provide a value, use it.
+	 * Otherwise use the cpufreq_khz.
+	 */
+	return new_cpufreq ? new_cpufreq : cpufreq_khz;
 }
 
 #ifdef CONFIG_ARM64_AMU_EXTN
