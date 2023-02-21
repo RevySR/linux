@@ -1826,6 +1826,15 @@ struct kvm_stat_data {
 	enum kvm_stat_kind kind;
 };
 
+#ifdef CONFIG_SW64
+struct kvm_stats_debugfs_item {
+	const char *name;
+	int offset;
+	enum kvm_stat_kind kind;
+	int mode;
+};
+#endif
+
 struct _kvm_stats_desc {
 	struct kvm_stats_desc desc;
 	char name[KVM_STATS_NAME_SIZE];
@@ -1948,6 +1957,11 @@ struct _kvm_stats_desc {
 	STATS_DESC_IBOOLEAN(VCPU_GENERIC, blocking)
 
 #ifdef CONFIG_SW64
+#define VM_STAT(n, x, ...) 							\
+	{ n, offsetof(struct kvm, stat.x), KVM_STAT_VM, ## __VA_ARGS__ }
+#define VCPU_STAT(n, x, ...)							\
+	{ n, offsetof(struct kvm_vcpu, stat.x), KVM_STAT_VCPU, ## __VA_ARGS__ }
+
 enum dfx_sw64_stat_kind {
 	DFX_SW64_STAT_U64,
 	DFX_SW64_STAT_CPUTIME,
@@ -1961,6 +1975,7 @@ struct dfx_sw64_kvm_stats_debugfs_item {
 	struct dentry *dentry;
 };
 extern struct dfx_sw64_kvm_stats_debugfs_item dfx_sw64_debugfs_entries[];
+extern struct kvm_stats_debugfs_item debugfs_entries[];
 #endif
 extern struct dentry *kvm_debugfs_dir;
 
