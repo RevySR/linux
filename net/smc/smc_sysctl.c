@@ -117,11 +117,10 @@ int __net_init smc_sysctl_net_init(struct net *net)
 	net->smc.sysctl_autocorking_size = SMC_AUTOCORKING_DEFAULT_SIZE;
 	net->smc.sysctl_smcr_buf_type = SMCR_MIXED_BUFS;
 	net->smc.sysctl_smcr_testlink_time = SMC_LLC_TESTLINK_DEFAULT_TIME;
-	WRITE_ONCE(net->smc.sysctl_wmem, net_smc_wmem_init);
-	WRITE_ONCE(net->smc.sysctl_rmem, net_smc_rmem_init);
+	net->smc.sysctl_wmem = 262144; /* 256 KiB */
+	net->smc.sysctl_rmem = 262144; /* 256 KiB */
 	net->smc.sysctl_max_links_per_lgr = SMC_LINKS_PER_LGR_MAX_PREFER;
 	net->smc.sysctl_max_conns_per_lgr = SMC_CONN_PER_LGR_PREFER;
-
 	return 0;
 
 err_reg:
