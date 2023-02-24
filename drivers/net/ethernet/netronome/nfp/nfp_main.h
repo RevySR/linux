@@ -141,6 +141,7 @@ struct nfp_pf {
 
 	struct nfp_shared_buf *shared_bufs;
 	unsigned int num_shared_bufs;
+	bool multi_pf_support;
 };
 
 extern struct pci_driver nfp_netvf_pci_driver;
