@@ -420,6 +420,9 @@ struct task_group {
 	/* Effective clamp values used for a task group */
 	struct uclamp_se	uclamp[UCLAMP_CNT];
 #endif
+#if defined(CONFIG_SCHED_CORE) && defined(CONFIG_CFS_BANDWIDTH)
+	unsigned int		ht_ratio;
+#endif
 
 };
 
@@ -1337,6 +1340,11 @@ extern void sched_core_dequeue(struct rq *rq, struct task_struct *p, int flags);
 extern void sched_core_get(void);
 extern void sched_core_put(void);
 
+#ifdef CONFIG_CFS_BANDWIDTH
+extern void account_ht_aware_quota(struct task_struct *p, u64 delta);
+#else
+void account_ht_aware_quota(struct task_struct *p, u64 delta) {}
+#endif
 #else /* !CONFIG_SCHED_CORE */
 
 static inline bool sched_core_enabled(struct rq *rq)
