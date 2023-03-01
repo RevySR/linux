@@ -5249,7 +5249,6 @@ static void pci_save_yitian710_regs(struct pci_dev *dev,
 				    struct pci_saved_regs *saved)
 {
 	int i;
-	u16 ctrl, ctrl2;
 
 	/* if not yitian 710, should return here */
 	if (!dev->broken_bus_reset)
@@ -5259,49 +5258,48 @@ static void pci_save_yitian710_regs(struct pci_dev *dev,
 	for (i = 0; i < 16; i++)
 		pci_read_config_dword(dev, i * 4, &dev->saved_config_space[i]);
 
-	pci_read_config_word(dev, PCI_EXP_DEVCTL, &ctrl);
-	pci_read_config_word(dev, PCI_EXP_DEVCTL2, &ctrl2);
+	pcie_capability_read_word(dev, PCI_EXP_DEVCTL, &saved->dev_ctrl);
+	pcie_capability_read_word(dev, PCI_EXP_RTCTL, &saved->root_ctrl);
+	pcie_capability_read_word(dev, PCI_EXP_DEVCTL2, &saved->dev_ctrl2);
 
-	saved->mps = (ctrl & PCI_EXP_DEVCTL_PAYLOAD) >> 5;
-	saved->mrrs = (ctrl & PCI_EXP_DEVCTL_READRQ) >> 12;
-	saved->comp_timeout_val = ctrl2 & PCI_EXP_DEVCTL2_COMP_TIMEOUT;
-	saved->comp_timeout_dis = (ctrl2 & PCI_EXP_DEVCTL2_COMP_TMOUT_DIS) >> 4;
 	if (dev->acs_cap)
 		pci_read_config_dword(dev, dev->acs_cap + PCI_ACS_CAP,
 				      &saved->acs_cap_ctrl);
+	if (dev->aer_cap)
+		pci_read_config_dword(dev, dev->aer_cap + PCI_ERR_ROOT_COMMAND,
+				      &saved->root_err_cmd);
 
-	pci_read_config_dword(dev, PCI_EXP_SLTCTL, &saved->slot_ctrl_status);
+	pcie_capability_read_word(dev, PCI_EXP_SLTCTL, &saved->slot_ctrl);
 }
 
 static void pci_restore_yitian710_regs(struct pci_dev *dev,
 				       struct pci_saved_regs *saved)
 {
-	u16 regval;
-
 	if (!dev->broken_bus_reset)
 		return;
 
 	/* restore pcie type1 config space header */
 	pci_restore_config_space_range(dev, 0, 15, 0, false);
 
-	regval = (saved->mps) << 5;
-	pcie_capability_clear_and_set_word(dev, PCI_EXP_DEVCTL,
-					   PCI_EXP_DEVCTL_PAYLOAD, regval);
-	regval = (saved->mrrs) << 12;
-	pcie_capability_clear_and_set_word(dev, PCI_EXP_DEVCTL,
-					   PCI_EXP_DEVCTL_READRQ, regval);
-	regval = saved->comp_timeout_val;
-	pcie_capability_clear_and_set_word(dev, PCI_EXP_DEVCTL2,
-					   PCI_EXP_DEVCTL2_COMP_TIMEOUT, regval);
-	regval = (saved->comp_timeout_dis) << 4;
-	pcie_capability_clear_and_set_word(dev, PCI_EXP_DEVCTL2,
-					   PCI_EXP_DEVCTL2_COMP_TMOUT_DIS, regval);
+	/*
+	 * restore Device Control, Root Control Register and Device Control 2
+	 * in PCI Express Capability
+	 */
+	pcie_capability_write_word(dev, PCI_EXP_DEVCTL, saved->dev_ctrl);
+	pcie_capability_write_word(dev, PCI_EXP_RTCTL, saved->root_ctrl);
+	pcie_capability_write_word(dev, PCI_EXP_DEVCTL2, saved->dev_ctrl2);
 
+	/* restore ACS Capability Register */
 	if (dev->acs_cap)
 		pci_write_config_dword(dev, dev->acs_cap + PCI_ACS_CAP,
 				       saved->acs_cap_ctrl);
+	/* restore AER Root Error Command Register */
+	if (dev->aer_cap)
+		pci_write_config_dword(dev, dev->aer_cap + PCI_ERR_ROOT_COMMAND,
+				       saved->root_err_cmd);
 
-	pci_write_config_dword(dev, PCI_EXP_SLTCTL, saved->slot_ctrl_status);
+	/* restore Slot Control Register */
+	pcie_capability_write_word(dev, PCI_EXP_SLTCTL, saved->slot_ctrl);
 }
 
 void pci_reset_secondary_bus(struct pci_dev *dev)

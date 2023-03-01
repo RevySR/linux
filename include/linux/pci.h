@@ -314,12 +314,12 @@ struct pci_vpd {
 
 /* The structure describes the regs to be saved for yitian710 SoC. */
 struct pci_saved_regs {
-	u8		mps;
-	u8		mrrs;
-	u8		comp_timeout_val;
-	u8		comp_timeout_dis;
+	u16		dev_ctrl;
+	u16		dev_ctrl2;
 	u32		acs_cap_ctrl;
-	u32		slot_ctrl_status;	/* should be the last register to restore */
+	u32		root_err_cmd;
+	u16		root_ctrl;
+	u16		slot_ctrl;	/* should be the last register to restore */
 };
 
 struct irq_affinity;
