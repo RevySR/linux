@@ -1355,6 +1355,9 @@ struct fuse_file *fuse_file_open(struct fuse_mount *fm, u64 nodeid,
 void fuse_file_release(struct inode *inode, struct fuse_file *ff,
 		       unsigned int open_flags, fl_owner_t id, bool isdir);
 
+typedef int (*fuse_mount_cb_t)(struct file *file);
+extern fuse_mount_cb_t fuse_mount_callback;
+
 static inline bool is_virtfuse_device(struct file *file) { return false; }
 
 #endif /* _FS_FUSE_I_H */
