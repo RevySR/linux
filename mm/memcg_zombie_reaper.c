@@ -254,14 +254,17 @@ static void reap_zombie_memcgs(bool background)
 	reclaimed = 0;
 	reclaimed_threshold = reaper_pages_scan;
 	for_each_mem_cgroup_tree(iter, NULL) {
-		if (background && reclaimed >= reclaimed_threshold) {
+		if (background &&
+		    (reclaimed >= reclaimed_threshold)) {
 			mem_cgroup_iter_break(NULL, iter);
 			break;
 		}
 		if (mem_cgroup_online(iter))
 			continue;
-		if (!(reaper_kthread_on & REAP_BACKGROUND_GLOBAL) &&
-		    !iter->reap_background)
+		if (background &&
+		    !(reaper_kthread_on & REAP_BACKGROUND_GLOBAL) &&
+		    !((reaper_kthread_on & REAP_BACKGROUND_MEMCG) &&
+		      (iter->reap_background)))
 			continue;
 		reclaimed += do_reap_zombie_memcg(iter, background);
 		cond_resched();
