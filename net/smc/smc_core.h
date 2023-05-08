@@ -28,7 +28,7 @@
 #define SMC_CONN_PER_LGR_MAX	255	/* max. # of connections per link group,
 					 * also is the default value for SMC-R v1 and v2.0
 					 */
-#define SMC_CONN_PER_LGR_PREFER	255	/* Preferred connections per link group used for
+#define SMC_CONN_PER_LGR_PREFER	32	/* Preferred connections per link group used for
 					 * SMC-R v2.1 and later negotiation, vendors or
 					 * distrubutions may modify it to a value between
 					 * 16-255 as needed.
