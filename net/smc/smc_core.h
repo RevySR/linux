@@ -91,6 +91,8 @@ struct smc_rdma_wr {				/* work requests per message
 
 #define SMC_LGR_ID_SIZE		4
 
+#define SMC_LINKFLAG_ANNOUNCE_PENDING	0
+
 struct smc_link {
 	struct iw_ext_conn_param	iw_conn_param;
 	struct smc_ib_device	*smcibdev;	/* ib-device */
@@ -147,6 +149,15 @@ struct smc_link {
 	} ____cacheline_aligned_in_smp;
 	struct completion	reg_ref_comp;
 	enum smc_wr_reg_state	wr_reg_state;	/* state of wr_reg request */
+
+	atomic_t	peer_rq_credits;	/* credits for peer rq flowctrl */
+	atomic_t	local_rq_credits;	/* credits for local rq flowctrl */
+	u8		credits_enable;		/* credits enable flag, set when negotiation */
+	u8		local_cr_watermark_high;	/* local rq credits watermark */
+	u8		peer_cr_watermark_low;	/* peer rq credits watermark */
+	u8		credits_update_limit;	/* credits update limit for cdc msg */
+	struct work_struct	credits_announce_work;	/* work for credits announcement */
+	unsigned long	flags;	/* link flags, SMC_LINKFLAG_ANNOUNCE_PENDING .etc */
 
 	u8			gid[SMC_GID_SIZE];/* gid matching used vlan id*/
 	u8			eiwarp_gid[SMC_GID_SIZE];
@@ -365,6 +376,8 @@ struct smc_link_group {
 						/* max conn can be assigned to lgr */
 			u8			max_links;
 						/* max links can be added in lgr */
+			u8			credits_en;
+						/* is credits enabled by vendor opts negotiation */
 		};
 		struct { /* SMC-D */
 			struct smcd_gid		peer_gid;
@@ -418,6 +431,7 @@ struct smc_init_info {
 	u8			max_conns;
 	u8			max_links;
 	u8			vendor_opt_valid : 1;
+	u8			credits_en : 1;
 	u8			first_contact_peer;
 	u8			first_contact_local;
 	u16			feature_mask;

@@ -1042,11 +1042,13 @@ static int smc_lgr_create(struct smc_sock *smc, struct smc_init_info *ini)
 			       ETH_ALEN);
 			lgr->max_conns = ini->max_conns;
 			lgr->max_links = ini->max_links;
+			lgr->credits_en = ini->vendor_opt_valid && ini->credits_en;
 		} else {
 			ibdev = ini->ib_dev;
 			ibport = ini->ib_port;
 			lgr->max_conns = SMC_CONN_PER_LGR_MAX;
 			lgr->max_links = SMC_LINKS_ADD_LNK_MAX;
+			lgr->credits_en = 0;
 		}
 		memcpy(lgr->pnet_id, ibdev->pnetid[ibport - 1],
 		       SMC_MAX_PNETID_LEN);

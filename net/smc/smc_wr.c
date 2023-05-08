@@ -130,7 +130,8 @@ static inline void smc_wr_tx_process_cqe(struct ib_wc *wc)
 	}
 	if (pnd_snd.handler)
 		pnd_snd.handler(&pnd_snd.priv, link, wc->status);
-	wake_up(&link->wr_tx_wait);
+	if (wq_has_sleeper(&link->wr_tx_wait))
+		wake_up(&link->wr_tx_wait);
 }
 
 /*---------------------------- request submission ---------------------------*/
@@ -140,11 +141,16 @@ static inline int smc_wr_tx_get_free_slot_index(struct smc_link *link, u32 *idx)
 	*idx = link->wr_tx_cnt;
 	if (!smc_link_sendable(link))
 		return -ENOLINK;
+
+	if (!smc_wr_tx_get_credit(link))
+		return -EBUSY;
+
 	for_each_clear_bit(*idx, link->wr_tx_mask, link->wr_tx_cnt) {
 		if (!test_and_set_bit(*idx, link->wr_tx_mask))
 			return 0;
 	}
 	*idx = link->wr_tx_cnt;
+	smc_wr_tx_put_credits(link, 1, false);
 	return -EBUSY;
 }
 
@@ -250,7 +256,7 @@ int smc_wr_tx_put_slot(struct smc_link *link,
 		memset(&link->wr_tx_bufs[idx], 0,
 		       sizeof(link->wr_tx_bufs[idx]));
 		test_and_clear_bit(idx, link->wr_tx_mask);
-		wake_up(&link->wr_tx_wait);
+		smc_wr_tx_put_credits(link, 1, true);
 		return 1;
 	} else if (link->lgr->smc_version == SMC_V2 &&
 		   pend->idx == link->wr_tx_cnt) {
@@ -431,6 +437,13 @@ static inline void smc_wr_rx_process_cqe(struct ib_wc *wc)
 			break;
 		}
 	}
+
+	if (smc_wr_rx_credits_need_announce(link) &&
+	    !test_bit(SMC_LINKFLAG_ANNOUNCE_PENDING, &link->flags) &&
+	    !link->clearing) {
+		set_bit(SMC_LINKFLAG_ANNOUNCE_PENDING, &link->flags);
+		schedule_work(&link->credits_announce_work);
+	}
 }
 
 static void smc_wr_tasklet_fn(struct tasklet_struct *t)
@@ -475,6 +488,8 @@ int smc_wr_rx_post_init(struct smc_link *link)
 
 	for (i = 0; i < link->wr_rx_cnt; i++)
 		rc = smc_wr_rx_post(link);
+	/* credits have already been announced to peer */
+	atomic_set(&link->local_rq_credits, 0);
 	return rc;
 }
 
@@ -881,6 +896,16 @@ int smc_wr_create_link(struct smc_link *lnk)
 		goto cancel_ref;
 	init_completion(&lnk->reg_ref_comp);
 	init_waitqueue_head(&lnk->wr_rx_empty_wait);
+	atomic_set(&lnk->peer_rq_credits, 0);
+	atomic_set(&lnk->local_rq_credits, 0);
+	lnk->flags = 0;
+	lnk->local_cr_watermark_high = max(lnk->wr_rx_cnt / 3, 1U);
+	lnk->peer_cr_watermark_low = 0;
+
+	/* if credits accumlated less than 10% of wr_rx_cnt(at least 5),
+	 * will not be announced by cdc msg.
+	 */
+	lnk->credits_update_limit = max(lnk->wr_rx_cnt / 10, 5U);
 	return rc;
 
 cancel_ref:
