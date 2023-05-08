@@ -1306,7 +1306,7 @@ static int smc_connect_rdma_v2_prepare(struct smc_sock *smc,
 	}
 
 	ini->release_nr = fce->release;
-	rc = smc_clc_clnt_v2x_features_validate(fce, ini);
+	rc = smc_clc_clnt_v2x_features_validate(smc, fce, ini);
 	if (rc)
 		return rc;
 
@@ -1483,7 +1483,7 @@ static int smc_connect_ism(struct smc_sock *smc,
 				smc_get_clc_first_contact_ext(aclc, true);
 
 			ini->release_nr = fce->release;
-			rc = smc_clc_clnt_v2x_features_validate(fce, ini);
+			rc = smc_clc_clnt_v2x_features_validate(smc, fce, ini);
 			if (rc)
 				return rc;
 		}

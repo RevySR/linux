@@ -854,6 +854,24 @@ int smc_clc_send_decline(struct smc_sock *smc, u32 peer_diag_info, u8 version)
 	return len > 0 ? 0 : len;
 }
 
+inline struct smc_clc_vendor_opt_ali
+smc_clc_vendor_opts_ali_get_config(struct smc_sock *smc)
+{
+	/* smc_clc_vendor_opt_ali is defined in network bytes order,
+	 * but sysctl_vendor_exp_options is assinged in host bytes order.
+	 * So converted sysctl_vendor_exp_options to __be32, in case
+	 * sysctl_vendor_exp_options can be configured compatible either
+	 * on be host or le host.
+	 */
+	__be32 vendor_opts_val =
+		cpu_to_be32(sock_net(&smc->sk)->smc.sysctl_vendor_exp_options);
+
+	BUILD_BUG_ON_MSG(sizeof(struct smc_clc_vendor_opt_ali) > sizeof(unsigned int),
+			 "struct smc_clc_vendor_opt_ali size can not exceeds 4 bytes");
+
+	return *((struct smc_clc_vendor_opt_ali *)&vendor_opts_val);
+}
+
 /* send CLC PROPOSAL message across internal TCP socket */
 int smc_clc_send_proposal(struct smc_sock *smc, struct smc_init_info *ini)
 {
@@ -937,6 +955,8 @@ int smc_clc_send_proposal(struct smc_sock *smc, struct smc_init_info *ini)
 	} else {
 		struct smc_clc_eid_entry *ueident;
 		u16 v2_ext_offset;
+		struct smc_clc_vendor_opt_ali vendor_config =
+			smc_clc_vendor_opts_ali_get_config(smc);
 
 		v2_ext->hdr.flag.release = SMC_RELEASE;
 		v2_ext_offset = sizeof(*pclc_smcd) -
@@ -946,11 +966,16 @@ int smc_clc_send_proposal(struct smc_sock *smc, struct smc_init_info *ini)
 						pclc_prfx->ipv6_prefixes_cnt *
 						sizeof(ipv6_prfx[0]);
 		pclc_smcd->v2_ext_offset = htons(v2_ext_offset);
-		memcpy(pclc_smcd->vendor_oui, SMC_VENDOR_OUI_ALIBABA,
-		       sizeof(SMC_VENDOR_OUI_ALIBABA));
-		pclc_smcd->vendor_exp_options.valid = 1;
-		pclc_smcd->vendor_exp_options.credits_en = 1;
-		pclc_smcd->vendor_exp_options.rwwi_en = 1;
+
+		if (vendor_config.valid) {
+			memcpy(pclc_smcd->vendor_oui, SMC_VENDOR_OUI_ALIBABA,
+			       sizeof(SMC_VENDOR_OUI_ALIBABA));
+			pclc_smcd->vendor_exp_options.valid = 1;
+			if (vendor_config.credits_en)
+				pclc_smcd->vendor_exp_options.credits_en = 1;
+			if (vendor_config.rwwi_en)
+				pclc_smcd->vendor_exp_options.rwwi_en = 1;
+		}
 		plen += sizeof(*v2_ext);
 
 		v2_ext->feature_mask = htons(SMC_FEATURE_MASK);
@@ -1269,12 +1294,15 @@ int smc_clc_send_accept(struct smc_sock *new_smc, bool srv_first_contact,
 	return len > 0 ? 0 : len;
 }
 
-void smc_clc_vendor_opt_validate(struct smc_clc_msg_proposal *pclc,
+void smc_clc_vendor_opt_validate(struct smc_sock *smc,
+				 struct smc_clc_msg_proposal *pclc,
 				 struct smc_init_info *ini)
 {
 	struct smc_clc_msg_smcd *prop_smcd = smc_get_clc_msg_smcd(pclc);
+	struct smc_clc_vendor_opt_ali vendor_config =
+		smc_clc_vendor_opts_ali_get_config(smc);
 
-	if (!prop_smcd)
+	if (!prop_smcd || !vendor_config.valid)
 		return;
 
 	if (memcmp(prop_smcd->vendor_oui, SMC_VENDOR_OUI_ALIBABA,
@@ -1285,8 +1313,16 @@ void smc_clc_vendor_opt_validate(struct smc_clc_msg_proposal *pclc,
 		return;
 
 	ini->vendor_opt_valid = 1;
-	ini->credits_en = prop_smcd->vendor_exp_options.credits_en;
-	ini->rwwi_en = prop_smcd->vendor_exp_options.rwwi_en;
+
+	if (vendor_config.credits_en)
+		ini->credits_en = prop_smcd->vendor_exp_options.credits_en;
+	else
+		ini->credits_en = 0;
+
+	if (vendor_config.rwwi_en)
+		ini->rwwi_en = prop_smcd->vendor_exp_options.rwwi_en;
+	else
+		ini->rwwi_en = 0;
 }
 
 int smc_clc_srv_v2x_features_validate(struct smc_sock *smc,
@@ -1321,16 +1357,19 @@ int smc_clc_srv_v2x_features_validate(struct smc_sock *smc,
 			return SMC_CLC_DECL_MAXLINKERR;
 	}
 
-	smc_clc_vendor_opt_validate(pclc, ini);
+	smc_clc_vendor_opt_validate(smc, pclc, ini);
 
 	return 0;
 }
 
-int smc_clc_clnt_v2x_features_validate(struct smc_clc_first_contact_ext *fce,
+int smc_clc_clnt_v2x_features_validate(struct smc_sock *smc,
+				       struct smc_clc_first_contact_ext *fce,
 				       struct smc_init_info *ini)
 {
 	struct smc_clc_first_contact_ext_v2x *fce_v2x =
 		(struct smc_clc_first_contact_ext_v2x *)fce;
+	struct smc_clc_vendor_opt_ali vendor_config =
+		smc_clc_vendor_opts_ali_get_config(smc);
 
 	if (ini->release_nr < SMC_RELEASE_1)
 		return 0;
@@ -1347,6 +1386,12 @@ int smc_clc_clnt_v2x_features_validate(struct smc_clc_first_contact_ext *fce,
 	}
 	/* common supplemental features of server and client */
 	ini->feature_mask = ntohs(fce_v2x->feature_mask) & SMC_FEATURE_MASK;
+
+	if ((!vendor_config.valid && fce_v2x->vendor_exp_options.valid) ||
+	    (!vendor_config.credits_en &&
+	     fce_v2x->vendor_exp_options.credits_en) ||
+	    (!vendor_config.rwwi_en && fce_v2x->vendor_exp_options.rwwi_en))
+		return SMC_CLC_DECL_VENDORERR;
 
 	if (fce_v2x->vendor_exp_options.valid) {
 		ini->vendor_opt_valid = 1;

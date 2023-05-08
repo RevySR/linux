@@ -71,3 +71,17 @@ smcr_max_conns_per_lgr - INTEGER
 	acceptable value ranges from 16 to 255. Only for SMC-R v2.1 and later.
 
 	Default: 32
+
+experiment_vendor_options - UNSIGNED INTEGER
+	Controls whether to enable experimental vendor options or not. It is a bitmap
+	and each bit indicates an experimental vendor option. Bit value 0 means disable
+	the option and bit value 1 means enable the option. The bits definition is as
+	follows,
+	bit31: enable/disable all experimental vendor options.
+	bit30: enable/disable SMC-R with rdma write with immediate feature.
+	bit29: enable/disable SMC-R with rdma flow control feature.
+	bit0-bit28: Reserved.
+
+	Notice that it is experimental and may be removed in the future.
+
+	Default: 0xFFFFFFFF
