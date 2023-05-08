@@ -790,6 +790,11 @@ static struct mon_evt mbm_local_event = {
 	.evtid		= QOS_L3_MBM_LOCAL_EVENT_ID,
 };
 
+static struct mon_evt mbm_bps_event = {
+	.name		= "mbm_local_bytes",
+	.evtid		= QOS_MC_MBM_BPS_EVENT_ID,
+};
+
 /*
  * Initialize the event list for the resource.
  *
@@ -807,6 +812,14 @@ static void l3_mon_evt_init(struct rdt_resource *r)
 		list_add_tail(&mbm_total_event.list, &r->evt_list);
 	if (resctrl_arch_is_mbm_local_enabled())
 		list_add_tail(&mbm_local_event.list, &r->evt_list);
+}
+
+static void mc_mon_evt_init(struct rdt_resource *r)
+{
+	INIT_LIST_HEAD(&r->evt_list);
+
+	if (resctrl_arch_is_mbm_bps_enabled())
+		list_add_tail(&mbm_bps_event.list, &r->evt_list);
 }
 
 int resctrl_mon_resource_init(void)
@@ -831,6 +844,9 @@ int resctrl_mon_resource_init(void)
 		mbm_local_event.configurable = true;
 		mbm_config_rftype_init("mbm_local_bytes_config");
 	}
+
+	r = resctrl_arch_get_resource(RDT_RESOURCE_MBA);
+	mc_mon_evt_init(r);
 
 	return 0;
 }

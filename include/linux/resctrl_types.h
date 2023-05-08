@@ -93,6 +93,9 @@ enum resctrl_event_id {
 	QOS_L3_OCCUP_EVENT_ID		= 0x01,
 	QOS_L3_MBM_TOTAL_EVENT_ID	= 0x02,
 	QOS_L3_MBM_LOCAL_EVENT_ID	= 0x03,
+	QOS_MC_MBM_BPS_EVENT_ID		= 0x04,
 };
+
+#define RESCTRL_MAX_EVENT_NUM		4
 
 #endif /* __LINUX_RESCTRL_TYPES_H */

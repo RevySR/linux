@@ -35,6 +35,7 @@ static bool exposed_alloc_capable;
 static bool exposed_mon_capable;
 static struct mpam_class *mbm_local_class;
 static struct mpam_class *mbm_total_class;
+static struct mpam_class *mbm_bps_class;
 
 /*
  * MPAM emulates CDP by setting different PARTID in the I/D fields of MPAM1_EL1.
@@ -77,6 +78,11 @@ bool resctrl_arch_is_mbm_local_enabled(void)
 bool resctrl_arch_is_mbm_total_enabled(void)
 {
 	return mbm_total_class;
+}
+
+bool resctrl_arch_is_mbm_bps_enabled(void)
+{
+	return mbm_bps_class;
 }
 
 bool resctrl_arch_get_cdp_enabled(enum resctrl_res_level rid)
@@ -272,6 +278,10 @@ static void *resctrl_arch_mon_ctx_alloc_no_wait(struct rdt_resource *r,
 	case QOS_L3_MBM_LOCAL_EVENT_ID:
 	case QOS_L3_MBM_TOTAL_EVENT_ID:
 		return mon_is_rmid_idx;
+	case QOS_MC_MBM_BPS_EVENT_ID:
+		if (mpam_current_machine == MPAM_YITIAN710)
+			return mon_is_rmid_idx;
+		return ERR_PTR(-EOPNOTSUPP);
 	}
 
 	return ERR_PTR(-EOPNOTSUPP);
@@ -316,6 +326,7 @@ void resctrl_arch_mon_ctx_free(struct rdt_resource *r, int evtid,
 		return;
 	case QOS_L3_MBM_TOTAL_EVENT_ID:
 	case QOS_L3_MBM_LOCAL_EVENT_ID:
+	case QOS_MC_MBM_BPS_EVENT_ID:
 		return;
 	}
 }
@@ -354,6 +365,10 @@ int resctrl_arch_rmid_read(struct rdt_resource	*r, struct rdt_domain *d,
 	case QOS_L3_MBM_LOCAL_EVENT_ID:
 	case QOS_L3_MBM_TOTAL_EVENT_ID:
 		type = mpam_feat_msmon_mbwu;
+		break;
+	case QOS_MC_MBM_BPS_EVENT_ID:
+		if (mpam_current_machine == MPAM_YITIAN710)
+			type = mpam_feat_impl_msmon_mbwu;
 		break;
 	default:
 		return -EINVAL;
@@ -485,6 +500,16 @@ static bool class_has_usable_mbwu(struct mpam_class *class)
 		return false;
 
 	return (mpam_partid_max > 1) || (mpam_pmg_max != 0);
+}
+
+static bool class_has_usable_impl_mbwu(struct mpam_class *class)
+{
+	struct mpam_props *cprops = &class->props;
+
+	if (!mpam_has_feature(mpam_feat_impl_msmon_mbwu, cprops))
+		return false;
+
+	return true;
 }
 
 static bool mba_class_use_mbw_part(struct mpam_props *cprops)
@@ -832,6 +857,10 @@ static int mpam_resctrl_resource_init(struct mpam_resctrl_res *res)
 		if (has_mbwu && class->type == MPAM_CLASS_MEMORY) {
 			mbm_total_class = class;
 			r->mon_capable = true;
+		} else if (class_has_usable_impl_mbwu(class)) {
+			r->mon_capable = true;
+			if (mpam_current_machine == MPAM_YITIAN710)
+				mbm_bps_class = class;
 		}
 	}
 
