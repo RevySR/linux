@@ -35,6 +35,8 @@
 
 #include "mpam_internal.h"
 
+extern int ddrc_freq;
+
 /*
  * mpam_list_lock protects the SRCU lists when writing. Once the
  * mpam_enabled key is enabled these lists are read-only,
@@ -692,6 +694,10 @@ static void mpam_ris_hw_probe(struct mpam_msc_ris *ris)
 		}
 	}
 
+	if (FIELD_GET(MPAMF_IDR_HAS_IMPL_IDR, ris->idr))
+		if (mpam_current_machine == MPAM_YITIAN710 && class->type == MPAM_CLASS_MEMORY)
+			mpam_set_feature(mpam_feat_impl_msmon_mbwu, props);
+
 	/*
 	 * RIS with PARTID narrowing don't have enough storage for one
 	 * configuration per PARTID. If these are in a class we could use,
@@ -1015,6 +1021,45 @@ static void __ris_msmon_read(void *arg)
 	*(m->val) += now;
 }
 
+static void __ris_impl_msmon_read(void *arg)
+{
+	unsigned long flags;
+	struct mon_read *m = arg;
+	u64 mb_val = 0;
+	struct mon_cfg *ctx = m->ctx;
+	struct mpam_msc *msc = m->ris->msc;
+	u32 custom_reg_base_addr, cycle, val;
+
+	lockdep_assert_held(&msc->lock);
+	if (m->type != mpam_feat_impl_msmon_mbwu)
+		return;
+
+	/* Other machine can extend this function */
+	if (mpam_current_machine != MPAM_YITIAN710)
+		return;
+
+	spin_lock_irqsave(&msc->part_sel_lock, flags);
+
+	__mpam_write_reg(msc, MPAMCFG_PART_SEL, ctx->mon);
+
+	custom_reg_base_addr = __mpam_read_reg(msc, MPAMF_IMPL_IDR);
+
+	cycle = __mpam_read_reg(msc, custom_reg_base_addr + MPAMF_CUST_WINDW_OFFSET);
+	val = __mpam_read_reg(msc, custom_reg_base_addr + MPAMF_CUST_MBWC_OFFSET);
+
+	spin_unlock_irqrestore(&msc->part_sel_lock, flags);
+
+	if (val & MSMON___NRDY) {
+		m->err = -EBUSY;
+		return;
+	}
+
+	mb_val = MBWU_GET(val);
+
+	mb_val = mb_val * 32 * ddrc_freq * 1000000 / cycle; /* B/s */
+	*(m->val) += mb_val;
+}
+
 static int _msmon_read(struct mpam_component *comp, struct mon_read *arg)
 {
 	int err, idx;
@@ -1027,8 +1072,15 @@ static int _msmon_read(struct mpam_component *comp, struct mon_read *arg)
 
 		msc = ris->msc;
 		mutex_lock(&msc->lock);
-		err = smp_call_function_any(&msc->accessibility,
-					    __ris_msmon_read, arg, true);
+		if (arg->type == mpam_feat_msmon_csu ||
+		    arg->type == mpam_feat_msmon_mbwu)
+			err = smp_call_function_any(&msc->accessibility,
+					__ris_msmon_read, arg, true);
+		else if (arg->type == mpam_feat_impl_msmon_mbwu)
+			err = smp_call_function_any(&msc->accessibility,
+					__ris_impl_msmon_read, arg, true);
+		else
+			err = -EOPNOTSUPP;
 		mutex_unlock(&msc->lock);
 		if (!err && arg->err)
 			err = arg->err;

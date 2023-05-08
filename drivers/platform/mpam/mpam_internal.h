@@ -108,6 +108,7 @@ enum mpam_device_features {
 	mpam_feat_msmon_mbwu_capture,
 	mpam_feat_msmon_mbwu_rwbw,
 	mpam_feat_msmon_capt,
+	mpam_feat_impl_msmon_mbwu,
 	mpam_feat_partid_nrw,
 	MPAM_FEATURE_LAST,
 };
@@ -573,5 +574,12 @@ void mpam_resctrl_exit(void);
  *                  generation register
  */
 #define MSMON_CAPT_EVNT_NOW    BIT(0)
+
+/* Used for PTG Yitian710 specific MB monitoring feature */
+#define MBWU_MASK GENMASK(23, 0)
+#define MBWU_WINWD_MAX GENMASK(22, 0)
+#define MBWU_GET(v) ((v) & MBWU_MASK)
+#define MPAMF_CUST_MBWC_OFFSET 0x08
+#define MPAMF_CUST_WINDW_OFFSET 0x0C
 
 #endif /* MPAM_INTERNAL_H */

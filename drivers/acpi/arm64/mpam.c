@@ -22,6 +22,8 @@
 #define ACPI_MPAM_MSC_IRQ_AFFINITY_PROCESSOR_CONTAINER (1<<3)
 #define ACPI_MPAM_MSC_IRQ_AFFINITY_VALID               (1<<4)
 
+int ddrc_freq;
+
 /* Use OEM info in MPAM ACPI table to distinguish different machine types */
 struct acpi_mpam_machine_oem_info {
 	enum mpam_machine_type type;
@@ -141,6 +143,8 @@ static int acpi_mpam_parse_resource(struct mpam_msc *msc,
 		return mpam_ris_create(msc, res->ris_index, MPAM_CLASS_CACHE,
 				       level, cache_id);
 	case ACPI_MPAM_LOCATION_TYPE_MEMORY:
+		if (mpam_current_machine == MPAM_YITIAN710)
+			ddrc_freq = res->locator.memory_locator.reserved;
 		return mpam_ris_create(msc, res->ris_index, MPAM_CLASS_MEMORY,
 				       255, res->locator.memory_locator.proximity_domain);
 	default:
