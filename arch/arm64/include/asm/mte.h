@@ -93,6 +93,7 @@ void mte_zero_clear_page_tags(void *addr);
 void mte_sync_tags(pte_t pte);
 void mte_copy_page_tags(void *kto, const void *kfrom);
 void mte_thread_init_user(void);
+int mte_copy_mc_page_tags(void *kto, const void *kfrom);
 void mte_thread_switch(struct task_struct *next);
 void mte_cpu_setup(void);
 void mte_suspend_enter(void);
@@ -130,6 +131,10 @@ static inline void mte_copy_page_tags(void *kto, const void *kfrom)
 }
 static inline void mte_thread_init_user(void)
 {
+}
+static inline int mte_copy_mc_page_tags(void *kto, const void *kfrom)
+{
+	return 0;
 }
 static inline void mte_thread_switch(struct task_struct *next)
 {
