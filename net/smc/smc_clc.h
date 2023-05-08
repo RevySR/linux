@@ -48,6 +48,7 @@
 #define SMC_CLC_DECL_RELEASEERR	0x03030009  /* release version negotiate failed */
 #define SMC_CLC_DECL_MAXCONNERR	0x0303000a  /* max connections negotiate failed */
 #define SMC_CLC_DECL_MAXLINKERR	0x0303000b  /* max links negotiate failed */
+#define SMC_CLC_DECL_VENDORERR	0x0303000c  /* vendor opts negotiate failed */
 #define SMC_CLC_DECL_MODEUNSUPP	0x03040000  /* smc modes do not match (R or D)*/
 #define SMC_CLC_DECL_RMBE_EC	0x03050000  /* peer has eyecatcher in RMBE    */
 #define SMC_CLC_DECL_OPTUNSUPP	0x03060000  /* fastopen sockopt not supported */
@@ -150,11 +151,24 @@ struct smc_clc_msg_proposal_prefix {	/* prefix part of clc proposal message*/
 	u8 ipv6_prefixes_cnt;	/* number of IPv6 prefixes in prefix array */
 } __aligned(4);
 
+/* Alibaba vendor experimental options */
+struct smc_clc_vendor_opt_ali {
+#if defined(__BIG_ENDIAN_BITFIELD)
+	u8 valid : 1,
+	   reserved0 : 7;
+#elif defined(__LITTLE_ENDIAN_BITFIELD)
+	u8 reserved0 : 7,
+	   valid : 1;
+#endif
+	u8 reserved[3];
+};
+
 struct smc_clc_msg_smcd {	/* SMC-D GID information */
 	struct smc_clc_smcd_gid_chid ism; /* ISM native GID+CHID of requestor */
 	__be16 v2_ext_offset;	/* SMC Version 2 Extension Offset */
 	u8 vendor_oui[3];	/* vendor organizationally unique identifier */
-	u8 vendor_exp_options[5];
+	u8 reserved0;
+	struct smc_clc_vendor_opt_ali vendor_exp_options;
 	u8 reserved[20];
 };
 
@@ -255,7 +269,7 @@ struct smc_clc_first_contact_ext_v2x {
 		u8 reserved3[2];	/* for SMC-D only */
 	};
 	__be16 feature_mask;
-	__be32 vendor_exp_options;
+	struct smc_clc_vendor_opt_ali vendor_exp_options;
 	u8 reserved4[8];
 } __packed;		/* format defined in
 			 * IBM Shared Memory Communications Version 2 (Third Edition)

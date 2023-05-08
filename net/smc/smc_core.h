@@ -417,6 +417,7 @@ struct smc_init_info {
 	u8			release_nr;
 	u8			max_conns;
 	u8			max_links;
+	u8			vendor_opt_valid : 1;
 	u8			first_contact_peer;
 	u8			first_contact_local;
 	u16			feature_mask;
