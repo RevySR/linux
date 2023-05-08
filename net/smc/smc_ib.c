@@ -829,7 +829,11 @@ int smc_ib_create_queue_pair(struct smc_link *lnk)
 				/* include unsolicited rdma_writes as well,
 				 * there are max. 2 RDMA_WRITE per 1 WR_SEND.
 				 * RDMA_WRITE consumes send queue entities,
-				 * without recv queue entities.
+				 * without recv queue entities.When using rwwi,
+				 * the max num of inflight llc msg is SMC_WR_BUF_CNT,
+				 * and the max num of inflight cdc msg is SMC_WR_BUF_CNT,
+				 * 1 cdc msg has max 2 RDMA_WRITE_WITH_IMM,
+				 * so SMC_WR_BUF_CNT * 3 is enough for sq depth.
 				 */
 			.max_send_wr = SMC_WR_BUF_CNT * 3,
 			.max_recv_wr = SMC_WR_BUF_CNT,

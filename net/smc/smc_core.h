@@ -33,7 +33,7 @@
 					 * distrubutions may modify it to a value between
 					 * 16-255 as needed.
 					 */
-
+#define SMC_MAX_TOKEN_LOCAL		255
 struct smc_lgr_list {			/* list of link group definition */
 	struct list_head	list;
 	spinlock_t		lock;	/* protects list of link groups */
@@ -125,6 +125,7 @@ struct smc_link {
 		struct percpu_ref	wr_tx_refs;
 	} ____cacheline_aligned_in_smp;
 	struct completion	tx_ref_comp;
+	atomic_t		tx_inflight_credit;
 
 	u8			*wr_rx_bufs;	/* WR recv payload buffers */
 	struct ib_recv_wr	*wr_rx_ibs;	/* WR recv meta data */
@@ -378,6 +379,7 @@ struct smc_link_group {
 						/* max links can be added in lgr */
 			u8			credits_en;
 						/* is credits enabled by vendor opts negotiation */
+			u8			use_rwwi; /* use RDMA WRITE with Imm or not */
 		};
 		struct { /* SMC-D */
 			struct smcd_gid		peer_gid;
@@ -432,6 +434,7 @@ struct smc_init_info {
 	u8			max_links;
 	u8			vendor_opt_valid : 1;
 	u8			credits_en : 1;
+	u8			rwwi_en : 1;
 	u8			first_contact_peer;
 	u8			first_contact_local;
 	u16			feature_mask;

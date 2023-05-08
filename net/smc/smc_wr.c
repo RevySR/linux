@@ -30,6 +30,8 @@
 
 #include "smc.h"
 #include "smc_wr.h"
+#include "smc_cdc.h"
+#include "smc_tx.h"
 
 #define SMC_WR_MAX_POLL_CQE 10	/* max. # of compl. queue elements in 1 poll */
 
@@ -57,10 +59,15 @@ static inline bool smc_wr_is_tx_pend(struct smc_link *link)
 	return !bitmap_empty(link->wr_tx_mask, link->wr_tx_cnt);
 }
 
+static inline bool smc_wr_is_tx_pend_rwwi(struct smc_link *link)
+{
+	return link->lgr->use_rwwi && (atomic_read(&link->tx_inflight_credit) < link->wr_tx_cnt);
+}
+
 /* wait till all pending tx work requests on the given link are completed */
 void smc_wr_tx_wait_no_pending_sends(struct smc_link *link)
 {
-	wait_event(link->wr_tx_wait, !smc_wr_is_tx_pend(link));
+	wait_event(link->wr_tx_wait, !smc_wr_is_tx_pend(link) && !smc_wr_is_tx_pend_rwwi(link));
 }
 
 static inline int smc_wr_tx_find_pending_index(struct smc_link *link, u64 wr_id)
@@ -74,13 +81,22 @@ static inline int smc_wr_tx_find_pending_index(struct smc_link *link, u64 wr_id)
 	return link->wr_tx_cnt;
 }
 
-static inline void smc_wr_tx_process_cqe(struct ib_wc *wc)
+static inline void smc_wr_tx_process_cqe(struct ib_wc *wc, bool is_rwwi)
 {
 	struct smc_wr_tx_pend pnd_snd;
+	union smc_wr_rwwi_tx_id wr_id;
 	struct smc_link *link;
 	u32 pnd_snd_idx;
 
 	link = wc->qp->qp_context;
+	if (is_rwwi) {
+		wr_id.data = wc->wr_id;
+		smc_tx_put_free_slot_rwwi(link, true);
+		if (wc->status)
+			smcr_link_down_cond_sched(link);
+		smc_cdc_tx_handler_rwwi(wc);
+		goto wake_tx_wait;
+	}
 
 	if (wc->opcode == IB_WC_REG_MR) {
 		if (wc->status)
@@ -130,6 +146,7 @@ static inline void smc_wr_tx_process_cqe(struct ib_wc *wc)
 	}
 	if (pnd_snd.handler)
 		pnd_snd.handler(&pnd_snd.priv, link, wc->status);
+wake_tx_wait:
 	if (wq_has_sleeper(&link->wr_tx_wait))
 		wake_up(&link->wr_tx_wait);
 }
@@ -337,7 +354,7 @@ int smc_wr_reg_send(struct smc_link *link, struct ib_mr *mr)
 	int rc;
 
 	link->wr_reg_state = POSTED;
-	link->wr_reg.wr.wr_id = (u64)(uintptr_t)mr;
+	link->wr_reg.wr.wr_id = smc_wr_tx_get_next_wr_id(link);
 	link->wr_reg.mr = mr;
 	link->wr_reg.key = mr->rkey;
 	rc = ib_post_send(link->roce_qp, &link->wr_reg.wr, NULL);
@@ -417,10 +434,13 @@ static inline void smc_wr_rx_process_cqe(struct ib_wc *wc)
 {
 	struct smc_link *link = wc->qp->qp_context;
 
-	link->wr_rx_id_compl = wc->wr_id;
+	link->wr_rx_id_compl = wc->wr_id & SMC_WR_ID_SEQ_MASK;
 	if (wc->status == IB_WC_SUCCESS) {
 		link->wr_rx_tstamp = jiffies;
-		smc_wr_rx_demultiplex(wc);
+		if (wc->wc_flags & IB_WC_WITH_IMM)
+			smc_cdc_rx_handler_rwwi(wc);
+		else
+			smc_wr_rx_demultiplex(wc);
 		smc_wr_rx_post(link); /* refill WR RX */
 	} else {
 		/* handle status errors */
@@ -457,10 +477,14 @@ again:
 		memset(&wc, 0, sizeof(wc));
 		rc = ib_poll_cq(smcibcq->ib_cq, SMC_WR_MAX_POLL_CQE, wc);
 		for (i = 0; i < rc; i++) {
-			if (smc_wr_id_is_rx(wc[i].wr_id))
-				smc_wr_rx_process_cqe(&wc[i]);
-			else
-				smc_wr_tx_process_cqe(&wc[i]);
+			if (SMC_WR_IS_TX_RWWI(wc[i].wr_id)) {
+				smc_wr_tx_process_cqe(&wc[i], true);
+			} else {
+				if (smc_wr_id_is_rx(wc[i].wr_id))
+					smc_wr_rx_process_cqe(&wc[i]);
+				else
+					smc_wr_tx_process_cqe(&wc[i], false);
+			}
 		}
 	} while (rc > 0);
 
@@ -896,6 +920,7 @@ int smc_wr_create_link(struct smc_link *lnk)
 		goto cancel_ref;
 	init_completion(&lnk->reg_ref_comp);
 	init_waitqueue_head(&lnk->wr_rx_empty_wait);
+	atomic_set(&lnk->tx_inflight_credit, lnk->wr_tx_cnt);
 	atomic_set(&lnk->peer_rq_credits, 0);
 	atomic_set(&lnk->local_rq_credits, 0);
 	lnk->flags = 0;

@@ -168,6 +168,7 @@ static int smc_lgr_register_conn(struct smc_connection *conn, bool first)
 {
 	struct smc_sock *smc = container_of(conn, struct smc_sock, conn);
 	static atomic_t nexttoken = ATOMIC_INIT(0);
+	int i;
 	int rc;
 
 	if (!conn->lgr->is_smcd) {
@@ -181,10 +182,26 @@ static int smc_lgr_register_conn(struct smc_connection *conn, bool first)
 	 * in this link group
 	 */
 	sock_hold(&smc->sk); /* sock_put in smc_lgr_unregister_conn() */
-	while (!conn->alert_token_local) {
-		conn->alert_token_local = atomic_inc_return(&nexttoken);
-		if (smc_lgr_find_conn(conn->alert_token_local, conn->lgr))
-			conn->alert_token_local = 0;
+	if (conn->lgr->use_rwwi) {
+		for (i = 1; i <= SMC_MAX_TOKEN_LOCAL; i++) {
+			if (!smc_lgr_find_conn(i, conn->lgr)) {
+				conn->alert_token_local = i;
+				break;
+			}
+		}
+		if (!conn->alert_token_local) {
+			atomic_dec(&conn->lnk->conn_cnt);
+			conn->lnk = NULL;
+			conn->lgr = NULL;
+			sock_put(&smc->sk);
+			return SMC_CLC_DECL_INTERR;
+		}
+	} else {
+		while (!conn->alert_token_local) {
+			conn->alert_token_local = atomic_inc_return(&nexttoken);
+			if (smc_lgr_find_conn(conn->alert_token_local, conn->lgr))
+				conn->alert_token_local = 0;
+		}
 	}
 	smc_lgr_add_alert_token(conn);
 	conn->lgr->conns_num++;
@@ -1043,12 +1060,16 @@ static int smc_lgr_create(struct smc_sock *smc, struct smc_init_info *ini)
 			lgr->max_conns = ini->max_conns;
 			lgr->max_links = ini->max_links;
 			lgr->credits_en = ini->vendor_opt_valid && ini->credits_en;
+			/* use_rwwi is limited for single link lgr */
+			lgr->use_rwwi = ini->vendor_opt_valid && ini->rwwi_en &&
+					lgr->max_links <= 1;
 		} else {
 			ibdev = ini->ib_dev;
 			ibport = ini->ib_port;
 			lgr->max_conns = SMC_CONN_PER_LGR_MAX;
 			lgr->max_links = SMC_LINKS_ADD_LNK_MAX;
 			lgr->credits_en = 0;
+			lgr->use_rwwi = 0;
 		}
 		memcpy(lgr->pnet_id, ibdev->pnetid[ibport - 1],
 		       SMC_MAX_PNETID_LEN);

@@ -157,9 +157,11 @@ struct smc_clc_vendor_opt_ali {
 #if defined(__BIG_ENDIAN_BITFIELD)
 	u8 valid : 1,
 	   credits_en : 1,
-	   reserved0 : 6;
+	   rwwi_en    : 1,
+	   reserved0  : 5;
 #elif defined(__LITTLE_ENDIAN_BITFIELD)
-	u8 reserved0 : 6,
+	u8 reserved0  : 5,
+	   rwwi_en    : 1,
 	   credits_en : 1,
 	   valid : 1;
 #endif

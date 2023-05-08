@@ -17,6 +17,7 @@
 
 #include "smc.h"
 #include "smc_tx.h"
+#include "smc_wr.h"
 #include "smc_cdc.h"
 #include "smc_close.h"
 
@@ -89,7 +90,10 @@ static int smc_close_wr(struct smc_connection *conn)
 {
 	conn->local_tx_ctrl.conn_state_flags.peer_done_writing = 1;
 
-	return smc_cdc_get_slot_and_msg_send(conn);
+	if (conn->lgr->use_rwwi)
+		return smc_tx_rdma_write_with_no_data_rwwi(conn);
+	else
+		return smc_cdc_get_slot_and_msg_send(conn);
 }
 
 static int smc_close_final(struct smc_connection *conn)
@@ -101,14 +105,20 @@ static int smc_close_final(struct smc_connection *conn)
 	if (conn->killed)
 		return -EPIPE;
 
-	return smc_cdc_get_slot_and_msg_send(conn);
+	if (conn->lgr->use_rwwi)
+		return smc_tx_rdma_write_with_no_data_rwwi(conn);
+	else
+		return smc_cdc_get_slot_and_msg_send(conn);
 }
 
 int smc_close_abort(struct smc_connection *conn)
 {
 	conn->local_tx_ctrl.conn_state_flags.peer_conn_abort = 1;
 
-	return smc_cdc_get_slot_and_msg_send(conn);
+	if (conn->lgr->use_rwwi)
+		return smc_tx_rdma_write_with_no_data_rwwi(conn);
+	else
+		return smc_cdc_get_slot_and_msg_send(conn);
 }
 
 static void smc_close_cancel_work(struct smc_sock *smc)

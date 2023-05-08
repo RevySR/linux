@@ -33,6 +33,11 @@ static void smc_cdc_tx_handler(struct smc_wr_tx_pend_priv *pnd_snd,
 	struct smc_sock *smc;
 	int diff;
 
+	if (unlikely(link->lgr->use_rwwi)) {
+		pr_err_once("smc: unexpected cdc msg tx work completion when rwwi enabled.\n");
+		return;
+	}
+
 	sndbuf_desc = conn->sndbuf_desc;
 	smc = container_of(conn, struct smc_sock, conn);
 	bh_lock_sock(&smc->sk);
@@ -64,6 +69,59 @@ static void smc_cdc_tx_handler(struct smc_wr_tx_pend_priv *pnd_snd,
 		if (unlikely(wq_has_sleeper(&conn->cdc_pend_tx_wq)))
 			wake_up(&conn->cdc_pend_tx_wq);
 	}
+	WARN_ON(atomic_read(&conn->cdc_pend_tx_wr) < 0);
+
+	smc_tx_sndbuf_nonfull(smc);
+	bh_unlock_sock(&smc->sk);
+}
+
+void smc_cdc_tx_handler_rwwi(struct ib_wc *wc)
+{
+	struct smc_link *link = wc->qp->qp_context;
+	struct smc_link_group *lgr = link->lgr;
+	struct smc_connection *conn = NULL;
+	union smc_wr_rwwi_tx_id wr_id;
+	struct smc_sock *smc = NULL;
+	int diff;
+
+	if (unlikely(!lgr->use_rwwi)) {
+		pr_err_once("smc: unexpected rwwi msg tx work completion when rwwi disabled.\n");
+		return;
+	}
+
+	wr_id.data = wc->wr_id;
+
+	read_lock_bh(&lgr->conns_lock);
+	conn = smc_lgr_find_conn(wr_id.token, lgr);
+	read_unlock_bh(&lgr->conns_lock);
+	if (!conn)
+		return;
+
+	smc = container_of(conn, struct smc_sock, conn);
+	bh_lock_sock(&smc->sk);
+
+	if (!wc->status) {
+		diff = wr_id.inflight_sent;
+		/* sndbuf_space is decreased in smc_sendmsg */
+		smp_mb__before_atomic();
+		atomic_add(diff, &conn->sndbuf_space);
+		/* guarantee 0 <= sndbuf_space <= sndbuf_desc->len */
+		smp_mb__after_atomic();
+
+		smc_curs_add(conn->sndbuf_desc->len, &conn->tx_curs_fin, diff);
+		smc_curs_add(conn->sndbuf_desc->len, &conn->local_tx_ctrl_fin, diff);
+	}
+
+	if (atomic_dec_and_test(&conn->cdc_pend_tx_wr)) {
+		if (sock_owned_by_user(&smc->sk))
+			conn->tx_in_release_sock = true;
+		else
+			smc_tx_pending(conn);
+
+		if (unlikely(wq_has_sleeper(&conn->cdc_pend_tx_wq)))
+			wake_up(&conn->cdc_pend_tx_wq);
+	}
+
 	WARN_ON(atomic_read(&conn->cdc_pend_tx_wr) < 0);
 
 	smc_tx_sndbuf_nonfull(smc);
@@ -118,6 +176,11 @@ int smc_cdc_msg_send(struct smc_connection *conn,
 	union smc_host_cursor cfed;
 	u8 saved_credits = 0;
 	int rc;
+
+	if (unlikely(link->lgr->use_rwwi)) {
+		pr_err_once("smc: send unexpected cdc msg when rwwi enabled.\n");
+		return -EINVAL;
+	}
 
 	smc_cdc_add_pending_send(conn, pend);
 
@@ -333,19 +396,12 @@ static void smc_cdc_msg_validate(struct smc_sock *smc, struct smc_cdc_msg *cdc,
 	}
 }
 
-static void smc_cdc_msg_recv_action(struct smc_sock *smc,
-				    struct smc_cdc_msg *cdc)
+static void __smc_cdc_msg_recv_action(struct smc_sock *smc,
+				      int diff_prod, int diff_cons)
 {
-	union smc_host_cursor cons_old, prod_old;
 	struct smc_connection *conn = &smc->conn;
-	int diff_cons, diff_prod, diff_tx;
+	int diff_tx;
 
-	smc_curs_copy(&prod_old, &conn->local_rx_ctrl.prod, conn);
-	smc_curs_copy(&cons_old, &conn->local_rx_ctrl.cons, conn);
-	smc_cdc_msg_to_host(&conn->local_rx_ctrl, cdc, conn);
-
-	diff_cons = smc_curs_diff(conn->peer_rmbe_size, &cons_old,
-				  &conn->local_rx_ctrl.cons);
 	if (diff_cons) {
 		/* peer_rmbe_space is decreased during data transfer with RDMA
 		 * write
@@ -378,9 +434,6 @@ static void smc_cdc_msg_recv_action(struct smc_sock *smc,
 			smc_tx_sndbuf_nonfull(smc);
 		}
 	}
-
-	diff_prod = smc_curs_diff(conn->rmb_desc->len, &prod_old,
-				  &conn->local_rx_ctrl.prod);
 	if (diff_prod) {
 		if (conn->local_rx_ctrl.prod_flags.urg_data_present)
 			smc_cdc_handle_urg_data_arrival(smc, &diff_prod);
@@ -427,6 +480,24 @@ static void smc_cdc_msg_recv_action(struct smc_sock *smc,
 		if (!queue_work(smc_close_wq, &conn->close_work))
 			sock_put(&smc->sk);
 	}
+}
+
+static void smc_cdc_msg_recv_action(struct smc_sock *smc,
+				    struct smc_cdc_msg *cdc)
+{
+	union smc_host_cursor cons_old, prod_old;
+	struct smc_connection *conn = &smc->conn;
+	int diff_cons, diff_prod;
+
+	smc_curs_copy(&prod_old, &conn->local_rx_ctrl.prod, conn);
+	smc_curs_copy(&cons_old, &conn->local_rx_ctrl.cons, conn);
+	smc_cdc_msg_to_host(&conn->local_rx_ctrl, cdc, conn);
+
+	diff_cons = smc_curs_diff(conn->peer_rmbe_size, &cons_old,
+				  &conn->local_rx_ctrl.cons);
+	diff_prod = smc_curs_diff(conn->rmb_desc->len, &prod_old,
+				  &conn->local_rx_ctrl.prod);
+	__smc_cdc_msg_recv_action(smc, diff_prod, diff_cons);
 }
 
 /* called under tasklet context */
@@ -480,6 +551,11 @@ static void smc_cdc_rx_handler(struct ib_wc *wc, void *buf)
 	struct smc_link_group *lgr;
 	struct smc_sock *smc;
 
+	if (unlikely(link->lgr->use_rwwi)) {
+		pr_err_once("smc: recv unexpected cdc msg when rwwi enabled.\n");
+		return;
+	}
+
 	if (wc->byte_len < offsetof(struct smc_cdc_msg, reserved))
 		return; /* short message */
 	if (cdc->len != SMC_WR_TX_SIZE)
@@ -507,6 +583,158 @@ static void smc_cdc_rx_handler(struct ib_wc *wc, void *buf)
 		return;
 
 	smc_cdc_msg_recv(smc, cdc);
+}
+
+static void smc_cdc_handle_rwwi_data_msg(struct smc_sock *smc,
+					 union smc_wr_imm_msg *imm_msg, int diff_prod)
+{
+	struct smc_connection *conn = &smc->conn;
+	int diff_cons;
+
+	diff_cons = imm_msg->data.diff_cons;
+	if (diff_cons)
+		smc_curs_add_safe(conn->peer_rmbe_size, &conn->local_rx_ctrl.cons, diff_cons, conn);
+	/* cause this imm_data contains no conn_state_flags and prod_flags info, clean them */
+	memset(&conn->local_rx_ctrl.conn_state_flags, 0,
+	       sizeof(struct smc_cdc_conn_state_flags));
+	memset(&conn->local_rx_ctrl.prod_flags, 0,
+	       sizeof(struct smc_cdc_producer_flags));
+
+	__smc_cdc_msg_recv_action(smc, diff_prod, diff_cons);
+}
+
+static void smc_cdc_handle_rwwi_data_with_flags_msg(struct smc_sock *smc,
+						    union smc_wr_imm_msg *imm_msg, int diff_prod)
+{
+	struct smc_connection *conn = &smc->conn;
+	struct smc_cdc_producer_flags *pflags;
+	int diff_cons;
+
+	diff_cons = imm_msg->data_with_flags.diff_cons;
+	if (diff_cons)
+		smc_curs_add_safe(conn->peer_rmbe_size, &conn->local_rx_ctrl.cons, diff_cons, conn);
+	/* clean prod_flags that are not carried by this imm_data */
+	memset(&conn->local_rx_ctrl.prod_flags, 0,
+	       sizeof(struct smc_cdc_producer_flags));
+	pflags = &conn->local_rx_ctrl.prod_flags;
+	pflags->write_blocked = imm_msg->data_with_flags.write_blocked;
+	pflags->urg_data_present = imm_msg->data_with_flags.urg_data_present;
+	pflags->urg_data_pending = imm_msg->data_with_flags.urg_data_pending;
+	/* cause this imm_data contains no conn_state_flagsinfo, clean it */
+	memset(&conn->local_rx_ctrl.conn_state_flags, 0,
+	       sizeof(struct smc_cdc_conn_state_flags));
+
+	__smc_cdc_msg_recv_action(smc, diff_prod, diff_cons);
+}
+
+static void smc_cdc_handle_rwwi_data_cr_msg(struct smc_sock *smc,
+					    union smc_wr_imm_msg *imm_msg, int diff_prod)
+{
+	struct smc_connection *conn = &smc->conn;
+	int diff_cons;
+
+	if (imm_msg->data_cr.credits)
+		smc_wr_tx_put_credits(conn->lnk, imm_msg->data_cr.credits, true);
+
+	diff_cons = imm_msg->data_cr.diff_cons;
+	if (diff_cons)
+		smc_curs_add_safe(conn->peer_rmbe_size, &conn->local_rx_ctrl.cons, diff_cons, conn);
+	/* cause this imm_data contains no conn_state_flags and prod_flags info, clean them */
+	memset(&conn->local_rx_ctrl.conn_state_flags, 0,
+	       sizeof(struct smc_cdc_conn_state_flags));
+	memset(&conn->local_rx_ctrl.prod_flags, 0,
+	       sizeof(struct smc_cdc_producer_flags));
+
+	__smc_cdc_msg_recv_action(smc, diff_prod, diff_cons);
+}
+
+static void smc_cdc_handle_rwwi_data_with_flags_cr_msg(struct smc_sock *smc,
+						       union smc_wr_imm_msg *imm_msg, int diff_prod)
+{
+	struct smc_connection *conn = &smc->conn;
+	struct smc_cdc_producer_flags *pflags;
+	int diff_cons;
+
+	if (imm_msg->data_with_flags_cr.credits)
+		smc_wr_tx_put_credits(conn->lnk, imm_msg->data_with_flags_cr.credits, true);
+
+	diff_cons = imm_msg->data_with_flags_cr.diff_cons;
+	if (diff_cons)
+		smc_curs_add_safe(conn->peer_rmbe_size, &conn->local_rx_ctrl.cons, diff_cons, conn);
+	/* clean prod_flags that are not carried by this imm_data */
+	memset(&conn->local_rx_ctrl.prod_flags, 0,
+	       sizeof(struct smc_cdc_producer_flags));
+	pflags = &conn->local_rx_ctrl.prod_flags;
+	pflags->write_blocked = imm_msg->data_with_flags_cr.write_blocked;
+	pflags->urg_data_present = imm_msg->data_with_flags_cr.urg_data_present;
+	pflags->urg_data_pending = imm_msg->data_with_flags_cr.urg_data_pending;
+	/* cause this imm_data contains no conn_state_flagsinfo, clean it */
+	memset(&conn->local_rx_ctrl.conn_state_flags, 0,
+	       sizeof(struct smc_cdc_conn_state_flags));
+
+	__smc_cdc_msg_recv_action(smc, diff_prod, diff_cons);
+}
+
+static void smc_cdc_handle_rwwi_ctrl_msg(struct smc_sock *smc,
+					 union smc_wr_imm_msg *imm_msg, int diff_prod)
+{
+	struct smc_connection *conn = &smc->conn;
+
+	conn->local_rx_ctrl.prod_flags = imm_msg->ctrl.pflags;
+	conn->local_rx_ctrl.conn_state_flags = imm_msg->ctrl.csflags;
+	/* this imm_data contains no diff_cons info, clean it */
+	__smc_cdc_msg_recv_action(smc, diff_prod, 0);
+}
+
+void smc_cdc_rx_handler_rwwi(struct ib_wc *wc)
+{
+	struct smc_link *link = wc->qp->qp_context;
+	struct smc_link_group *lgr = link->lgr;
+	struct smc_connection *conn = NULL;
+	union smc_wr_imm_msg imm_msg;
+	struct smc_sock *smc = NULL;
+	int diff_prod;
+
+	if (unlikely(!link->lgr->use_rwwi)) {
+		pr_err_once("smc: recv unexpected rwwi msg when rwwi disabled.\n");
+		return;
+	}
+
+	imm_msg.imm_data = be32_to_cpu(wc->ex.imm_data);
+	read_lock_bh(&lgr->conns_lock);
+	conn = smc_lgr_find_conn(imm_msg.hdr.token, lgr);
+	read_unlock_bh(&lgr->conns_lock);
+	if (!conn)
+		return;
+
+	smc = container_of(conn, struct smc_sock, conn);
+
+	sock_hold(&smc->sk);
+	bh_lock_sock(&smc->sk);
+	diff_prod = wc->byte_len;
+	if (diff_prod)
+		smc_curs_add_safe(conn->rmb_desc->len, &conn->local_rx_ctrl.prod, diff_prod, conn);
+
+	switch (imm_msg.hdr.opcode) {
+	case SMC_WR_OP_DATA:
+		smc_cdc_handle_rwwi_data_msg(smc, &imm_msg, diff_prod);
+		break;
+	case SMC_WR_OP_DATA_WITH_FLAGS:
+		smc_cdc_handle_rwwi_data_with_flags_msg(smc, &imm_msg, diff_prod);
+		break;
+	case SMC_WR_OP_CTRL:
+		smc_cdc_handle_rwwi_ctrl_msg(smc, &imm_msg, diff_prod);
+		break;
+	case SMC_WR_OP_DATA_CR:
+		smc_cdc_handle_rwwi_data_cr_msg(smc, &imm_msg, diff_prod);
+		break;
+	case SMC_WR_OP_DATA_WITH_FLAGS_CR:
+		smc_cdc_handle_rwwi_data_with_flags_cr_msg(smc, &imm_msg, diff_prod);
+		break;
+	}
+
+	bh_unlock_sock(&smc->sk);
+	sock_put(&smc->sk); /* no free sk in softirq-context */
 }
 
 static struct smc_wr_rx_handler smc_cdc_rx_handlers[] = {

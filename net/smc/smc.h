@@ -249,6 +249,9 @@ struct smc_connection {
 	u8			killed : 1;	/* abnormal termination */
 	u8			freed : 1;	/* normal termiation */
 	u8			out_of_sync : 1; /* out of sync with peer */
+	u8			unwrap_remaining : 1; /* have remaining data to
+						       * send when RMB unwrapped
+						       */
 };
 
 struct smc_sock {				/* smc sock container */

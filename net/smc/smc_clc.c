@@ -466,6 +466,7 @@ static int smc_clc_fill_fce_v2x(struct smc_clc_first_contact_ext_v2x *fce_v2x,
 		if (ini->vendor_opt_valid) {
 			fce_v2x->vendor_exp_options.valid = 1;
 			fce_v2x->vendor_exp_options.credits_en = ini->credits_en;
+			fce_v2x->vendor_exp_options.rwwi_en = ini->rwwi_en;
 		}
 	}
 
@@ -949,6 +950,7 @@ int smc_clc_send_proposal(struct smc_sock *smc, struct smc_init_info *ini)
 		       sizeof(SMC_VENDOR_OUI_ALIBABA));
 		pclc_smcd->vendor_exp_options.valid = 1;
 		pclc_smcd->vendor_exp_options.credits_en = 1;
+		pclc_smcd->vendor_exp_options.rwwi_en = 1;
 		plen += sizeof(*v2_ext);
 
 		v2_ext->feature_mask = htons(SMC_FEATURE_MASK);
@@ -1284,6 +1286,7 @@ void smc_clc_vendor_opt_validate(struct smc_clc_msg_proposal *pclc,
 
 	ini->vendor_opt_valid = 1;
 	ini->credits_en = prop_smcd->vendor_exp_options.credits_en;
+	ini->rwwi_en = prop_smcd->vendor_exp_options.rwwi_en;
 }
 
 int smc_clc_srv_v2x_features_validate(struct smc_sock *smc,
@@ -1348,6 +1351,7 @@ int smc_clc_clnt_v2x_features_validate(struct smc_clc_first_contact_ext *fce,
 	if (fce_v2x->vendor_exp_options.valid) {
 		ini->vendor_opt_valid = 1;
 		ini->credits_en = fce_v2x->vendor_exp_options.credits_en;
+		ini->rwwi_en = fce_v2x->vendor_exp_options.rwwi_en;
 	}
 
 	return 0;
@@ -1382,7 +1386,8 @@ int smc_clc_v2x_features_confirm_check(struct smc_clc_msg_accept_confirm *cclc,
 
 	if (ini->vendor_opt_valid &&
 	    (!fce_v2x->vendor_exp_options.valid ||
-	     fce_v2x->vendor_exp_options.credits_en != ini->credits_en))
+	     fce_v2x->vendor_exp_options.credits_en != ini->credits_en ||
+	     fce_v2x->vendor_exp_options.rwwi_en != ini->rwwi_en))
 		return SMC_CLC_DECL_VENDORERR;
 
 	return 0;
