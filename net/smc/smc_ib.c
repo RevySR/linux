@@ -796,9 +796,11 @@ static void smc_ib_qp_event_handler(struct ib_event *ibevent, void *priv)
 		port_idx = ibevent->element.qp->port - 1;
 		if (port_idx >= SMC_MAX_PORTS)
 			break;
-		set_bit(port_idx, &smcibdev->port_event_mask);
-		if (!test_and_set_bit(port_idx, smcibdev->ports_going_away))
-			schedule_work(&smcibdev->port_event_work);
+		if (!smc_ib_port_active(smcibdev, port_idx + 1)) {
+			set_bit(port_idx, &smcibdev->port_event_mask);
+			if (!test_and_set_bit(port_idx, smcibdev->ports_going_away))
+				schedule_work(&smcibdev->port_event_work);
+		}
 		break;
 	default:
 		break;
