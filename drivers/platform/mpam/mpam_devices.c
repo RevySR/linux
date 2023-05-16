@@ -1220,6 +1220,7 @@ static void mpam_reprogram_ris_partid(struct mpam_msc_ris *ris, u16 partid,
 	struct mpam_props *rprops = &ris->props;
 	u16 dspri = GENMASK(rprops->dspri_wd, 0);
 	u16 intpri = GENMASK(rprops->intpri_wd, 0);
+	u32 custom_reg_base_addr;
 
 	spin_lock(&msc->part_sel_lock);
 	__mpam_part_sel(ris->ris_idx, partid, msc);
@@ -1274,6 +1275,15 @@ static void mpam_reprogram_ris_partid(struct mpam_msc_ris *ris, u16 partid,
 			pri_val |= FIELD_PREP(MPAMCFG_PRI_DSPRI, dspri);
 
 		mpam_write_partsel_reg(msc, PRI, pri_val);
+	}
+
+	if (FIELD_GET(MPAMF_IDR_HAS_IMPL_IDR, ris->idr)) {
+		if (mpam_current_machine == MPAM_YITIAN710) {
+			custom_reg_base_addr = __mpam_read_reg(msc, MPAMF_IMPL_IDR);
+			__mpam_write_reg(msc, custom_reg_base_addr +
+					 MPAMF_CUST_WINDW_OFFSET,
+					 MBWU_WINWD_MAX);
+		}
 	}
 
 	spin_unlock(&msc->part_sel_lock);
