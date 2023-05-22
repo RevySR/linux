@@ -5265,9 +5265,12 @@ static void pci_save_yitian710_regs(struct pci_dev *dev,
 	if (dev->acs_cap)
 		pci_read_config_dword(dev, dev->acs_cap + PCI_ACS_CAP,
 				      &saved->acs_cap_ctrl);
+
+#ifdef CONFIG_PCIEAER
 	if (dev->aer_cap)
 		pci_read_config_dword(dev, dev->aer_cap + PCI_ERR_ROOT_COMMAND,
 				      &saved->root_err_cmd);
+#endif
 
 	pcie_capability_read_word(dev, PCI_EXP_SLTCTL, &saved->slot_ctrl);
 }
@@ -5293,10 +5296,13 @@ static void pci_restore_yitian710_regs(struct pci_dev *dev,
 	if (dev->acs_cap)
 		pci_write_config_dword(dev, dev->acs_cap + PCI_ACS_CAP,
 				       saved->acs_cap_ctrl);
+
+#ifdef CONFIG_PCIEAER
 	/* restore AER Root Error Command Register */
 	if (dev->aer_cap)
 		pci_write_config_dword(dev, dev->aer_cap + PCI_ERR_ROOT_COMMAND,
 				       saved->root_err_cmd);
+#endif
 
 	/* restore Slot Control Register */
 	pcie_capability_write_word(dev, PCI_EXP_SLTCTL, saved->slot_ctrl);
