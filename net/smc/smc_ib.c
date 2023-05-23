@@ -1270,7 +1270,7 @@ static int smc_ib_add_dev(struct ib_device *ibdev)
 
 	/* trigger reading of the port attributes */
 	port_cnt = smcibdev->ibdev->phys_port_cnt;
-	pr_warn_ratelimited("smc: adding ib device %s with port count %d\n",
+	pr_info_ratelimited("smc: adding ib device %s with port count %d\n",
 			    smcibdev->ibdev->name, port_cnt);
 	for (i = 0;
 	     i < min_t(size_t, port_cnt, SMC_MAX_PORTS);
@@ -1281,7 +1281,7 @@ static int smc_ib_add_dev(struct ib_device *ibdev)
 					   smcibdev->pnetid[i]))
 			smc_pnetid_by_table_ib(smcibdev, i + 1);
 		smc_copy_netdev_ifindex(smcibdev, i);
-		pr_warn_ratelimited("smc:    ib device %s port %d has pnetid "
+		pr_info_ratelimited("smc:    ib device %s port %d has pnetid "
 				    "%.16s%s\n",
 				    smcibdev->ibdev->name, i + 1,
 				    smcibdev->pnetid[i],
@@ -1301,7 +1301,7 @@ static void smc_ib_remove_dev(struct ib_device *ibdev, void *client_data)
 	mutex_lock(&smc_ib_devices.mutex);
 	list_del_init(&smcibdev->list); /* remove from smc_ib_devices */
 	mutex_unlock(&smc_ib_devices.mutex);
-	pr_warn_ratelimited("smc: removing ib device %s\n",
+	pr_info_ratelimited("smc: removing ib device %s\n",
 			    smcibdev->ibdev->name);
 	smc_smcr_terminate_all(smcibdev);
 	smc_iw_release_ports(smcibdev);

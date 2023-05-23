@@ -1804,7 +1804,7 @@ void smcr_lgr_set_type(struct smc_link_group *lgr, enum smc_lgr_type new_type)
 		lgr_type = "ASYMMETRIC_LOCAL";
 		break;
 	}
-	pr_warn_ratelimited("smc: SMC-R lg %*phN net %llu state changed: "
+	pr_info_ratelimited("smc: SMC-R lg %*phN net %llu state changed: "
 			    "%s, pnetid %.16s\n", SMC_LGR_ID_SIZE, &lgr->id,
 			    lgr->net->net_cookie, lgr_type, lgr->pnet_id);
 }

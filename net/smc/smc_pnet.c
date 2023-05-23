@@ -122,7 +122,7 @@ static int smc_pnet_remove_by_pnetid(struct net *net, char *pnet_name)
 			if (pnetelem->type == SMC_PNET_ETH && pnetelem->ndev) {
 				netdev_put(pnetelem->ndev,
 					   &pnetelem->dev_tracker);
-				pr_warn_ratelimited("smc: net device %s "
+				pr_info_ratelimited("smc: net device %s "
 						    "erased user defined "
 						    "pnetid %.16s\n",
 						    pnetelem->eth_name,
@@ -146,7 +146,7 @@ static int smc_pnet_remove_by_pnetid(struct net *net, char *pnet_name)
 			    (!pnet_name ||
 			     smc_pnet_match(pnet_name,
 					    ibdev->pnetid[ibport]))) {
-				pr_warn_ratelimited("smc: ib device %s ibport "
+				pr_info_ratelimited("smc: ib device %s ibport "
 						    "%d erased user defined "
 						    "pnetid %.16s\n",
 						    ibdev->ibdev->name,
@@ -166,7 +166,7 @@ static int smc_pnet_remove_by_pnetid(struct net *net, char *pnet_name)
 		if (smcd->pnetid_by_user &&
 		    (!pnet_name ||
 		     smc_pnet_match(pnet_name, smcd->pnetid))) {
-			pr_warn_ratelimited("smc: smcd device %s "
+			pr_info_ratelimited("smc: smcd device %s "
 					    "erased user defined pnetid "
 					    "%.16s\n",
 					    dev_name(smcd->ops->get_dev(smcd)),
@@ -201,7 +201,7 @@ static int smc_pnet_add_by_ndev(struct net_device *ndev)
 			netdev_hold(ndev, &pnetelem->dev_tracker, GFP_ATOMIC);
 			pnetelem->ndev = ndev;
 			rc = 0;
-			pr_warn_ratelimited("smc: adding net device %s with "
+			pr_info_ratelimited("smc: adding net device %s with "
 					    "user defined pnetid %.16s\n",
 					    pnetelem->eth_name,
 					    pnetelem->pnet_name);
@@ -232,7 +232,7 @@ static int smc_pnet_remove_by_ndev(struct net_device *ndev)
 			netdev_put(pnetelem->ndev, &pnetelem->dev_tracker);
 			pnetelem->ndev = NULL;
 			rc = 0;
-			pr_warn_ratelimited("smc: removing net device %s with "
+			pr_info_ratelimited("smc: removing net device %s with "
 					    "user defined pnetid %.16s\n",
 					    pnetelem->eth_name,
 					    pnetelem->pnet_name);
@@ -395,7 +395,7 @@ static int smc_pnet_add_eth(struct smc_pnettable *pnettable, struct net *net,
 		goto out_put;
 	}
 	if (ndev)
-		pr_warn_ratelimited("smc: net device %s "
+		pr_info_ratelimited("smc: net device %s "
 				    "applied user defined pnetid %.16s\n",
 				    new_pe->eth_name, new_pe->pnet_name);
 	return 0;
@@ -421,7 +421,7 @@ static int smc_pnet_add_ib(struct smc_pnettable *pnettable, char *ib_name,
 	if (ib_dev) {
 		ibdev_applied = smc_pnet_apply_ib(ib_dev, ib_port, pnet_name);
 		if (ibdev_applied)
-			pr_warn_ratelimited("smc: ib device %s ibport %d "
+			pr_info_ratelimited("smc: ib device %s ibport %d "
 					    "applied user defined pnetid "
 					    "%.16s\n", ib_dev->ibdev->name,
 					    ib_port,
@@ -432,7 +432,7 @@ static int smc_pnet_add_ib(struct smc_pnettable *pnettable, char *ib_name,
 		smcddev_applied = smc_pnet_apply_smcd(smcd, pnet_name);
 		if (smcddev_applied) {
 			dev = smcd->ops->get_dev(smcd);
-			pr_warn_ratelimited("smc: smcd device %s "
+			pr_info_ratelimited("smc: smcd device %s "
 					    "applied user defined pnetid "
 					    "%.16s\n", dev_name(dev),
 					    smcd->pnetid);

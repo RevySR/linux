@@ -518,7 +518,7 @@ static void smcd_register_dev(struct ism_dev *ism)
 	}
 	mutex_unlock(&smcd_dev_list.mutex);
 
-	pr_warn_ratelimited("smc: adding smcd device %s with pnetid %.16s%s\n",
+	pr_info_ratelimited("smc: adding smcd device %s with pnetid %.16s%s\n",
 			    dev_name(&ism->dev), smcd->pnetid,
 			    smcd->pnetid_by_user ? " (user defined)" : "");
 
@@ -529,7 +529,7 @@ static void smcd_unregister_dev(struct ism_dev *ism)
 {
 	struct smcd_dev *smcd = ism_get_priv(ism, &smc_ism_client);
 
-	pr_warn_ratelimited("smc: removing smcd device %s\n",
+	pr_info_ratelimited("smc: removing smcd device %s\n",
 			    dev_name(&ism->dev));
 	smcd->going_away = 1;
 	smc_smcd_terminate_all(smcd);
