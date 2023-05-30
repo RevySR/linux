@@ -848,6 +848,21 @@ static void smcr_link_iw_extension(struct iw_ext_conn_param *iw_param, struct so
 	} else {
 		iw_param->sk_addr.saddr_v6 = clcsk->sk_v6_rcv_saddr;
 		iw_param->sk_addr.daddr_v6 = clcsk->sk_v6_daddr;
+
+		/* Workaround for IPv6
+		 */
+		if (ipv6_addr_v4mapped(&iw_param->sk_addr.saddr_v6) &&
+		    ipv6_addr_v4mapped(&iw_param->sk_addr.daddr_v6)) {
+			__be32 saddr_v4, daddr_v4;
+
+			saddr_v4 = iw_param->sk_addr.saddr_v6.s6_addr32[3];
+			daddr_v4 = iw_param->sk_addr.daddr_v6.s6_addr32[3];
+			memset(&iw_param->sk_addr.saddr_v6, 0, sizeof(struct in6_addr));
+			memset(&iw_param->sk_addr.daddr_v6, 0, sizeof(struct in6_addr));
+			iw_param->sk_addr.family = PF_INET;
+			iw_param->sk_addr.saddr_v4 = saddr_v4;
+			iw_param->sk_addr.daddr_v4 = daddr_v4;
+		}
 #endif
 	}
 
