@@ -60,7 +60,9 @@ struct smc_ib_device {				/* ib-device infos for smc */
 	unsigned long		port_event_mask;
 	DECLARE_BITMAP(ports_going_away, SMC_MAX_PORTS);
 	atomic_t		lnk_cnt;	/* number of links on ibdev */
+	refcount_t		lnk_pending_cnt;/* number of links attempt to use ibdev */
 	wait_queue_head_t	lnks_deleted;	/* wait 4 removal of all links*/
+	wait_queue_head_t	lnks_pending;	/* wait 4 pending establish of links */
 	struct mutex		mutex;		/* protect dev setup+cleanup */
 	atomic_t		lnk_cnt_by_port[SMC_MAX_PORTS];
 						/* number of links per port */
@@ -124,5 +126,7 @@ int smc_ib_find_route(struct net *net, __be32 saddr, __be32 daddr,
 		      u8 nexthop_mac[], u8 *uses_gateway);
 bool smc_ib_is_valid_local_systemid(void);
 bool smc_ib_is_iwarp(struct ib_device *ibdev, u8 ibport);
+void smc_ib_get_pending_device(struct smc_ib_device *smcibdev);
+void smc_ib_put_pending_device(struct smc_ib_device *smcibdev);
 int smcr_nl_get_device(struct sk_buff *skb, struct netlink_callback *cb);
 #endif

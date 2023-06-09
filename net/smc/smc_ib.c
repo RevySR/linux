@@ -1164,6 +1164,17 @@ bool smc_ib_is_iwarp(struct ib_device *ibdev, u8 ibport)
 	return rdma_protocol_iwarp(ibdev, ibport);
 }
 
+void smc_ib_get_pending_device(struct smc_ib_device *smcibdev)
+{
+	refcount_inc(&smcibdev->lnk_pending_cnt);
+}
+
+void smc_ib_put_pending_device(struct smc_ib_device *smcibdev)
+{
+	if (refcount_dec_and_test(&smcibdev->lnk_pending_cnt))
+		wake_up(&smcibdev->lnks_pending);
+}
+
 /* Reserve socket ports of each net namespace which can be accessed
  * by eRDMA (iWARP) device for out-bound RC establishment.
  */
@@ -1258,7 +1269,9 @@ static int smc_ib_add_dev(struct ib_device *ibdev)
 	}
 	INIT_WORK(&smcibdev->port_event_work, smc_ib_port_event_work);
 	atomic_set(&smcibdev->lnk_cnt, 0);
+	refcount_set(&smcibdev->lnk_pending_cnt, 1);
 	init_waitqueue_head(&smcibdev->lnks_deleted);
+	init_waitqueue_head(&smcibdev->lnks_pending);
 	mutex_init(&smcibdev->mutex);
 	mutex_lock(&smc_ib_devices.mutex);
 	list_add_tail(&smcibdev->list, &smc_ib_devices.list);
@@ -1301,6 +1314,9 @@ static void smc_ib_remove_dev(struct ib_device *ibdev, void *client_data)
 	mutex_lock(&smc_ib_devices.mutex);
 	list_del_init(&smcibdev->list); /* remove from smc_ib_devices */
 	mutex_unlock(&smc_ib_devices.mutex);
+	smc_ib_put_pending_device(smcibdev);
+	wait_event(smcibdev->lnks_pending,	/* wait for no pending usage */
+		   !refcount_read(&smcibdev->lnk_pending_cnt));
 	pr_info_ratelimited("smc: removing ib device %s\n",
 			    smcibdev->ibdev->name);
 	smc_smcr_terminate_all(smcibdev);

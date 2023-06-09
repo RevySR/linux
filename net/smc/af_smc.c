@@ -1117,6 +1117,20 @@ static int smc_find_proposal_devices(struct smc_sock *smc,
 		ini->smcr_version &= ~SMC_V1;
 	/* else RDMA is supported for this connection */
 
+	/* make sure SMC_V1 ibdev still available */
+	if (ini->smcr_version & SMC_V1) {
+		mutex_lock(&smc_ib_devices.mutex);
+		if (list_empty(&ini->ib_dev->list)) {
+			ini->ib_dev = NULL;
+			ini->ib_port = 0;
+			ini->smcr_version &= ~SMC_V1;
+		} else {
+			/* put in __smc_connect */
+			smc_ib_get_pending_device(ini->ib_dev);
+		}
+		mutex_unlock(&smc_ib_devices.mutex);
+	}
+
 	ini->smc_type_v1 = smc_indicated_type(ini->smcd_version & SMC_V1,
 					      ini->smcr_version & SMC_V1);
 
@@ -1138,6 +1152,20 @@ static int smc_find_proposal_devices(struct smc_sock *smc,
 	    smc_find_rdma_device(smc, ini))
 		ini->smcr_version &= ~SMC_V2;
 	ini->check_smcrv2 = false;
+
+	/* make sure SMC_V2 ibdev still available */
+	if (ini->smcr_version & SMC_V2) {
+		mutex_lock(&smc_ib_devices.mutex);
+		if (list_empty(&ini->smcrv2.ib_dev_v2->list)) {
+			ini->smcrv2.ib_dev_v2 = NULL;
+			ini->smcrv2.ib_port_v2 = 0;
+			ini->smcr_version &= ~SMC_V2;
+		} else {
+			/* put in __smc_connect */
+			smc_ib_get_pending_device(ini->smcrv2.ib_dev_v2);
+		}
+		mutex_unlock(&smc_ib_devices.mutex);
+	}
 
 	ini->smc_type_v2 = smc_indicated_type(ini->smcd_version & SMC_V2,
 					      ini->smcr_version & SMC_V2);
@@ -1612,6 +1640,10 @@ static int __smc_connect(struct smc_sock *smc)
 	if (rc)
 		goto vlan_cleanup;
 
+	if (ini->smcrv2.ib_dev_v2)
+		smc_ib_put_pending_device(ini->smcrv2.ib_dev_v2);
+	if (ini->ib_dev)
+		smc_ib_put_pending_device(ini->ib_dev);
 	SMC_STAT_CLNT_SUCC_INC(sock_net(smc->clcsock->sk), aclc);
 	smc_connect_ism_vlan_cleanup(smc, ini);
 	kfree(buf);
@@ -1622,6 +1654,10 @@ vlan_cleanup:
 	smc_connect_ism_vlan_cleanup(smc, ini);
 	kfree(buf);
 fallback:
+	if (ini->smcrv2.ib_dev_v2)
+		smc_ib_put_pending_device(ini->smcrv2.ib_dev_v2);
+	if (ini->ib_dev)
+		smc_ib_put_pending_device(ini->ib_dev);
 	kfree(ini);
 	return smc_connect_decline_fallback(smc, rc, version);
 }
@@ -2351,6 +2387,18 @@ static void smc_find_rdma_v2_device_serv(struct smc_sock *new_smc,
 		smc_find_ism_store_rc(rc, ini);
 		goto not_found;
 	}
+	/* make sure SMC_V2 ibdev still available */
+	mutex_lock(&smc_ib_devices.mutex);
+	if (list_empty(&ini->smcrv2.ib_dev_v2->list)) {
+		smc_find_ism_store_rc(SMC_CLC_DECL_NOSMCRDEV, ini);
+		mutex_unlock(&smc_ib_devices.mutex);
+		goto not_found;
+	} else {
+		/* put below or in smc_listen_work */
+		smc_ib_get_pending_device(ini->smcrv2.ib_dev_v2);
+	}
+	mutex_unlock(&smc_ib_devices.mutex);
+
 	if (!ini->smcrv2.uses_gateway)
 		memcpy(ini->smcrv2.nexthop_mac, pclc->lcl.mac, ETH_ALEN);
 
@@ -2366,6 +2414,7 @@ static void smc_find_rdma_v2_device_serv(struct smc_sock *new_smc,
 		return;
 	ini->smcr_version = smcr_version;
 	smc_find_ism_store_rc(rc, ini);
+	smc_ib_put_pending_device(ini->smcrv2.ib_dev_v2);
 
 not_found:
 	ini->smcr_version &= ~SMC_V2;
@@ -2391,6 +2440,18 @@ static int smc_find_rdma_v1_device_serv(struct smc_sock *new_smc,
 		/* no RDMA device found */
 		return SMC_CLC_DECL_NOSMCDEV;
 	}
+	/* make sure SMC_V1 ibdev still available */
+	mutex_lock(&smc_ib_devices.mutex);
+	if (list_empty(&ini->ib_dev->list)) {
+		ini->ib_dev = NULL;
+		ini->ib_port = 0;
+		mutex_unlock(&smc_ib_devices.mutex);
+		return SMC_CLC_DECL_NOSMCDEV;
+	}
+	/* put in smc_listen_work */
+	smc_ib_get_pending_device(ini->ib_dev);
+	mutex_unlock(&smc_ib_devices.mutex);
+
 	rc = smc_listen_rdma_init(new_smc, ini);
 	if (rc)
 		return rc;
@@ -2593,6 +2654,10 @@ static void smc_listen_work(struct work_struct *work)
 			goto out_unlock;
 		mutex_unlock(&smc_server_lgr_pending);
 	}
+	if (ini->smcrv2.ib_dev_v2)
+		smc_ib_put_pending_device(ini->smcrv2.ib_dev_v2);
+	if (ini->ib_dev)
+		smc_ib_put_pending_device(ini->ib_dev);
 	smc_conn_save_peer_info(new_smc, cclc);
 
 	if (ini->is_smcd &&
@@ -2607,6 +2672,10 @@ static void smc_listen_work(struct work_struct *work)
 	goto out_free;
 
 out_unlock:
+	if (ini->smcrv2.ib_dev_v2)
+		smc_ib_put_pending_device(ini->smcrv2.ib_dev_v2);
+	if (ini->ib_dev)
+		smc_ib_put_pending_device(ini->ib_dev);
 	mutex_unlock(&smc_server_lgr_pending);
 out_decl:
 	smc_listen_decline(new_smc, rc, ini ? ini->first_contact_local : 0,
