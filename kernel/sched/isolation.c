@@ -146,7 +146,8 @@ void __init housekeeping_init(void)
 		WARN_ON_ONCE(cpumask_empty(housekeeping.cpumasks[type]));
 	}
 #ifdef CONFIG_CGROUP_SCHED
-	if ((housekeeping.flags & HK_FLAG_DOMAIN) && type < HK_TYPE_MAX) {
+	if (dyn_isolcpus_ready && (housekeeping.flags & HK_FLAG_DOMAIN) &&
+	    type < HK_TYPE_MAX) {
 		cpumask_copy(dyn_allowed, housekeeping.cpumasks[type]);
 		cpumask_copy(dyn_possible, housekeeping.cpumasks[type]);
 	}
