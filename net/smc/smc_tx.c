@@ -325,6 +325,9 @@ static int smc_tx_rdma_write(struct smc_connection *conn, int peer_rmbe_offset,
 	if (!lgr->use_rwwi)
 		rdma_wr->wr.wr_id = smc_wr_tx_get_next_wr_id(link);
 	rdma_wr->wr.num_sge = num_sges;
+	/* rtoken might be deleted if peer freed connection */
+	if (conn->rtoken_idx < 0)
+		return -EINVAL;
 	rdma_wr->remote_addr =
 		lgr->rtokens[conn->rtoken_idx][link->link_idx].dma_addr +
 		/* RMBE within RMB */
@@ -333,11 +336,9 @@ static int smc_tx_rdma_write(struct smc_connection *conn, int peer_rmbe_offset,
 		peer_rmbe_offset;
 	rdma_wr->rkey = lgr->rtokens[conn->rtoken_idx][link->link_idx].rkey;
 	/* rtoken might be deleted if peer freed connection */
-	if (!rdma_wr->rkey ||
-	    (rdma_wr->remote_addr == (conn->tx_off + peer_rmbe_offset))) {
-		pr_warn_ratelimited("smc: unexpected sends during connection termination flow\n");
+	if (rdma_wr->remote_addr == (conn->tx_off + peer_rmbe_offset))
 		return -EINVAL;
-	}
+
 	rc = ib_post_send(link->roce_qp, &rdma_wr->wr, NULL);
 	if (rc)
 		smcr_link_down_cond_sched(link);

@@ -494,6 +494,30 @@ static inline struct smc_connection *smc_lgr_find_conn(
 	return res;
 }
 
+/* Find the smc sock associated with the given rtoken_idx in the link group.
+ * Requires @conns_lock
+ * @rtoken_idx	rtoken index to search for
+ * @lgr			link group to search in
+ * Returns smc_sock associated with rtoken_idx if found, NULL otherwise.
+ * sock_put(&smc->sk) must be called after using the smc_sock.
+ */
+static inline struct smc_sock *
+smc_lgr_get_sock_by_rtoken(int rtoken_idx, struct smc_link_group *lgr)
+{
+	struct smc_connection *cur, *tmp;
+	struct smc_sock *res = NULL;
+
+	rbtree_postorder_for_each_entry_safe(cur, tmp, &lgr->conns_all, alert_node) {
+		if (cur->rtoken_idx == rtoken_idx) {
+			res = container_of(cur, struct smc_sock, conn);
+			sock_hold(&res->sk);
+			break;
+		}
+	}
+
+	return res;
+}
+
 static inline bool smc_conn_lgr_valid(struct smc_connection *conn)
 {
 	return conn->lgr && conn->alert_token_local;
