@@ -413,6 +413,7 @@ static const struct proc_ops proc_dyn_isolcpus_operations = {
 	.proc_read		= seq_read,
 	.proc_write		= write_dyn_isolcpus,
 	.proc_lseek		= noop_llseek,
+	.proc_release		= single_release,
 };
 
 static int __init dyn_isolcpus_init(void)
