@@ -494,6 +494,28 @@ static inline struct smc_connection *smc_lgr_find_conn(
 	return res;
 }
 
+/* Find the smc sock associated with the given alert token in the link group.
+ * Requires @conns_lock
+ * @token	alert token to search for
+ * @lgr		link group to search in
+ * Returns smc_sock associated with token if found, NULL otherwise.
+ * sock_put(&smc->sk) must be called after using the smc_sock.
+ */
+static inline struct smc_sock *
+smc_lgr_get_sock(u32 token, struct smc_link_group *lgr)
+{
+	struct smc_connection *conn = NULL;
+	struct smc_sock *smc = NULL;
+
+	conn = smc_lgr_find_conn(token, lgr);
+	if (!conn)
+		return NULL;
+
+	smc = container_of(conn, struct smc_sock, conn);
+	sock_hold(&smc->sk);
+	return smc;
+}
+
 /* Find the smc sock associated with the given rtoken_idx in the link group.
  * Requires @conns_lock
  * @rtoken_idx	rtoken index to search for

@@ -92,12 +92,12 @@ void smc_cdc_tx_handler_rwwi(struct ib_wc *wc)
 	wr_id.data = wc->wr_id;
 
 	read_lock_bh(&lgr->conns_lock);
-	conn = smc_lgr_find_conn(wr_id.token, lgr);
+	smc = smc_lgr_get_sock(wr_id.token, lgr);
 	read_unlock_bh(&lgr->conns_lock);
-	if (!conn)
+	if (!smc)
 		return;
 
-	smc = container_of(conn, struct smc_sock, conn);
+	conn = &smc->conn;
 	bh_lock_sock(&smc->sk);
 
 	if (!wc->status) {
@@ -126,6 +126,7 @@ void smc_cdc_tx_handler_rwwi(struct ib_wc *wc)
 
 	smc_tx_sndbuf_nonfull(smc);
 	bh_unlock_sock(&smc->sk);
+	sock_put(&smc->sk); /* sock_hold in smc_lgr_get_sock */
 }
 
 int smc_cdc_get_free_slot(struct smc_connection *conn,
@@ -702,14 +703,12 @@ void smc_cdc_rx_handler_rwwi(struct ib_wc *wc)
 
 	imm_msg.imm_data = be32_to_cpu(wc->ex.imm_data);
 	read_lock_bh(&lgr->conns_lock);
-	conn = smc_lgr_find_conn(imm_msg.hdr.token, lgr);
+	smc = smc_lgr_get_sock(imm_msg.hdr.token, lgr);
 	read_unlock_bh(&lgr->conns_lock);
-	if (!conn)
+	if (!smc)
 		return;
 
-	smc = container_of(conn, struct smc_sock, conn);
-
-	sock_hold(&smc->sk);
+	conn = &smc->conn;
 	bh_lock_sock(&smc->sk);
 	diff_prod = wc->byte_len;
 	if (diff_prod)
@@ -734,7 +733,7 @@ void smc_cdc_rx_handler_rwwi(struct ib_wc *wc)
 	}
 
 	bh_unlock_sock(&smc->sk);
-	sock_put(&smc->sk); /* no free sk in softirq-context */
+	sock_put(&smc->sk); /* sock_hold in smc_lgr_get_sock */
 }
 
 static struct smc_wr_rx_handler smc_cdc_rx_handlers[] = {
