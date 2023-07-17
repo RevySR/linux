@@ -80,6 +80,13 @@ static void *sev_es_tmr;
 #define NV_LENGTH (32 * 1024)
 static void *sev_init_ex_buffer;
 
+/*
+ * Hygon CSV build info:
+ *    Hygon CSV build info is 32-bit in length other than 8-bit as that
+ *    in AMD SEV.
+ */
+static u32 hygon_csv_build;
+
 static inline bool sev_version_greater_or_equal(u8 maj, u8 min)
 {
 	struct sev_device *sev = psp_master->sev_data;
@@ -509,8 +516,12 @@ static int __sev_platform_init_locked(int *error)
 
 	dev_dbg(sev->dev, "SEV firmware initialized\n");
 
-	dev_info(sev->dev, "SEV API:%d.%d build:%d\n", sev->api_major,
-		 sev->api_minor, sev->build);
+	if (boot_cpu_data.x86_vendor == X86_VENDOR_HYGON)
+		dev_info(sev->dev, "CSV API:%d.%d build:%d\n", sev->api_major,
+			 sev->api_minor, hygon_csv_build);
+	else
+		dev_info(sev->dev, "SEV API:%d.%d build:%d\n", sev->api_major,
+			 sev->api_minor, sev->build);
 
 	return 0;
 }
@@ -731,6 +742,10 @@ static int sev_get_api_version(void)
 	sev->api_minor = status.api_minor;
 	sev->build = status.build;
 	sev->state = status.state;
+
+	if (boot_cpu_data.x86_vendor == X86_VENDOR_HYGON)
+		hygon_csv_build = (status.flags >> 9) |
+				  ((u32)status.build << 23);
 
 	return 0;
 }
