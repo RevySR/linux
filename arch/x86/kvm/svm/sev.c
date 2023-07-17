@@ -2290,13 +2290,15 @@ void __init sev_hardware_setup(void)
 
 out:
 	if (boot_cpu_has(X86_FEATURE_SEV))
-		pr_info("SEV %s (ASIDs %u - %u)\n",
+		pr_info("%s %s (ASIDs %u - %u)\n",
+			boot_cpu_data.x86_vendor == X86_VENDOR_HYGON ? "CSV" : "SEV",
 			sev_supported ? min_sev_asid <= max_sev_asid ? "enabled" :
 								       "unusable" :
 								       "disabled",
 			min_sev_asid, max_sev_asid);
 	if (boot_cpu_has(X86_FEATURE_SEV_ES))
-		pr_info("SEV-ES %s (ASIDs %u - %u)\n",
+		pr_info("%s %s (ASIDs %u - %u)\n",
+			boot_cpu_data.x86_vendor == X86_VENDOR_HYGON ? "CSV2" : "SEV-ES",
 			sev_es_supported ? "enabled" : "disabled",
 			min_sev_asid > 1 ? 1 : 0, min_sev_asid - 1);
 

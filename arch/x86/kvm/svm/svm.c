@@ -547,7 +547,10 @@ static bool __kvm_is_svm_supported(void)
 	}
 
 	if (cc_platform_has(CC_ATTR_GUEST_MEM_ENCRYPT)) {
-		pr_info("KVM is unsupported when running as an SEV guest\n");
+		if (boot_cpu_data.x86_vendor == X86_VENDOR_HYGON)
+			pr_info("KVM is unsupported when running as an CSV guest\n");
+		else
+			pr_info("KVM is unsupported when running as an SEV guest\n");
 		return false;
 	}
 
