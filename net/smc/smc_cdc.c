@@ -408,10 +408,9 @@ static void smc_cdc_msg_recv_action(struct smc_sock *smc,
 		smc->sk.sk_write_space(&smc->sk);
 	}
 
-	if (conn->local_rx_ctrl.conn_state_flags.peer_conn_abort) {
+	if (conn->local_rx_ctrl.conn_state_flags.peer_conn_abort)
 		smc->sk.sk_err = ECONNRESET;
-		conn->local_tx_ctrl.conn_state_flags.peer_conn_abort = 1;
-	}
+
 	if (smc_cdc_rxed_any_close_or_senddone(conn)) {
 		smc->sk.sk_shutdown |= RCV_SHUTDOWN;
 		if (smc->clcsock && smc->clcsock->sk)
