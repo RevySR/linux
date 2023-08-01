@@ -931,7 +931,10 @@ u32 resctrl_arch_get_config(struct rdt_resource *r, struct rdt_domain *d,
 	dom = container_of(d, struct mpam_resctrl_dom, resctrl_dom);
 	cprops = &res->class->props;
 
-	partid = resctrl_get_config_index(closid, type);
+	if (mpam_resctrl_hide_cdp(r->rid))
+		partid = resctrl_get_config_index(closid, CDP_CODE);
+	else
+		partid = resctrl_get_config_index(closid, type);
 	cfg = &dom->comp->cfg[partid];
 
 	switch (r->rid) {
