@@ -13,7 +13,7 @@
 /*
  * Defines x86 CPU feature bits
  */
-#define NCAPINTS			22	   /* N 32-bit words worth of info */
+#define NCAPINTS			23	   /* N 32-bit words worth of info */
 #define NBUGINTS			2	   /* N 32-bit bug flags */
 
 /*
@@ -473,6 +473,10 @@
 #define X86_FEATURE_SBPB		(20*32+27) /* "" Selective Branch Prediction Barrier */
 #define X86_FEATURE_IBPB_BRTYPE		(20*32+28) /* "" MSR_PRED_CMD[IBPB] flushes all branch type predictions */
 #define X86_FEATURE_SRSO_NO		(20*32+29) /* "" CPU is not affected by SRSO */
+
+/* HYGON-defined CPU features, CPUID level 0x8c860000:0 (EDX), word 22 */
+#define X86_FEATURE_SM3			(22*32 + 1) /* SM3 instructions */
+#define X86_FEATURE_SM4			(22*32 + 2) /* SM4 instructions */
 
 /*
  * Extended auxiliary flags: Linux defined - for features scattered in various
