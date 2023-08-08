@@ -5185,6 +5185,8 @@ static struct kvm_x86_ops svm_x86_ops __initdata = {
 	.vcpu_get_apicv_inhibit_reasons = avic_vcpu_get_apicv_inhibit_reasons,
 
 	.vm_attestation = sev_vm_attestation,
+	.control_pre_system_reset = csv_control_pre_system_reset,
+	.control_post_system_reset = csv_control_post_system_reset,
 };
 
 /*

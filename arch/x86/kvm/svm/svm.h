@@ -739,6 +739,9 @@ void sev_es_unmap_ghcb(struct vcpu_svm *svm);
 int sev_vm_attestation(struct kvm *kvm, unsigned long gpa, unsigned long len);
 int sev_es_ghcb_map(struct vcpu_svm *svm, u64 ghcb_gpa);
 
+int csv_control_pre_system_reset(struct kvm *kvm);
+int csv_control_post_system_reset(struct kvm *kvm);
+
 /* vmenter.S */
 
 void __svm_sev_es_vcpu_run(struct vcpu_svm *svm, bool spec_ctrl_intercepted);
