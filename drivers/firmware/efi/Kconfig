@@ -304,7 +304,7 @@ config UEFI_CPER_X86
 
 config YITIAN_CPER_RAWDATA
 	bool "Print Yitian custom raw data about platform error info"
-	depends on EFI && ACPI
+	depends on EFI && ACPI && ARM64
 	help
 	  Allow print Yitian custom raw data about platform error info,
 	  including CMN, GIC, SMMU, DDR, etc. It gathers more useful error
