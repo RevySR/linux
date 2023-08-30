@@ -1125,12 +1125,43 @@ static void nfp_pci_shutdown(struct pci_dev *pdev)
 	__nfp_pci_shutdown(pdev, false);
 }
 
+void nfp_pci_error_reset_prepare(struct pci_dev *dev)
+{
+	struct nfp_pf *pf = pci_get_drvdata(dev);
+
+	if (pf) {
+		if (pf->multi_pf.en && pf->multi_pf.beat_addr) {
+			/* Pause heartbeat timer so it can't happen during FLR */
+			del_timer_sync(&pf->multi_pf.beat_timer);
+			/* We need to write keepalive to keep firmware alive
+			 * during frequent FLR.
+			 */
+			writeq(jiffies, nfp_get_beat_addr(pf, pf->multi_pf.id));
+		}
+	}
+}
+
+void nfp_pci_error_reset_done(struct pci_dev *dev)
+{
+	struct nfp_pf *pf = pci_get_drvdata(dev);
+
+	if (pf)
+		if (pf->multi_pf.en && pf->multi_pf.beat_addr)
+			add_timer(&pf->multi_pf.beat_timer);
+}
+
+static const struct pci_error_handlers nfp_pci_err_handler = {
+	.reset_prepare = nfp_pci_error_reset_prepare,
+	.reset_done = nfp_pci_error_reset_done,
+};
+
 static struct pci_driver nfp_pci_driver = {
 	.name			= nfp_driver_name,
 	.id_table		= nfp_pci_device_ids,
 	.probe			= nfp_pci_probe,
 	.remove			= nfp_pci_remove,
 	.shutdown		= nfp_pci_shutdown,
+	.err_handler		= &nfp_pci_err_handler,
 	.sriov_configure	= nfp_pcie_sriov_configure,
 };
 
