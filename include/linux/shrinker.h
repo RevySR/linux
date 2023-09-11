@@ -4,6 +4,8 @@
 
 #include <linux/atomic.h>
 #include <linux/types.h>
+#include <linux/refcount.h>
+#include <linux/completion.h>
 #include <linux/ck_kabi.h>
 
 #define SHRINKER_UNIT_BITS	BITS_PER_LONG
@@ -88,6 +90,17 @@ struct shrinker {
 	int seeks;	/* seeks to recreate an obj */
 	unsigned flags;
 
+	/*
+	 * The reference count of this shrinker. Registered shrinker have an
+	 * initial refcount of 1, then the lookup operations are now allowed
+	 * to use it via shrinker_try_get(). Later in the unregistration step,
+	 * the initial refcount will be discarded, and will free the shrinker
+	 * asynchronously via RCU after its refcount reaches 0.
+	 */
+	refcount_t refcount;
+	struct completion done;	/* use to wait for refcount to reach 0 */
+	struct rcu_head rcu;
+
 	void *private_data;
 
 	/* These are for internal use */
@@ -133,6 +146,17 @@ extern int __printf(2, 3) register_shrinker(struct shrinker *shrinker,
 					    const char *fmt, ...);
 extern void unregister_shrinker(struct shrinker *shrinker);
 extern void synchronize_shrinkers(void);
+
+static inline bool shrinker_try_get(struct shrinker *shrinker)
+{
+	return refcount_inc_not_zero(&shrinker->refcount);
+}
+
+static inline void shrinker_put(struct shrinker *shrinker)
+{
+	if (refcount_dec_and_test(&shrinker->refcount))
+		complete(&shrinker->done);
+}
 
 #ifdef CONFIG_SHRINKER_DEBUG
 extern int __printf(2, 3) shrinker_debugfs_rename(struct shrinker *shrinker,
