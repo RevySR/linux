@@ -693,13 +693,10 @@ void unregister_shrinker(struct shrinker *shrinker)
 }
 EXPORT_SYMBOL(unregister_shrinker);
 
+
 /**
- * synchronize_shrinkers - Wait for all running shrinkers to complete.
- *
- * This is equivalent to calling unregister_shrink() and register_shrinker(),
- * but atomically and with less overhead. This is useful to guarantee that all
- * shrinker invocations have seen an update, before freeing memory, similar to
- * rcu.
+ * Keep synchronize_shrinkers() here only to keep KAPI compatibility,
+ * and only OOT drivers use it.
  */
 void synchronize_shrinkers(void)
 {
