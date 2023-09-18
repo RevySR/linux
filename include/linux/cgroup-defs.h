@@ -302,6 +302,9 @@ struct cgroup_base_stat {
 #ifdef CONFIG_SCHED_CORE
 	u64 forceidle_sum;
 #endif
+#if defined(CONFIG_SCHED_ACPU) || defined(CONFIG_SCHED_CORE)
+	u64 sibidle_sum;
+#endif
 };
 
 /*

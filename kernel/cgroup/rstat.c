@@ -327,6 +327,9 @@ static void cgroup_base_stat_add(struct cgroup_base_stat *dst_bstat,
 #ifdef CONFIG_SCHED_CORE
 	dst_bstat->forceidle_sum += src_bstat->forceidle_sum;
 #endif
+#if defined(CONFIG_SCHED_ACPU) || defined(CONFIG_SCHED_CORE)
+	dst_bstat->sibidle_sum += src_bstat->sibidle_sum;
+#endif
 }
 
 static void cgroup_base_stat_sub(struct cgroup_base_stat *dst_bstat,
@@ -337,6 +340,9 @@ static void cgroup_base_stat_sub(struct cgroup_base_stat *dst_bstat,
 	dst_bstat->cputime.sum_exec_runtime -= src_bstat->cputime.sum_exec_runtime;
 #ifdef CONFIG_SCHED_CORE
 	dst_bstat->forceidle_sum -= src_bstat->forceidle_sum;
+#endif
+#if defined(CONFIG_SCHED_ACPU) || defined(CONFIG_SCHED_CORE)
+	dst_bstat->sibidle_sum -= src_bstat->sibidle_sum;
 #endif
 }
 
@@ -431,6 +437,11 @@ void __cgroup_account_cputime_field(struct cgroup *cgrp,
 		rstatc->bstat.forceidle_sum += delta_exec;
 		break;
 #endif
+#if defined(CONFIG_SCHED_ACPU) || defined(CONFIG_SCHED_CORE)
+	case CPUTIME_SIBIDLE:
+		rstatc->bstat.sibidle_sum += delta_exec;
+		break;
+#endif
 	default:
 		break;
 	}
@@ -473,6 +484,9 @@ static void root_cgroup_cputime(struct cgroup_base_stat *bstat)
 #ifdef CONFIG_SCHED_CORE
 		bstat->forceidle_sum += cpustat[CPUTIME_FORCEIDLE];
 #endif
+#if defined(CONFIG_SCHED_ACPU) || defined(CONFIG_SCHED_CORE)
+		bstat->sibidle_sum += cpustat[CPUTIME_SIBIDLE];
+#endif
 	}
 }
 
@@ -484,6 +498,9 @@ void cgroup_base_stat_cputime_show(struct seq_file *seq)
 #ifdef CONFIG_SCHED_CORE
 	u64 forceidle_time;
 #endif
+#if defined(CONFIG_SCHED_ACPU) || defined(CONFIG_SCHED_CORE)
+	u64 sibidle_time;
+#endif
 
 	if (cgroup_parent(cgrp)) {
 		cgroup_rstat_flush_hold(cgrp);
@@ -492,6 +509,9 @@ void cgroup_base_stat_cputime_show(struct seq_file *seq)
 			       &utime, &stime);
 #ifdef CONFIG_SCHED_CORE
 		forceidle_time = cgrp->bstat.forceidle_sum;
+#endif
+#if defined(CONFIG_SCHED_ACPU) || defined(CONFIG_SCHED_CORE)
+		sibidle_time = cgrp->bstat.sibidle_sum;
 #endif
 		cgroup_rstat_flush_release();
 	} else {
@@ -502,6 +522,9 @@ void cgroup_base_stat_cputime_show(struct seq_file *seq)
 #ifdef CONFIG_SCHED_CORE
 		forceidle_time = bstat.forceidle_sum;
 #endif
+#if defined(CONFIG_SCHED_ACPU) || defined(CONFIG_SCHED_CORE)
+		sibidle_time = bstat.sibidle_sum;
+#endif
 	}
 
 	do_div(usage, NSEC_PER_USEC);
@@ -509,6 +532,9 @@ void cgroup_base_stat_cputime_show(struct seq_file *seq)
 	do_div(stime, NSEC_PER_USEC);
 #ifdef CONFIG_SCHED_CORE
 	do_div(forceidle_time, NSEC_PER_USEC);
+#endif
+#if defined(CONFIG_SCHED_ACPU) || defined(CONFIG_SCHED_CORE)
+	do_div(sibidle_time, NSEC_PER_USEC);
 #endif
 
 	seq_printf(seq, "usage_usec %llu\n"
@@ -518,6 +544,9 @@ void cgroup_base_stat_cputime_show(struct seq_file *seq)
 
 #ifdef CONFIG_SCHED_CORE
 	seq_printf(seq, "core_sched.force_idle_usec %llu\n", forceidle_time);
+#endif
+#if defined(CONFIG_SCHED_ACPU) || defined(CONFIG_SCHED_CORE)
+	seq_printf(seq, "sibidle_usec %llu\n", sibidle_time);
 #endif
 }
 
