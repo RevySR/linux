@@ -2506,9 +2506,3 @@ static inline int sched_core_idle_cpu(int cpu) { return idle_cpu(cpu); }
 extern void sched_set_stop_task(int cpu, struct task_struct *stop);
 
 #endif
-
-#ifdef CONFIG_SCHED_ACPU
-extern void acpu_enable(void);
-#else
-static inline void acpu_enable(void) { }
-#endif

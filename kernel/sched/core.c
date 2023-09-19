@@ -157,6 +157,7 @@ DEFINE_STATIC_KEY_FALSE(__sched_core_enabled);
 
 #ifdef CONFIG_SCHED_ACPU
 DEFINE_STATIC_KEY_FALSE(acpu_enabled);
+unsigned int sysctl_sched_acpu_enabled;
 #endif
 
 /* kernel prio, less is more */
@@ -4991,7 +4992,7 @@ fire_sched_out_preempt_notifiers(struct task_struct *curr,
 #endif /* CONFIG_PREEMPT_NOTIFIERS */
 
 #ifdef CONFIG_SCHED_ACPU
-void acpu_enable(void)
+static void acpu_enable(void)
 {
 	int i;
 
@@ -5002,6 +5003,35 @@ void acpu_enable(void)
 		rq->last_acpu_update_time = rq->clock;
 	}
 	static_branch_enable(&acpu_enabled);
+}
+
+static void acpu_disable(void)
+{
+	static_branch_disable(&acpu_enabled);
+}
+
+int sched_acpu_enable_handler(struct ctl_table *table, int write, void __user *buffer,
+			      size_t *lenp, loff_t *ppos)
+{
+	int ret;
+	unsigned int old, new;
+
+	if (!write) {
+		ret = proc_dointvec_minmax(table, write, buffer, lenp, ppos);
+		return ret;
+	}
+
+	old = sysctl_sched_acpu_enabled;
+	ret = proc_dointvec_minmax(table, write, buffer, lenp, ppos);
+	new = sysctl_sched_acpu_enabled;
+	if (!ret && write && (old != new)) {
+		if (new)
+			acpu_enable();
+		else
+			acpu_disable();
+	}
+
+	return ret;
 }
 
 static void update_acpu(struct rq *rq, struct task_struct *prev, struct task_struct *next)
