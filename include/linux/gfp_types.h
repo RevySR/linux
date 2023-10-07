@@ -65,6 +65,11 @@ typedef unsigned int __bitwise gfp_t;
 #else
 #define ___GFP_NOKFENCE		0
 #endif
+#ifdef CONFIG_PGTABLE_BIND
+#define ___GFP_PGTABLE		0x10000000u
+#else
+#define ___GFP_PGTABLE		0
+#endif
 /* If the above are modified, __GFP_BITS_SHIFT may need updating */
 
 /*
@@ -107,6 +112,8 @@ typedef unsigned int __bitwise gfp_t;
  *
  * %__GFP_ACCOUNT causes the allocation to be accounted to kmemcg.
  *
+ * %__GFP_PGTABLE indicates the allocation of page table pages.
+ *
  * %__GFP_NOKFENCE informs DO NOT try to alloc page from kfence pool.
  */
 #define __GFP_RECLAIMABLE ((__force gfp_t)___GFP_RECLAIMABLE)
@@ -114,6 +121,7 @@ typedef unsigned int __bitwise gfp_t;
 #define __GFP_HARDWALL   ((__force gfp_t)___GFP_HARDWALL)
 #define __GFP_THISNODE	((__force gfp_t)___GFP_THISNODE)
 #define __GFP_ACCOUNT	((__force gfp_t)___GFP_ACCOUNT)
+#define __GFP_PGTABLE	((__force gfp_t)___GFP_PGTABLE)
 #define __GFP_NOKFENCE	((__force gfp_t)___GFP_NOKFENCE)
 
 /**

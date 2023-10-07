@@ -420,6 +420,11 @@ struct mem_cgroup {
 	struct work_struct pgcache_limit_work;
 #endif
 
+#ifdef CONFIG_PGTABLE_BIND
+	unsigned long pgtable_misplaced;
+	bool allow_pgtable_bind;
+#endif
+
 #ifdef CONFIG_LRU_GEN
 	/* per-memcg mm_struct list */
 	struct lru_gen_mm_list mm_list;

@@ -67,6 +67,13 @@
 #define __def_gfpflag_names_kfence
 #endif
 
+#ifdef CONFIG_PGTABLE_BIND
+#define __def_gfpflag_names_pgtable ,			\
+	gfpflag_string(__GFP_PGTABLE)
+#else
+#define __def_gfpflag_names_pgtable
+#endif
+
 #define show_gfp_flags(flags)								\
 	(flags) ? __print_flags(flags, "|",						\
 	__def_gfpflag_names __def_gfpflag_names_kasan __def_gfpflag_names_kfence	\

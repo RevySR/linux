@@ -1329,4 +1329,16 @@ config PAGECACHE_LIMIT
 
 	  If unsure, say N.
 
+config PGTABLE_BIND
+	bool "Enable page table allocation binded with CPUs and misplaced statistics"
+	depends on MEMCG
+	default n
+	help
+	  This feature is used to solve the problem that the page table pages can not be
+	  migrated through numa balancing. If pages are located on remote numa node, the
+	  performance can be degraded in some scenarios. Thus this configuration provides a
+	  way to allocate page table pages in local numa node with reserved memory range.
+
+	  If unsure, say N.
+
 endmenu

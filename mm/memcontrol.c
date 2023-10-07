@@ -6066,6 +6066,51 @@ static int mem_cgroup_allow_pgcache_sync_write(struct cgroup_subsys_state *css,
 }
 #endif /* CONFIG_PAGECACHE_LIMIT */
 
+#ifdef CONFIG_PGTABLE_BIND
+static u64 memcg_pgtable_bind_read(struct cgroup_subsys_state *css,
+				   struct cftype *cft)
+{
+	struct mem_cgroup *memcg = mem_cgroup_from_css(css);
+
+	return READ_ONCE(memcg->allow_pgtable_bind);
+}
+
+static int memcg_pgtable_bind_write(struct cgroup_subsys_state *css,
+				    struct cftype *cft, u64 val)
+{
+	struct mem_cgroup *memcg = mem_cgroup_from_css(css);
+
+	if (val)
+		memcg->allow_pgtable_bind = true;
+	else
+		memcg->allow_pgtable_bind = false;
+
+	return 0;
+}
+
+static u64 memcg_pgtable_misplaced_read(struct cgroup_subsys_state *css,
+					struct cftype *cft)
+{
+	struct mem_cgroup *memcg = mem_cgroup_from_css(css);
+
+	return READ_ONCE(memcg->pgtable_misplaced);
+}
+
+static int memcg_pgtable_misplaced_write(struct cgroup_subsys_state *css,
+					 struct cftype *cft, u64 val)
+{
+	struct mem_cgroup *memcg = mem_cgroup_from_css(css);
+
+	if (val)
+		return -EINVAL;
+
+	/* reset the stat of current memcg */
+	memcg->pgtable_misplaced = 0;
+
+	return 0;
+}
+#endif /* CONFIG_PGTABLE_BIND */
+
 static struct cftype mem_cgroup_legacy_files[] = {
 	{
 		.name = "usage_in_bytes",
@@ -6308,6 +6353,18 @@ static struct cftype mem_cgroup_legacy_files[] = {
 		.name = "pagecache_limit.sync",
 		.read_u64 = mem_cgroup_allow_pgcache_sync_read,
 		.write_u64 = mem_cgroup_allow_pgcache_sync_write,
+	},
+#endif
+#ifdef CONFIG_PGTABLE_BIND
+	{
+		.name = "pgtable_bind",
+		.write_u64 = memcg_pgtable_bind_write,
+		.read_u64 = memcg_pgtable_bind_read,
+	},
+	{
+		.name = "pgtable_misplaced",
+		.write_u64 = memcg_pgtable_misplaced_write,
+		.read_u64 = memcg_pgtable_misplaced_read,
 	},
 #endif
 #ifdef CONFIG_TEXT_UNEVICTABLE
@@ -8202,6 +8259,18 @@ static struct cftype memory_files[] = {
 		.name = "pagecache_limit.sync",
 		.read_u64 = mem_cgroup_allow_pgcache_sync_read,
 		.write_u64 = mem_cgroup_allow_pgcache_sync_write,
+	},
+#endif
+#ifdef CONFIG_PGTABLE_BIND
+	{
+		.name = "pgtable_bind",
+		.write_u64 = memcg_pgtable_bind_write,
+		.read_u64 = memcg_pgtable_bind_read,
+	},
+	{
+		.name = "pgtable_misplaced",
+		.write_u64 = memcg_pgtable_misplaced_write,
+		.read_u64 = memcg_pgtable_misplaced_read,
 	},
 #endif
 	{ }	/* terminate */
