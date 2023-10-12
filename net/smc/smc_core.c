@@ -1908,6 +1908,7 @@ void smcr_link_down_cond(struct smc_link *lnk)
 {
 	if (smc_link_downing(&lnk->state)) {
 		trace_smcr_link_down(lnk, __builtin_return_address(0));
+		smc_ib_modify_qp_error(lnk);
 		smcr_link_down(lnk);
 	}
 }
@@ -1950,6 +1951,7 @@ static void smc_link_down_work(struct work_struct *work)
 					     link_down_wrk);
 	struct smc_link_group *lgr = link->lgr;
 
+	smc_ib_modify_qp_error(link);
 	if (list_empty(&lgr->list))
 		goto out;
 	wake_up_all(&lgr->llc_msg_waiter);
