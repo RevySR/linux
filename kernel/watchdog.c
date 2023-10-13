@@ -853,7 +853,7 @@ int proc_watchdog_cpumask(struct ctl_table *table, int write,
 	return err;
 }
 
-static const int sixty = 60;
+static int one_hundred_fifty = 150;
 
 static struct ctl_table watchdog_sysctls[] = {
 	{
@@ -872,7 +872,7 @@ static struct ctl_table watchdog_sysctls[] = {
 		.mode		= 0644,
 		.proc_handler	= proc_watchdog_thresh,
 		.extra1		= SYSCTL_ZERO,
-		.extra2		= (void *)&sixty,
+		.extra2		= &one_hundred_fifty,
 	},
 	{
 		.procname	= "watchdog_cpumask",
