@@ -72,6 +72,11 @@ static void smc_connect_work(struct work_struct *);
 /* default use reserve_mode */
 bool reserve_mode = true;
 
+/* default disable SMC-D loopback */
+bool loopback_enable;
+module_param(loopback_enable, bool, 0444);
+MODULE_PARM_DESC(loopback_enable, "Enable SMC-D loopback support");
+
 /* rsvd_ports_base must less than (u16 MAX - 8) */
 u16 rsvd_ports_base = SMC_IWARP_RSVD_PORTS_BASE;
 module_param(rsvd_ports_base, ushort, 0444);

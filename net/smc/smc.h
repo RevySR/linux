@@ -35,6 +35,7 @@ extern struct proto smc_proto;
 extern struct proto smc_proto6;
 
 extern bool reserve_mode;
+extern bool loopback_enable;
 extern u16 rsvd_ports_base;
 
 /* smc sock initialization */

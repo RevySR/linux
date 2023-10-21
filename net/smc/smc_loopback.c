@@ -418,10 +418,13 @@ static void smc_lo_dev_remove(void)
 
 int smc_loopback_init(void)
 {
-	return smc_lo_dev_probe();
+	if (loopback_enable)
+		return smc_lo_dev_probe();
+	return 0;
 }
 
 void smc_loopback_exit(void)
 {
-	smc_lo_dev_remove();
+	if (loopback_enable)
+		smc_lo_dev_remove();
 }
