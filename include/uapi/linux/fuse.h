@@ -462,6 +462,9 @@ struct fuse_file_lock {
 /* Obsolete alias for FUSE_DIRECT_IO_ALLOW_MMAP */
 #define FUSE_DIRECT_IO_RELAX	FUSE_DIRECT_IO_ALLOW_MMAP
 
+#define FUSE_DELETE_STALE	(1ULL << 58)
+/* The 59th bit is left to FUSE_DIO_SHARED_MMAP */
+
 /**
  * CUSE INIT request/reply flags
  *
