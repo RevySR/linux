@@ -915,6 +915,7 @@ struct hnae3_roh_private_info {
 enum hnae3_pflag {
 	HNAE3_PFLAG_LIMIT_PROMISC,
 	HNAE3_PFLAG_FD_QB_ENABLE,
+	HNAE3_PFLAG_ROH_ARP_PROXY_ENABLE,
 	HNAE3_PFLAG_MAX
 };
 
