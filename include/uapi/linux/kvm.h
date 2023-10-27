@@ -1228,6 +1228,7 @@ struct kvm_ppc_resize_hpt {
 #define KVM_CAP_MEMORY_FAULT_INFO 232
 #define KVM_CAP_MEMORY_ATTRIBUTES 233
 #define KVM_CAP_GUEST_MEMFD 234
+#define KVM_CAP_VM_TYPES 235
 
 #define KVM_CAP_HYGON_COCO_EXT 501
 /* support userspace to request firmware to build CSV3 guest's memory space */
