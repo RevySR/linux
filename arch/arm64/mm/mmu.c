@@ -25,6 +25,7 @@
 #include <linux/vmalloc.h>
 #include <linux/set_memory.h>
 #include <linux/kfence.h>
+#include <linux/stop_machine.h>
 
 #include <asm/barrier.h>
 #include <asm/cputype.h>
@@ -71,6 +72,15 @@ EXPORT_SYMBOL(empty_zero_page);
 
 static DEFINE_SPINLOCK(swapper_pgdir_lock);
 static DEFINE_MUTEX(fixmap_lock);
+static DEFINE_MUTEX(split_linear_mapping_lock);
+
+static struct split_memory_params {
+	unsigned long virt;
+	phys_addr_t size;
+	pgprot_t prot;
+
+	atomic_t cpu_count;
+} split_memory_param;
 
 void set_swapper_pgd(pgd_t *pgdp, pgd_t pgd)
 {
@@ -1834,4 +1844,40 @@ void split_linear_mapping(unsigned long virt, phys_addr_t size, pgprot_t prot)
 
 		split_p4d_mapping(pgdp, addr, next, prot, flags);
 	} while (addr = next, addr < end);
+}
+
+static int __split_linear_mapping_after_init(void *data)
+{
+	struct split_memory_params *param = data;
+
+	if (atomic_inc_return(&param->cpu_count) == 1) {
+		split_linear_mapping(param->virt, param->size, param->prot);
+		atomic_inc(&param->cpu_count);
+	} else {
+		while (atomic_read(&param->cpu_count) <= num_online_cpus())
+			cpu_relax();
+	}
+	return 0;
+}
+
+/*
+ * When splitting the kernel page table through the Break-Before-Make principle,
+ * other CPUs might access address that mapped by a cleared entry before
+ * remapping. Thus the stop machine is used to avoid kernel page fault
+ * caused by inter-CPU synchronization.
+ */
+void split_linear_mapping_after_init(unsigned long virt, phys_addr_t size,
+				    pgprot_t prot)
+
+{
+	mutex_lock(&split_linear_mapping_lock);
+
+	split_memory_param.virt = virt;
+	split_memory_param.size = size;
+	split_memory_param.prot = prot;
+	atomic_set(&split_memory_param.cpu_count, 0);
+
+	stop_machine(__split_linear_mapping_after_init, &split_memory_param, cpu_online_mask);
+
+	mutex_unlock(&split_linear_mapping_lock);
 }
