@@ -285,7 +285,8 @@ static inline bool fixup_guest_exit(struct kvm_vcpu *vcpu, u64 *exit_code)
 /* Use the host thread's partid and pmg for world switch */
 static void __mpam_copy_el1_to_el2(void)
 {
-	if (IS_ENABLED(CONFIG_ARM64_MPAM) && mpam_cpus_have_feature())
+	if (IS_ENABLED(CONFIG_ARM64_MPAM) && mpam_cpus_have_feature() &&
+	    static_branch_likely(&mpam_enabled))
 		write_sysreg_s(read_sysreg_s(SYS_MPAM1_EL1), SYS_MPAM2_EL2);
 }
 

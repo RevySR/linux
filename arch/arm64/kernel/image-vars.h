@@ -67,6 +67,7 @@ KVM_NVHE_ALIAS(__hyp_stub_vectors);
 /* Additional static keys for cpufeatures */
 #ifdef CONFIG_ARM64_MPAM
 KVM_NVHE_ALIAS(arm64_mpam_has_hcr);
+KVM_NVHE_ALIAS(mpam_enabled);
 #endif
 
 /* Static keys which are set if a vGIC trap should be handled in hyp. */

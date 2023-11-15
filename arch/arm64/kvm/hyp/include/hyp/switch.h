@@ -177,7 +177,7 @@ static inline void  __activate_traps_mpam(struct kvm_vcpu *vcpu)
 {
 	u64 r = MPAM_SYSREG_TRAP_MPAM0_EL1 | MPAM_SYSREG_TRAP_MPAM1_EL1;
 
-	if (!mpam_cpus_have_feature())
+	if (!mpam_cpus_have_feature() || !static_branch_likely(&mpam_enabled))
 		return;
 
 	/* trap guest access to MPAMIDR_EL1 */
@@ -193,7 +193,7 @@ static inline void  __activate_traps_mpam(struct kvm_vcpu *vcpu)
 
 static inline void __deactivate_traps_mpam(void)
 {
-	if (!mpam_cpus_have_feature())
+	if (!mpam_cpus_have_feature() || !static_branch_likely(&mpam_enabled))
 		return;
 
 	write_sysreg_s(0, SYS_MPAM2_EL2);
