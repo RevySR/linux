@@ -76,6 +76,7 @@ extern void create_pgd_mapping(struct mm_struct *mm, phys_addr_t phys,
 extern void *fixmap_remap_fdt(phys_addr_t dt_phys, int *size, pgprot_t prot);
 extern void mark_linear_text_alias_ro(void);
 extern bool kaslr_requires_kpti(void);
+extern void split_linear_mapping(unsigned long virt, phys_addr_t size, pgprot_t prot);
 
 #define INIT_MM_CONTEXT(name)	\
 	.pgd = init_pg_dir,

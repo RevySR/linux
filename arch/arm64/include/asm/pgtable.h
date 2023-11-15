@@ -256,6 +256,11 @@ static inline pmd_t pmd_mkcont(pmd_t pmd)
 	return __pmd(pmd_val(pmd) | PMD_SECT_CONT);
 }
 
+static inline pmd_t pmd_mknoncont(pmd_t pmd)
+{
+	return __pmd(pmd_val(pmd) & ~PMD_SECT_CONT);
+}
+
 static inline pte_t pte_mkdevmap(pte_t pte)
 {
 	return set_pte_bit(pte, __pgprot(PTE_DEVMAP | PTE_SPECIAL));
@@ -491,6 +496,7 @@ static inline int pmd_trans_huge(pmd_t pmd)
 #define pmd_mkclean(pmd)	pte_pmd(pte_mkclean(pmd_pte(pmd)))
 #define pmd_mkdirty(pmd)	pte_pmd(pte_mkdirty(pmd_pte(pmd)))
 #define pmd_mkyoung(pmd)	pte_pmd(pte_mkyoung(pmd_pte(pmd)))
+#define pmd_exec(pmd)		(!(pmd_val(pmd) & PMD_TABLE_PXN))
 
 static inline pmd_t pmd_mkinvalid(pmd_t pmd)
 {
@@ -685,6 +691,7 @@ static inline unsigned long pmd_page_vaddr(pmd_t pmd)
 #define pud_valid(pud)		pte_valid(pud_pte(pud))
 #define pud_user(pud)		pte_user(pud_pte(pud))
 #define pud_user_exec(pud)	pte_user_exec(pud_pte(pud))
+#define pud_exec(pud)		(!(pud_val(pud) & PUD_TABLE_PXN))
 
 static inline void set_pud(pud_t *pudp, pud_t pud)
 {
@@ -752,6 +759,7 @@ static inline pmd_t *pud_pgtable(pud_t pud)
 #define p4d_none(p4d)		(!p4d_val(p4d))
 #define p4d_bad(p4d)		(!(p4d_val(p4d) & 2))
 #define p4d_present(p4d)	(p4d_val(p4d))
+#define p4d_exec(p4d)		(!(p4d_val(p4d) & P4D_TABLE_PXN))
 
 static inline void set_p4d(p4d_t *p4dp, p4d_t p4d)
 {
@@ -798,6 +806,7 @@ static inline pud_t *p4d_pgtable(p4d_t p4d)
 #define pgd_page_paddr(pgd)	({ BUILD_BUG(); 0;})
 
 /* Match pud_offset folding in <asm/generic/pgtable-nopud.h> */
+#define pud_offset_phys(dir, addr)	NULL
 #define pud_set_fixmap(addr)		NULL
 #define pud_set_fixmap_offset(pgdp, addr)	((pud_t *)pgdp)
 #define pud_clear_fixmap()
