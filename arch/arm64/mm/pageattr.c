@@ -33,6 +33,15 @@ bool can_set_direct_map(void)
 	       arm64_kfence_can_set_direct_map();
 }
 
+/*
+ * If rodata_full is enabled, the mapping of linear mapping range can also be
+ * block & cont mapping, here decouples the rodata_full and debug_pagealloc.
+ */
+bool can_set_block_and_cont_map(void)
+{
+	return !debug_pagealloc_enabled() && !arm64_kfence_can_set_direct_map();
+}
+
 static int change_page_range(pte_t *ptep, unsigned long addr, void *data)
 {
 	struct page_change_data *cdata = data;
@@ -108,6 +117,16 @@ static int change_memory_common(unsigned long addr, int numpages,
 	if (rodata_full && (pgprot_val(set_mask) == PTE_RDONLY ||
 			    pgprot_val(clear_mask) == PTE_RDONLY)) {
 		for (i = 0; i < area->nr_pages; i++) {
+			unsigned long virt = (unsigned long)page_address(area->pages[i]);
+
+			/*
+			 * Only split the linear mapping when the attribute is
+			 * changed to read only. Other situations do not suffer
+			 * the mapping type.
+			 */
+			if (pgprot_val(set_mask) == PTE_RDONLY && can_set_block_and_cont_map())
+				split_linear_mapping_after_init(virt, PAGE_SIZE, PAGE_KERNEL);
+
 			__change_memory_common((u64)page_address(area->pages[i]),
 					       PAGE_SIZE, set_mask, clear_mask);
 		}
