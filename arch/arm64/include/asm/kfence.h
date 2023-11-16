@@ -14,7 +14,18 @@
 
 static inline bool arch_kfence_init_pool(struct kfence_pool_area *kpa)
 {
-	return can_set_direct_map();
+	unsigned long addr = (unsigned long)kpa->addr;
+
+	if (!can_set_block_and_cont_map())
+		return false;
+
+	/*
+	 * If the allocated range is block and contiguous mapping, split it
+	 * to pte level before re-initializing kfence pages.
+	 */
+	split_linear_mapping_after_init(addr, kpa->pool_size, PAGE_KERNEL);
+
+	return true;
 }
 
 static inline bool kfence_protect_page(unsigned long addr, bool protect)

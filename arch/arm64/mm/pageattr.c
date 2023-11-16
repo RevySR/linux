@@ -39,7 +39,7 @@ bool can_set_direct_map(void)
  */
 bool can_set_block_and_cont_map(void)
 {
-	return !debug_pagealloc_enabled() && !arm64_kfence_can_set_direct_map();
+	return !debug_pagealloc_enabled();
 }
 
 static int change_page_range(pte_t *ptep, unsigned long addr, void *data)
