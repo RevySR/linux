@@ -60,6 +60,7 @@
 #include <linux/pagewalk.h>
 #include <linux/shmem_fs.h>
 #include <linux/sysctl.h>
+#include <linux/set_memory.h>
 #include "swap.h"
 #include "internal.h"
 #include "ras/ras_event.h"
@@ -2459,10 +2460,17 @@ static void memory_failure_work_func(struct work_struct *work)
 		raw_spin_unlock_irqrestore(&mf_cpu->lock, proc_flags);
 		if (!gotten)
 			break;
-		if (entry.flags & MF_SOFT_OFFLINE)
+		if (entry.flags & MF_SOFT_OFFLINE) {
 			soft_offline_page(entry.pfn, entry.flags);
-		else
-			memory_failure(entry.pfn, entry.flags);
+		} else if (!memory_failure(entry.pfn, entry.flags)) {
+			/*
+			 * If the pfn reported by ghes can not be recovered, set
+			 * the corresponding page table of linear mapping range
+			 * to be non-present, which avoids the speculative
+			 * access of corrupted memory.
+			 */
+			set_memory_np((unsigned long)page_to_virt(pfn_to_page(entry.pfn)), 1);
+		}
 	}
 }
 
