@@ -22,6 +22,7 @@ struct netns_smc {
 	int				sysctl_smcr_testlink_time;
 	int				sysctl_wmem;
 	int				sysctl_rmem;
+	int				sysctl_max_links_per_lgr;
 
 	CK_KABI_RESERVE(1)
 	CK_KABI_RESERVE(2)
