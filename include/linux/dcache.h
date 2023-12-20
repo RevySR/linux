@@ -296,6 +296,7 @@ extern char *d_absolute_path(const struct path *, char *, int);
 extern char *d_path(const struct path *, char *, int);
 extern char *dentry_path_raw(const struct dentry *, char *, int);
 extern char *dentry_path(const struct dentry *, char *, int);
+extern char *d_absolute_path_locked(const struct path *, char *, int);
 
 /* Allocation counts.. */
 
