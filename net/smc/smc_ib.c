@@ -311,39 +311,36 @@ static int smc_ib_determine_gid_rcu(const struct net_device *ndev,
 	 * do not record the real MAC GID of eRDMA iWARP, but convert the
 	 * IPv4 address of the net_device corresponding to eRDMA iWARP
 	 * into an IPv4 GID and record it.
-	 *
-	 * A prerequisite for this is that eRDMA iWARP will only be selected
-	 * for the reason that its corresponding net_device is the net_device
-	 * of clcsock, which means that we are not allowed to bind an eRDMA
-	 * iWARP device with another ethernet device through pnet_id.
 	 */
 	if (smcrv2 && attr->gid_type == IB_GID_TYPE_IB) {
 		struct in_device *in_dev = __in_dev_get_rcu(ndev);
 		struct net *net = dev_net(ndev);
 		const struct in_ifaddr *ifa;
-		bool ip_match = false;
+		bool subnet_match = false;
 
-		if (!in_dev || smcrv2->saddr == cpu_to_be32(INADDR_NONE))
+		if (!in_dev)
 			goto out;
 		in_dev_for_each_ifa_rcu(ifa, in_dev) {
-			if (ifa->ifa_address != smcrv2->saddr)
+			if (!inet_ifa_match(smcrv2->saddr, ifa))
 				continue;
-			ip_match = true;
+			subnet_match = true;
 			break;
 		}
-		if (!ip_match)
+		if (!subnet_match ||
+		    ifa->ifa_address == cpu_to_be32(INADDR_NONE))
 			goto out;
-		if (smcrv2->daddr && smc_ib_find_route(net, smcrv2->saddr,
+		if (smcrv2->daddr && smc_ib_find_route(net, ifa->ifa_address,
 						       smcrv2->daddr,
 						       smcrv2->nexthop_mac,
 						       &smcrv2->uses_gateway))
 			goto out;
 
 		if (gid)
-			ipv6_addr_set_v4mapped(smcrv2->saddr, (struct in6_addr *)gid);
+			ipv6_addr_set_v4mapped(ifa->ifa_address, (struct in6_addr *)gid);
 		if (sgid_index)
 			*sgid_index = attr->index;
 
+		/* save the GID of type IB_GID_TYPE_IB */
 		memcpy(smcrv2->eiwarp_gid, &attr->gid, SMC_GID_SIZE);
 		return 0;
 	}
