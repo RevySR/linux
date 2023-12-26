@@ -11,6 +11,9 @@
 #include <linux/irqreturn.h>
 #include <linux/delay.h>
 #include <linux/pci.h>
+#include <linux/sort.h>
+#include <linux/bsearch.h>
+#include <linux/rwlock.h>
 
 #include "sp-dev.h"
 #include "psp-dev.h"
@@ -27,8 +30,23 @@ int is_hygon_psp;
 enum HYGON_PSP_OPCODE {
 	HYGON_PSP_MUTEX_ENABLE = 1,
 	HYGON_PSP_MUTEX_DISABLE,
+	HYGON_VPSP_CTRL_OPT,
 	HYGON_PSP_OPCODE_MAX_NR,
 };
+
+enum VPSP_DEV_CTRL_OPCODE {
+	VPSP_OP_VID_ADD,
+	VPSP_OP_VID_DEL,
+};
+
+struct vpsp_dev_ctrl {
+	unsigned char op;
+	union {
+		unsigned int vid;
+		unsigned char reserved[128];
+	} data;
+};
+
 int psp_mutex_enabled;
 extern struct mutex sev_cmd_mutex;
 
@@ -270,9 +288,141 @@ static ssize_t write_psp(struct file *file, const char __user *buf, size_t count
 	return written;
 }
 
+DEFINE_RWLOCK(vpsp_rwlock);
+
+/* VPSP_VID_MAX_ENTRIES determines the maximum number of vms that can set vid.
+ * but, the performance of finding vid is determined by g_vpsp_vid_num,
+ * so VPSP_VID_MAX_ENTRIES can be set larger.
+ */
+#define VPSP_VID_MAX_ENTRIES    2048
+#define VPSP_VID_NUM_MAX        64
+
+struct vpsp_vid_entry {
+	uint32_t vid;
+	pid_t pid;
+};
+static struct vpsp_vid_entry g_vpsp_vid_array[VPSP_VID_MAX_ENTRIES];
+static uint32_t g_vpsp_vid_num;
+static int compare_vid_entries(const void *a, const void *b)
+{
+	return ((struct vpsp_vid_entry *)a)->pid - ((struct vpsp_vid_entry *)b)->pid;
+}
+static void swap_vid_entries(void *a, void *b, int size)
+{
+	struct vpsp_vid_entry entry;
+
+	memcpy(&entry, a, size);
+	memcpy(a, b, size);
+	memcpy(b, &entry, size);
+}
+
+/**
+ * When the virtual machine executes the 'tkm' command,
+ * it needs to retrieve the corresponding 'vid'
+ * by performing a binary search using 'kvm->userspace_pid'.
+ */
+int vpsp_get_vid(uint32_t *vid, pid_t pid)
+{
+	struct vpsp_vid_entry new_entry = {.pid = pid};
+	struct vpsp_vid_entry *existing_entry = NULL;
+
+	read_lock(&vpsp_rwlock);
+	existing_entry = bsearch(&new_entry, g_vpsp_vid_array, g_vpsp_vid_num,
+				sizeof(struct vpsp_vid_entry), compare_vid_entries);
+	read_unlock(&vpsp_rwlock);
+
+	if (!existing_entry)
+		return -ENOENT;
+	if (vid) {
+		*vid = existing_entry->vid;
+		pr_debug("PSP: %s %d, by pid %d\n", __func__, *vid, pid);
+	}
+	return 0;
+}
+EXPORT_SYMBOL_GPL(vpsp_get_vid);
+
+/**
+ * Upon qemu startup, this section checks whether
+ * the '-device psp,vid' parameter is specified.
+ * If set, it utilizes the 'vpsp_add_vid' function
+ * to insert the 'vid' and 'pid' values into the 'g_vpsp_vid_array'.
+ * The insertion is done in ascending order of 'pid'.
+ */
+static int vpsp_add_vid(uint32_t vid)
+{
+	pid_t cur_pid = task_pid_nr(current);
+	struct vpsp_vid_entry new_entry = {.vid = vid, .pid = cur_pid};
+
+	if (vpsp_get_vid(NULL, cur_pid) == 0)
+		return -EEXIST;
+	if (g_vpsp_vid_num == VPSP_VID_MAX_ENTRIES)
+		return -ENOMEM;
+	if (vid >= VPSP_VID_NUM_MAX)
+		return -EINVAL;
+
+	write_lock(&vpsp_rwlock);
+	memcpy(&g_vpsp_vid_array[g_vpsp_vid_num++], &new_entry, sizeof(struct vpsp_vid_entry));
+	sort(g_vpsp_vid_array, g_vpsp_vid_num, sizeof(struct vpsp_vid_entry),
+				compare_vid_entries, swap_vid_entries);
+	pr_info("PSP: add vid %d, by pid %d, total vid num is %d\n", vid, cur_pid, g_vpsp_vid_num);
+	write_unlock(&vpsp_rwlock);
+	return 0;
+}
+
+/**
+ * Upon the virtual machine is shut down,
+ * the 'vpsp_del_vid' function is employed to remove
+ * the 'vid' associated with the current 'pid'.
+ */
+static int vpsp_del_vid(void)
+{
+	pid_t cur_pid = task_pid_nr(current);
+	int i, ret = -ENOENT;
+
+	write_lock(&vpsp_rwlock);
+	for (i = 0; i < g_vpsp_vid_num; ++i) {
+		if (g_vpsp_vid_array[i].pid == cur_pid) {
+			--g_vpsp_vid_num;
+			pr_info("PSP: delete vid %d, by pid %d, total vid num is %d\n",
+				g_vpsp_vid_array[i].vid, cur_pid, g_vpsp_vid_num);
+			memcpy(&g_vpsp_vid_array[i], &g_vpsp_vid_array[i + 1],
+				sizeof(struct vpsp_vid_entry) * (g_vpsp_vid_num - i));
+			ret = 0;
+			goto end;
+		}
+	}
+
+end:
+	write_unlock(&vpsp_rwlock);
+	return ret;
+}
+
+static int do_vpsp_op_ioctl(struct vpsp_dev_ctrl *ctrl)
+{
+	int ret = 0;
+	unsigned char op = ctrl->op;
+
+	switch (op) {
+	case VPSP_OP_VID_ADD:
+		ret = vpsp_add_vid(ctrl->data.vid);
+		break;
+
+	case VPSP_OP_VID_DEL:
+		ret = vpsp_del_vid();
+		break;
+
+	default:
+		ret = -EINVAL;
+		break;
+	}
+	return ret;
+}
+
 static long ioctl_psp(struct file *file, unsigned int ioctl, unsigned long arg)
 {
 	unsigned int opcode = 0;
+	struct vpsp_dev_ctrl vpsp_ctrl_op;
+	int ret = -EFAULT;
 
 	if (_IOC_TYPE(ioctl) != HYGON_PSP_IOC_TYPE) {
 		printk(KERN_ERR "%s: invalid ioctl type: 0x%x\n", __func__, _IOC_TYPE(ioctl));
@@ -289,6 +439,7 @@ static long ioctl_psp(struct file *file, unsigned int ioctl, unsigned long arg)
 		// Wait 10ms just in case someone is right before getting the psp lock.
 		mdelay(10);
 		psp_mutex_unlock(&psp_misc->data_pg_aligned->mb_mutex);
+		ret = 0;
 		break;
 
 	case HYGON_PSP_MUTEX_DISABLE:
@@ -300,13 +451,21 @@ static long ioctl_psp(struct file *file, unsigned int ioctl, unsigned long arg)
 		// Wait 10ms just in case someone is right before getting the sev lock.
 		mdelay(10);
 		mutex_unlock(&sev_cmd_mutex);
+		ret = 0;
+		break;
+
+	case HYGON_VPSP_CTRL_OPT:
+		if (copy_from_user(&vpsp_ctrl_op, (void __user *)arg,
+						sizeof(struct vpsp_dev_ctrl)))
+			return -EFAULT;
+		ret = do_vpsp_op_ioctl(&vpsp_ctrl_op);
 		break;
 
 	default:
 		printk(KERN_ERR "%s: invalid ioctl number: %d\n", __func__, opcode);
 		return -EINVAL;
 	}
-	return 0;
+	return ret;
 }
 
 static const struct file_operations psp_fops = {
