@@ -14,7 +14,7 @@
 # define buildid .local
 
 %global dist %%DIST%%
-%define rpmversion %%DIST_KERNELVERSION%%
+%define kernelversion %%DIST_KERNELVERSION%%
 %define pkgrelease %%DIST_PKGRELEASEVERION%%
 
 # allow pkg_release to have configurable %%{?dist} tag
@@ -57,9 +57,6 @@
 #
 # should we do C=1 builds with sparse
 %define with_sparse    %{?_with_sparse:       1} %{?!_with_sparse:       0}
-
-# The kernel tarball/base version
-%define kversion 5.10
 
 %define with_gcov %{?_with_gcov: 1} %{?!_with_gcov: 0}
 
@@ -171,7 +168,7 @@ Name: kernel%{?variant}
 Group: System Environment/Kernel
 License: GPLv2 and Redistributable, no modification permitted
 URL: http://www.kernel.org/
-Version: %{rpmversion}
+Version: %{kernelversion}
 Release: %{pkg_release}
 Summary: The Linux kernel, based on version %{version}, heavily modified with backports
 # DO NOT CHANGE THE 'ExclusiveArch' LINE TO TEMPORARILY EXCLUDE AN ARCHITECTURE BUILD.
@@ -246,7 +243,7 @@ BuildRequires: xmlto
 BuildRequires: asciidoc
 %endif
 
-Source0: linux-%{rpmversion}-%{pkg_release}.tar.xz
+Source0: linux-%{kernelversion}-%{pkg_release}.tar.xz
 
 %define modsign_cmd %{SOURCE18}
 
@@ -290,8 +287,8 @@ enterprise customers, etc.
 # macros defined above.
 #
 %define kernel_reqprovconf \
-Provides: %{name} = %{rpmversion}-%{pkg_release}\
-Provides: %{name}-%{_target_cpu} = %{rpmversion}-%{pkg_release}%{?1:+%{1}}\
+Provides: %{name} = %{kernelversion}-%{pkg_release}\
+Provides: %{name}-%{_target_cpu} = %{kernelversion}-%{pkg_release}%{?1:+%{1}}\
 Provides: kernel-drm-nouveau = 16\
 Provides: %{name}-uname-r = %{KVERREL}%{?variant}%{?1:+%{1}}\
 Requires(pre): %{kernel_prereq}\
@@ -329,8 +326,8 @@ Group: Development/System
 Obsoletes: glibc-kernheaders < 3.0-46
 Provides: glibc-kernheaders = 3.0-46
 %if "0%{?variant}"
-Obsoletes: kernel-headers < %{rpmversion}-%{pkg_release}
-Provides: kernel-headers = %{rpmversion}-%{pkg_release}
+Obsoletes: kernel-headers < %{kernelversion}-%{pkg_release}
+Provides: kernel-headers = %{kernelversion}-%{pkg_release}
 %endif
 %description headers
 Kernel-headers includes the C header files that specify the interface
@@ -611,8 +608,8 @@ ApplyOptionalPatch()
   fi
 }
 
-%setup -q -n %{name}-%{rpmversion}-%{pkg_release} -c
-mv linux-%{rpmversion}-%{pkg_release} linux-%{KVERREL}
+%setup -q -n %{name}-%{kernelversion}-%{pkg_release} -c
+mv linux-%{kernelversion}-%{pkg_release} linux-%{KVERREL}
 
 cd linux-%{KVERREL}
 
@@ -1172,7 +1169,7 @@ find Documentation -type d | xargs chmod u+w
 cd linux-%{KVERREL}
 
 %if %{with_doc}
-docdir=$RPM_BUILD_ROOT%{_datadir}/doc/kernel-doc-%{rpmversion}
+docdir=$RPM_BUILD_ROOT%{_datadir}/doc/kernel-doc-%{kernelversion}
 
 # copy the source over
 mkdir -p $docdir
@@ -1396,9 +1393,9 @@ fi
 %if %{with_doc}
 %files doc
 %defattr(-,root,root)
-%{_datadir}/doc/kernel-doc-%{rpmversion}/Documentation/*
-%dir %{_datadir}/doc/kernel-doc-%{rpmversion}/Documentation
-%dir %{_datadir}/doc/kernel-doc-%{rpmversion}
+%{_datadir}/doc/kernel-doc-%{kernelversion}/Documentation/*
+%dir %{_datadir}/doc/kernel-doc-%{kernelversion}/Documentation
+%dir %{_datadir}/doc/kernel-doc-%{kernelversion}
 %endif
 
 %if %{with_perf}
