@@ -156,6 +156,23 @@
 #define X86_FEATURE_PHE_EN		( 5*32+11) /* PHE enabled */
 #define X86_FEATURE_PMM			( 5*32+12) /* PadLock Montgomery Multiplier */
 #define X86_FEATURE_PMM_EN		( 5*32+13) /* PMM enabled */
+#define X86_FEATURE_ZX_FMA		(5*32+15) /* FMA supported */
+#define X86_FEATURE_PARALLAX	(5*32+16) /* Adaptive P-state control present */
+#define X86_FEATURE_PARALLAX_EN (5*32+17) /* Adaptive P-state control enabled */
+#define X86_FEATURE_OVERSTRESS	(5*32+18) /* Overstress Feature for auto overclock present */
+#define X86_FEATURE_OVERSTRESS_EN (5*32+19) /* Overstress Feature for auto overclock enabled */
+#define X86_FEATURE_TM3        (5*32+20) /* Thermal Monitor 3 present */
+#define X86_FEATURE_TM3_EN		(5*32+21) /* Thermal Monitor 3 enabled */
+#define X86_FEATURE_RNG2		(5*32+22) /* 2nd generation of RNG present */
+#define X86_FEATURE_RNG2_EN    (5*32+23) /* 2nd generation of RNG enabled */
+#define X86_FEATURE_SEM        (5*32+24) /* SME feature present */
+#define X86_FEATURE_PHE2		(5*32+25) /* SHA384 and SHA 512 present */
+#define X86_FEATURE_PHE2_EN    (5*32+26) /* SHA384 and SHA 512 enabled */
+#define X86_FEATURE_XMODX      (5*32+27) /* "rsa" XMODEXP and MONTMUL2 are present */
+#define X86_FEATURE_XMODX_EN   (5*32+28) /* "rsa_en" XMODEXP and MONTMUL2 are enabled */
+#define X86_FEATURE_VEX        (5*32+29) /* VEX instructions are present */
+#define X86_FEATURE_VEX_EN		(5*32+30) /* VEX instructions are enabled */
+#define X86_FEATURE_STK        (5*32+31) /* STK are present */
 
 /* More extended AMD flags: CPUID level 0x80000001, ECX, word 6 */
 #define X86_FEATURE_LAHF_LM		( 6*32+ 0) /* LAHF/SAHF in long mode */
