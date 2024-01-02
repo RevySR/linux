@@ -8237,6 +8237,9 @@ static int __pagecache_shrink(struct mem_cgroup *memcg,
 			pgdat = NODE_DATA(nid);
 		}
 
+		/* handle sc->may_deactivate etc. */
+		prepare_scan_count(pgdat, sc);
+
 		tmp = mem_cgroup_iter(new, NULL, NULL);
 		do {
 
