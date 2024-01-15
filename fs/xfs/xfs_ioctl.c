@@ -2171,6 +2171,24 @@ xfs_file_ioctl(
 		return error;
 	}
 
+	case XFS_IOC_SET_REFLINK_FLAGS: {
+		uint32_t in;
+
+		if (get_user(in, (uint32_t __user *)arg))
+			return -EFAULT;
+
+		xfs_ilock(ip, XFS_ILOCK_EXCL);
+		ip->i_reflink_flags = in;
+		xfs_iunlock(ip, XFS_ILOCK_EXCL);
+		return 0;
+	}
+
+	case XFS_IOC_GET_REFLINK_FLAGS: {
+		if (put_user(ip->i_reflink_flags, (uint32_t __user *)arg))
+			return -EFAULT;
+		return 0;
+	}
+
 	default:
 		return -ENOTTY;
 	}
