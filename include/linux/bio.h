@@ -10,7 +10,15 @@
 #include <linux/blk_types.h>
 #include <linux/uio.h>
 
+#ifdef CONFIG_THP_SWAP
+#if HPAGE_PMD_NR > 256
+#define BIO_MAX_VECS		(HPAGE_PMD_NR * 1U)
+#else
 #define BIO_MAX_VECS		256U
+#endif
+#else
+#define BIO_MAX_VECS		256U
+#endif
 
 struct queue_limits;
 
