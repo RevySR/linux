@@ -646,10 +646,10 @@ static bool get_builtin_microcode(struct cpio_data *cp)
 
 	if (x86_cpuid_vendor() == X86_VENDOR_AMD && family >= 0x15)
 		snprintf(fw_name, sizeof(fw_name),
-			 "amd-ucode/microcode_amd_fam%.2xh.bin", family);
+			 "amd-ucode/microcode_amd_fam%02hhxh.bin", family);
 	else if (x86_cpuid_vendor() == X86_VENDOR_HYGON)
 		snprintf(fw_name, sizeof(fw_name),
-			 "hygon-ucode/microcode_hygon_fam%.2xh.bin", family);
+			 "hygon-ucode/microcode_hygon_fam%02hhxh.bin", family);
 
 	if (firmware_request_builtin(&fw, fw_name)) {
 		cp->size = fw.size;
