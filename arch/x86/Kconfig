@@ -1320,6 +1320,10 @@ config MICROCODE_INITRD32
 	def_bool y
 	depends on MICROCODE && X86_32 && BLK_DEV_INITRD
 
+config MICROCODE_INITRD32
+	def_bool y
+	depends on MICROCODE && X86_32 && BLK_DEV_INITRD
+
 config MICROCODE_LATE_LOADING
 	bool "Late microcode loading (DANGEROUS)"
 	default n
