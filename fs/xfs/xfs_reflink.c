@@ -1710,6 +1710,15 @@ xfs_reflink_remap_prep(
 	if (IS_DAX(inode_in) != IS_DAX(inode_out))
 		goto out_unlock;
 
+	/*
+	 * For inodes flagged with XFS_REFLINK_{PRIMARY, SECONDARY},
+	 * users do not need persistence, so we can apply fast reflink,
+	 * i.e., write protect without flushing dirty.
+	 */
+	if (src->i_reflink_flags & (XFS_REFLINK_PRIMARY |
+				    XFS_REFLINK_SECONDARY))
+		remap_flags |= REMAP_FILE_FAST_REFLINK;
+
 	if (!IS_DAX(inode_in))
 		ret = generic_remap_file_range_prep(file_in, pos_in, file_out,
 				pos_out, len, remap_flags);

@@ -495,6 +495,8 @@ struct address_space {
 	struct rw_semaphore	i_mmap_rwsem;
 	void			*private_data;
 
+	struct fast_reflink_work *fast_reflink_work;
+
 	CK_KABI_RESERVE(1)
 	CK_KABI_RESERVE(2)
 	CK_KABI_RESERVE(3)
@@ -1911,6 +1913,8 @@ struct dir_context {
  * btrfs clone/dedupe ioctls.
  */
 #define REMAP_FILE_ADVISORY		(REMAP_FILE_CAN_SHORTEN)
+
+#define REMAP_FILE_FAST_REFLINK		(1 << 2)
 
 /*
  * These flags control the behavior of vfs_copy_file_range().

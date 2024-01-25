@@ -6640,3 +6640,336 @@ void ptlock_free(struct ptdesc *ptdesc)
 	kmem_cache_free(page_ptl_cachep, ptdesc->ptl);
 }
 #endif
+
+/* Fast reflink */
+static inline bool is_pmd_tbl_wrprotect(pmd_t pmd)
+{
+#if defined(CONFIG_ARM64)
+#define PMD_SECT_AP_WRPROTECT (_AT(pmdval_t, 2) << 61)	/* APTable[1:0] */
+	return (pmd_val(pmd) & PMD_TABLE_BIT) &&
+		(pmd_val(pmd) & PMD_SECT_AP_WRPROTECT);
+#elif defined(CONFIG_X86)
+	return (pmd_flags(pmd) & ~_PAGE_USER) == (_KERNPG_TABLE & ~_PAGE_RW);
+#else
+	return false;
+#endif
+}
+
+static inline void pmdp_set_tbl_wrprotect(struct mm_struct *mm,
+					  unsigned long addr, pmd_t *pmdp)
+{
+#if defined(CONFIG_ARM64)
+	set_pmd(pmdp, __pmd(pmd_val(*pmdp) | PMD_SECT_AP_WRPROTECT));
+#elif defined(CONFIG_X86)
+	pmdp_set_wrprotect(mm, addr, pmdp);
+#endif
+}
+
+static inline void pmdp_clear_tbl_wrprotect(pmd_t *pmdp,
+					    struct vm_area_struct *vma)
+{
+#if defined(CONFIG_ARM64)
+	set_pmd(pmdp, __pmd(pmd_val(*pmdp) & ~PMD_SECT_AP_WRPROTECT));
+#elif defined(CONFIG_X86)
+	set_pmd(pmdp, pmd_mkwrite(*pmdp, vma));
+#endif
+}
+
+bool is_pmd_fast_reflink(pmd_t pmd)
+{
+	return !is_swap_pmd(pmd) && !pmd_trans_huge(pmd) &&
+		!pmd_devmap(pmd) && is_pmd_tbl_wrprotect(pmd);
+}
+
+static int follow_pmd(struct mm_struct *mm, unsigned long address,
+		      pmd_t **pmdp)
+{
+	pgd_t *pgd;
+	p4d_t *p4d;
+	pud_t *pud;
+	pmd_t *pmd;
+
+	pgd = pgd_offset(mm, address);
+	if (pgd_none(*pgd) || unlikely(pgd_bad(*pgd)))
+		goto out;
+
+	p4d = p4d_offset(pgd, address);
+	if (p4d_none(*p4d) || unlikely(p4d_bad(*p4d)))
+		goto out;
+
+	pud = pud_offset(p4d, address);
+	if (pud_none(*pud) || unlikely(pud_bad(*pud)))
+		goto out;
+
+	pmd = pmd_offset(pud, address);
+	if (pmd_huge(*pmd))
+		goto found;
+
+	if (pmd_none(*pmd) || unlikely(pmd_bad(*pmd)))
+		goto out;
+
+found:
+	*pmdp = pmd;
+	return 0;
+out:
+	return -EINVAL;
+}
+
+static void fr_apply_pte_range(struct vm_area_struct *vma, pmd_t *pmd,
+			       unsigned long start, unsigned long end)
+{
+	pte_t *start_pte;
+	pte_t *ptep, pte;
+	spinlock_t *ptl;
+
+	start_pte = pte_offset_map_lock(vma->vm_mm, pmd, start, &ptl);
+	ptep = start_pte;
+
+	do {
+		pte = *ptep;
+		if (pte_none(pte))
+			continue;
+
+		if (!pte_dirty(pte) && !pte_write(pte))
+			continue;
+
+		/* The caller is responsible for tlb flush. */
+		pte = ptep_get_and_clear(vma->vm_mm, start, ptep);
+		pte = pte_wrprotect(pte);
+		pte = pte_mkclean(pte);
+		set_pte_at(vma->vm_mm, start, ptep, pte);
+	} while (ptep++, start += PAGE_SIZE, start != end);
+
+	pte_unmap_unlock(start_pte, ptl);
+}
+
+static void fr_apply_vma(struct vm_area_struct *vma)
+{
+	struct mm_struct *mm = vma->vm_mm;
+	unsigned long start = vma->vm_start;
+	unsigned long end = vma->vm_end;
+	unsigned long next;
+	spinlock_t *pml;
+	pmd_t *pmdp = NULL;
+	pmd_t pmd;
+	bool applied = false;
+
+	do {
+		next = pmd_addr_end(start, end);
+		if (follow_pmd(mm, start, &pmdp))
+			continue;
+
+		pml = pmd_lock(mm, pmdp);
+		if (pmd_huge(*pmdp)) {
+#ifdef CONFIG_FS_DAX_PMD
+			if (!pmd_dirty(*pmdp) && !pmd_write(*pmdp))
+				goto unlock_pmd;
+
+			pmd = pmdp_invalidate(vma, start, pmdp);
+			pmd = pmd_wrprotect(pmd);
+			pmd = pmd_mkclean(pmd);
+			set_pmd_at(mm, start, pmdp, pmd);
+unlock_pmd:
+#endif
+			spin_unlock(pml);
+			continue;
+		}
+
+		if (pmd_none(*pmdp) || unlikely(pmd_bad(*pmdp))) {
+			spin_unlock(pml);
+			continue;
+		}
+
+		if (IS_ALIGNED(start, PMD_SIZE) && (start + PMD_SIZE <= end)) {
+			pmdp_set_tbl_wrprotect(mm, start, pmdp);
+			flush_tlb_range(vma, start, start + PMD_SIZE);
+			applied = true;
+			spin_unlock(pml);
+			continue;
+		} else {
+			spin_unlock(pml);
+			fr_apply_pte_range(vma, pmdp, start, next);
+			flush_tlb_range(vma, start, next);
+			continue;
+		}
+	} while (start = next, start != end);
+
+	if (applied)
+		vma->fast_reflink = applied;
+}
+
+static void fast_reflink_fixup(struct work_struct *work);
+int fast_reflink_apply(struct address_space *mapping, pgoff_t start,
+		       pgoff_t end)
+{
+	struct vm_area_struct *vma;
+
+	i_mmap_lock_read(mapping);
+	vma_interval_tree_foreach(vma, &mapping->i_mmap, start, end) {
+		if (!(vma->vm_flags & VM_SHARED))
+			continue;
+
+		fr_apply_vma(vma);
+	}
+	i_mmap_unlock_read(mapping);
+
+	if (!mapping->fast_reflink_work) {
+		struct fast_reflink_work *fr_work;
+
+		fr_work = kmalloc(sizeof(*fr_work), GFP_KERNEL|__GFP_NOFAIL);
+		INIT_WORK(&fr_work->work, fast_reflink_fixup);
+		fr_work->mapping = mapping;
+		mapping->fast_reflink_work = fr_work;
+	}
+	schedule_work(&mapping->fast_reflink_work->work);
+
+	return 0;
+}
+
+static void fr_fixup_pte_range(struct vm_area_struct *vma, pmd_t *pmd,
+			       unsigned long start, unsigned long end)
+{
+	pte_t *start_pte;
+	pte_t *ptep, pte;
+	spinlock_t *ptl;
+
+	start_pte = pte_offset_map_lock(vma->vm_mm, pmd, start, &ptl);
+	ptep = start_pte;
+
+	/* Already fixed up */
+	if (unlikely(!is_pmd_fast_reflink(*pmd)))
+		goto out;
+
+	do {
+		pte = *ptep;
+		if (pte_none(pte))
+			continue;
+
+		if (!pte_dirty(pte) && !pte_write(pte))
+			continue;
+
+		/* The caller is responsible for tlb flush. */
+		pte = ptep_get_and_clear(vma->vm_mm, start, ptep);
+		pte = pte_wrprotect(pte);
+		pte = pte_mkclean(pte);
+		set_pte_at(vma->vm_mm, start, ptep, pte);
+	} while (ptep++, start += PAGE_SIZE, start != end);
+
+out:
+	pte_unmap_unlock(start_pte, ptl);
+}
+
+static void fr_fixup_pmd_range(struct vm_area_struct *vma, pud_t *pud,
+			       unsigned long start, unsigned long end)
+{
+	pmd_t *pmd;
+	unsigned long next;
+	spinlock_t *pml;
+
+	pmd = pmd_offset(pud, start);
+	do {
+		next = pmd_addr_end(start, end);
+		if (pmd_none(*pmd))
+			continue;
+
+		pml = pmd_lock(vma->vm_mm, pmd);
+		if (is_pmd_fast_reflink(*pmd)) {
+			spin_unlock(pml);
+			fr_fixup_pte_range(vma, pmd, start, next);
+
+			pml = pmd_lock(vma->vm_mm, pmd);
+			if (is_pmd_fast_reflink(*pmd))
+				pmdp_clear_tbl_wrprotect(pmd, vma);
+		}
+		spin_unlock(pml);
+	} while (pmd++, start = next, start != end);
+}
+
+static void fr_fixup_pud_range(struct vm_area_struct *vma, p4d_t *p4d,
+			       unsigned long start, unsigned long end)
+{
+	pud_t *pud;
+	unsigned long next;
+
+	pud = pud_offset(p4d, start);
+	do {
+		next = pud_addr_end(start, end);
+		if (pud_none_or_clear_bad(pud))
+			continue;
+		fr_fixup_pmd_range(vma, pud, start, next);
+	} while (pud++, start = next, start != end);
+}
+
+static void fr_fixup_p4d_range(struct vm_area_struct *vma, pgd_t *pgd,
+			       unsigned long start, unsigned long end)
+{
+	p4d_t *p4d;
+	unsigned long next;
+
+	p4d = p4d_offset(pgd, start);
+	do {
+		next = p4d_addr_end(start, end);
+		if (p4d_none_or_clear_bad(p4d))
+			continue;
+		fr_fixup_pud_range(vma, p4d, start, next);
+	} while (p4d++, start = next, start != end);
+}
+
+static void fr_fixup_page_range(struct vm_area_struct *vma,
+				unsigned long start, unsigned long end)
+{
+	pgd_t *pgd;
+	unsigned long next;
+
+	pgd = pgd_offset(vma->vm_mm, start);
+	do {
+		next = pgd_addr_end(start, end);
+		if (pgd_none_or_clear_bad(pgd))
+			continue;
+		fr_fixup_p4d_range(vma, pgd, start, next);
+	} while (pgd++, start = next, start != end);
+}
+
+/* The mmap_lock (read/write) of vma->vm_mm is held */
+void fast_reflink_fixup_vma(struct vm_area_struct *vma)
+{
+	if (!vma->fast_reflink)
+		return;
+
+	fr_fixup_page_range(vma, vma->vm_start, vma->vm_end);
+	vma->fast_reflink = false;
+#ifdef CONFIG_ARM64
+	flush_tlb_range(vma, vma->vm_start, vma->vm_end);
+#endif
+}
+
+/* The mmap_lock (read) of vma->vm_mm is held */
+void fast_reflink_fixup_pmd(struct vm_area_struct *vma, pmd_t *pmd,
+			    unsigned long addr)
+{
+	if (!is_pmd_fast_reflink(*pmd) || !vma->fast_reflink)
+		return;
+
+	addr &= PMD_MASK;
+	fr_fixup_page_range(vma, addr, addr + PMD_SIZE);
+	VM_WARN_ON_ONCE(is_pmd_fast_reflink(*pmd));
+
+#ifdef CONFIG_ARM64
+	flush_tlb_range(vma, addr & PMD_MASK, (addr & PMD_MASK) + PMD_SIZE);
+#endif
+}
+
+static void fast_reflink_fixup(struct work_struct *work)
+{
+	struct fast_reflink_work *fr_work;
+	struct address_space *mapping;
+	struct vm_area_struct *vma;
+
+	fr_work = container_of(work, struct fast_reflink_work, work);
+	mapping = fr_work->mapping;
+
+	i_mmap_lock_read(mapping);
+	vma_interval_tree_foreach(vma, &mapping->i_mmap, 0, ULONG_MAX)
+		fast_reflink_fixup_vma(vma);
+	i_mmap_unlock_read(mapping);
+}

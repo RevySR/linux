@@ -4191,8 +4191,22 @@ static inline void async_fork_fixup_vma(struct vm_area_struct *mpnt)
 }
 #endif
 
+struct fast_reflink_work {
+	struct work_struct work;
+	struct address_space *mapping;
+};
+
+int fast_reflink_apply(struct address_space *mapping, pgoff_t start,
+		       pgoff_t end);
+bool is_pmd_fast_reflink(pmd_t pmd);
+void fast_reflink_fixup_pmd(struct vm_area_struct *vma, pmd_t *pmd,
+			    unsigned long addr);
+void fast_reflink_fixup_vma(struct vm_area_struct *vma);
+
 static inline bool is_pmd_transient(pmd_t pmd)
 {
+	if (is_pmd_fast_reflink(pmd))
+		return true;
 	if (is_pmd_async_fork(pmd))
 		return true;
 	return false;
@@ -4200,10 +4214,12 @@ static inline bool is_pmd_transient(pmd_t pmd)
 static inline void fixup_pmd(struct vm_area_struct *vma,
 				pmd_t *pmd, unsigned long addr)
 {
+	fast_reflink_fixup_pmd(vma, pmd, addr);
 	async_fork_fixup_pmd(vma, pmd, addr);
 }
 static inline void fixup_vma(struct vm_area_struct *vma)
 {
+	fast_reflink_fixup_vma(vma);
 	async_fork_fixup_vma(vma);
 }
 

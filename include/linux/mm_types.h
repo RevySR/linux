@@ -764,6 +764,8 @@ struct vm_area_struct {
 	struct vm_area_struct *async_fork_vma;
 #endif
 
+	bool fast_reflink;
+
 	CK_KABI_RESERVE(1)
 	CK_KABI_RESERVE(2)
 	CK_KABI_RESERVE(3)
