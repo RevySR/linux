@@ -815,6 +815,8 @@ int vpsp_try_get_result(uint32_t vid, uint8_t prio, uint32_t index,
 int vpsp_try_do_cmd(uint32_t vid, int cmd, void *data, struct vpsp_ret *psp_ret);
 
 int vpsp_get_vid(uint32_t *vid, pid_t pid);
+
+int vpsp_get_default_vid_permission(void);
 #else	/* !CONFIG_CRYPTO_DEV_SP_PSP */
 
 static inline int
@@ -860,6 +862,8 @@ vpsp_try_get_result(uint8_t prio, uint32_t index,
 static inline int
 vpsp_try_do_cmd(uint32_t vid, int cmd, void *data, struct vpsp_ret *psp_ret) { return -ENODEV; }
 
+static inline int
+vpsp_get_default_vid_permission(void) { return -ENODEV; }
 #endif	/* CONFIG_CRYPTO_DEV_SP_PSP */
 
 #endif	/* __PSP_SEV_H__ */
