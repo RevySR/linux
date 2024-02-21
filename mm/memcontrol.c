@@ -7579,6 +7579,23 @@ static struct cftype memory_files[] = {
 		.read_u64 = memcg_reap_background_read,
 		.write_u64 = memcg_reap_background_write,
 	},
+#ifdef CONFIG_PAGECACHE_LIMIT
+	{
+		.name = "pagecache_limit.enable",
+		.read_u64 = mem_cgroup_allow_pgcache_limit_read,
+		.write_u64 = mem_cgroup_allow_pgcache_limit_write,
+	},
+	{
+		.name = "pagecache_limit.size",
+		.read_u64 = mem_cgroup_pgcache_limit_size_read,
+		.write = mem_cgroup_pgcache_limit_size_write,
+	},
+	{
+		.name = "pagecache_limit.sync",
+		.read_u64 = mem_cgroup_allow_pgcache_sync_read,
+		.write_u64 = mem_cgroup_allow_pgcache_sync_write,
+	},
+#endif
 	{ }	/* terminate */
 };
 
