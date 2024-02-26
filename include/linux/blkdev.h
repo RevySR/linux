@@ -388,6 +388,12 @@ struct blk_independent_access_ranges {
 	struct blk_independent_access_range	ia_range[];
 };
 
+/*
+ * default request hang threshold, unit is millisecond. If one request does
+ * not complete in this threashold time, consider this request as hang.
+ */
+#define BLK_REQ_HANG_THRESHOLD	5000
+
 struct request_queue {
 	struct request		*last_merge;
 	struct elevator_queue	*elevator;
@@ -464,6 +470,7 @@ struct request_queue {
 #endif
 
 	unsigned int		rq_timeout;
+	unsigned int		rq_hang_threshold;
 
 	struct timer_list	timeout;
 	struct work_struct	timeout_work;
@@ -955,6 +962,8 @@ extern void blk_queue_required_elevator_features(struct request_queue *q,
 						 unsigned int features);
 extern bool blk_queue_can_use_dma_map_merging(struct request_queue *q,
 					      struct device *dev);
+extern void blk_queue_rq_hang_threshold(struct request_queue *q,
+					unsigned int hang_threshold);
 
 bool __must_check blk_get_queue(struct request_queue *);
 extern void blk_put_queue(struct request_queue *);

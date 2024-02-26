@@ -253,6 +253,8 @@ unsigned int blk_mq_in_flight(struct request_queue *q,
 		struct block_device *part);
 void blk_mq_in_flight_rw(struct request_queue *q, struct block_device *part,
 		unsigned int inflight[2]);
+void blk_mq_hang_rw(struct request_queue *q, struct block_device *part,
+		unsigned int hang[2]);
 
 static inline void blk_mq_put_dispatch_budget(struct request_queue *q,
 					      int budget_token)
