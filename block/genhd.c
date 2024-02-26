@@ -109,6 +109,7 @@ static void part_stat_read_all(struct block_device *part,
 
 		for (group = 0; group < NR_STAT_GROUPS; group++) {
 			stat->nsecs[group] += ptr->nsecs[group];
+			stat->d2c_nsecs[group] += ptr->d2c_nsecs[group];
 			stat->sectors[group] += ptr->sectors[group];
 			stat->ios[group] += ptr->ios[group];
 			stat->merges[group] += ptr->merges[group];
@@ -973,7 +974,8 @@ ssize_t part_stat_show(struct device *dev,
 		"%8lu %8lu %8llu %8u "
 		"%8u %8u %8u "
 		"%8lu %8lu %8llu %8u "
-		"%8lu %8u"
+		"%8lu %8u "
+		"%8u %8u %8u"
 		"\n",
 		stat.ios[STAT_READ],
 		stat.merges[STAT_READ],
@@ -995,7 +997,10 @@ ssize_t part_stat_show(struct device *dev,
 		(unsigned long long)stat.sectors[STAT_DISCARD],
 		(unsigned int)div_u64(stat.nsecs[STAT_DISCARD], NSEC_PER_MSEC),
 		stat.ios[STAT_FLUSH],
-		(unsigned int)div_u64(stat.nsecs[STAT_FLUSH], NSEC_PER_MSEC));
+		(unsigned int)div_u64(stat.nsecs[STAT_FLUSH], NSEC_PER_MSEC),
+		(unsigned int)div_u64(stat.d2c_nsecs[STAT_READ], NSEC_PER_MSEC),
+		(unsigned int)div_u64(stat.d2c_nsecs[STAT_WRITE], NSEC_PER_MSEC),
+		(unsigned int)div_u64(stat.d2c_nsecs[STAT_DISCARD], NSEC_PER_MSEC));
 }
 
 ssize_t part_inflight_show(struct device *dev, struct device_attribute *attr,
@@ -1293,7 +1298,8 @@ static int diskstats_show(struct seq_file *seqf, void *v)
 			   "%lu %lu %lu %u "
 			   "%u %u %u "
 			   "%lu %lu %lu %u "
-			   "%lu %u"
+			   "%lu %u "
+			   "%u %u %u"
 			   "\n",
 			   MAJOR(hd->bd_dev), MINOR(hd->bd_dev), hd,
 			   stat.ios[STAT_READ],
@@ -1320,6 +1326,12 @@ static int diskstats_show(struct seq_file *seqf, void *v)
 						 NSEC_PER_MSEC),
 			   stat.ios[STAT_FLUSH],
 			   (unsigned int)div_u64(stat.nsecs[STAT_FLUSH],
+						 NSEC_PER_MSEC),
+			   (unsigned int)div_u64(stat.d2c_nsecs[STAT_READ],
+						 NSEC_PER_MSEC),
+			   (unsigned int)div_u64(stat.d2c_nsecs[STAT_WRITE],
+						 NSEC_PER_MSEC),
+			   (unsigned int)div_u64(stat.d2c_nsecs[STAT_DISCARD],
 						 NSEC_PER_MSEC)
 			);
 	}
