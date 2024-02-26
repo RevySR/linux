@@ -1542,6 +1542,13 @@ struct task_struct {
 	struct user_event_mm		*user_event_mm;
 #endif
 
+	int wait_res_type;
+	union {
+		struct folio		*wait_folio;
+		struct bio		*wait_bio;
+	};
+	unsigned long wait_moment;
+
 	/*
 	 * New fields for task_struct should be added above here, so that
 	 * they are included in the randomized portion of task_struct.
@@ -1558,6 +1565,36 @@ struct task_struct {
 	 * Do not put anything below here!
 	 */
 };
+
+enum {
+	TASK_WAIT_FOLIO = 1,
+	TASK_WAIT_BIO,
+};
+
+static inline void task_set_wait_res(int type, void *res)
+{
+	switch (type) {
+	case TASK_WAIT_FOLIO:
+		current->wait_folio = (struct folio *)res;
+		break;
+	case TASK_WAIT_BIO:
+		current->wait_bio = (struct bio *)res;
+		break;
+	default:
+		current->wait_folio = NULL;
+		break;
+	}
+
+	current->wait_res_type = type;
+	current->wait_moment = jiffies;
+}
+
+static inline void task_clear_wait_res(void)
+{
+	current->wait_folio = NULL;
+	current->wait_res_type = 0;
+	current->wait_moment = 0;
+}
 
 static inline struct pid *task_pid(struct task_struct *task)
 {
