@@ -62,9 +62,13 @@ void memcg_add_pgcache_limit_reclaimed(struct mem_cgroup *memcg,
 {
 	struct mem_cgroup *iter;
 
+	preempt_disable();
+
 	for (iter = memcg; iter; iter = parent_mem_cgroup(iter))
 		__this_cpu_add(iter->exstat_cpu->item[MEMCG_PGCACHE_RECLAIM],
 			       nr);
+
+	preempt_enable();
 }
 
 void memcg_pgcache_limit_work_func(struct work_struct *work)
