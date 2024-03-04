@@ -398,10 +398,6 @@ static void reserve_oldmem_region(void)
 
 void __init platform_init(void)
 {
-	arch_reserve_vmcore();
-	arch_parse_crashkernel();
-	reserve_oldmem_region();
-
 #ifdef CONFIG_ACPI_TABLE_UPGRADE
 	acpi_table_upgrade();
 #endif
@@ -441,6 +437,10 @@ static void __init arch_mem_init(char **cmdline_p)
 {
 	/* Recalculate max_low_pfn for "mem=xxx" */
 	max_pfn = max_low_pfn = PHYS_PFN(memblock_end_of_DRAM());
+
+	arch_reserve_vmcore();
+	arch_parse_crashkernel();
+	reserve_oldmem_region();
 
 	if (usermem)
 		pr_info("User-defined physical RAM map overwrite\n");
