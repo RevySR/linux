@@ -263,6 +263,12 @@ void bio_init(struct bio *bio, struct block_device *bdev, struct bio_vec *table,
 	bio->bi_issue.value = 0;
 	if (bdev)
 		bio_associate_blkg(bio);
+#ifdef CONFIG_BLK_DEV_THROTTLING
+	bio->start_time_ns = 0;
+	bio->io_start_time_ns = 0;
+	bio->bi_tg_end_io = NULL;
+	bio->bi_tg_private = NULL;
+#endif
 #ifdef CONFIG_BLK_CGROUP_IOCOST
 	bio->bi_iocost_cost = 0;
 #endif
@@ -1605,6 +1611,10 @@ again:
 	blk_throtl_bio_endio(bio);
 	/* release cgroup info */
 	bio_uninit(bio);
+#ifdef CONFIG_BLK_DEV_THROTTLING
+	if (bio->bi_tg_end_io)
+		bio->bi_tg_end_io(bio);
+#endif
 	if (bio->bi_end_io)
 		bio->bi_end_io(bio);
 }
