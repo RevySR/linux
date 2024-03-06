@@ -171,7 +171,7 @@ int build_id_parse(struct vm_area_struct *vma, unsigned char *build_id,
 	}
 
 	ret = -EINVAL;
-	page_addr = kmap_atomic(page);
+	page_addr = kmap_local_page(page);
 	ehdr = (Elf32_Ehdr *)page_addr;
 
 	/* compare magic x7f "ELF" */
@@ -187,7 +187,7 @@ int build_id_parse(struct vm_area_struct *vma, unsigned char *build_id,
 	else if (ehdr->e_ident[EI_CLASS] == ELFCLASS64)
 		ret = get_build_id_64(page_addr, build_id, size);
 out:
-	kunmap_atomic(page_addr);
+	kunmap_local(page_addr);
 	put_page(page);
 	return ret;
 }
