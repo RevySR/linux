@@ -735,6 +735,9 @@ void submit_bio_noacct(struct bio *bio)
 	struct block_device *bdev = bio->bi_bdev;
 	struct request_queue *q = bdev_get_queue(bdev);
 	blk_status_t status = BLK_STS_IOERR;
+	DEFINE_WAIT(wait);
+	wait_queue_head_t *wait_head = NULL;
+	bool throtl;
 
 	might_sleep();
 
@@ -808,7 +811,13 @@ void submit_bio_noacct(struct bio *bio)
 		break;
 	}
 
-	if (blk_throtl_bio(bio))
+	throtl = blk_throtl_bio(bio, &wait_head, &wait);
+	if (wait_head) {
+		io_schedule();
+		finish_wait(wait_head, &wait);
+	}
+
+	if (throtl)
 		return;
 	submit_bio_noacct_nocheck(bio);
 	return;

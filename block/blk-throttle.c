@@ -331,6 +331,10 @@ static void throtl_service_queue_init(struct throtl_service_queue *sq)
 {
 	INIT_LIST_HEAD(&sq->queued[READ]);
 	INIT_LIST_HEAD(&sq->queued[WRITE]);
+	sq->nr_queued_bytes[READ] = 0;
+	sq->nr_queued_bytes[WRITE] = 0;
+	init_waitqueue_head(&sq->wait[READ]);
+	init_waitqueue_head(&sq->wait[WRITE]);
 	sq->pending_tree = RB_ROOT_CACHED;
 	timer_setup(&sq->pending_timer, throtl_pending_timer_fn, 0);
 }
@@ -1102,6 +1106,7 @@ static void throtl_add_bio_tg(struct bio *bio, struct throtl_qnode *qn,
 	throtl_qnode_add_bio(bio, qn, &sq->queued[rw]);
 
 	sq->nr_queued[rw]++;
+	sq->nr_queued_bytes[rw] += throtl_bio_data_size(bio);
 	blkg_rwstat_add(&tg->total_bytes_queued, bio_op(bio),
 			throtl_bio_data_size(bio));
 	blkg_rwstat_add(&tg->total_io_queued, bio_op(bio), 1);
@@ -1160,6 +1165,15 @@ static void tg_dispatch_one_bio(struct throtl_grp *tg, bool rw)
 	 */
 	bio = throtl_pop_queued(&sq->queued[rw], &tg_to_put);
 	sq->nr_queued[rw]--;
+	sq->nr_queued_bytes[rw] -= throtl_bio_data_size(bio);
+	WARN_ON_ONCE(sq->nr_queued_bytes[rw] < 0);
+
+	if (wq_has_sleeper(&sq->wait[rw])) {
+		if (sq->nr_queued_bytes[rw] > 0)
+			wake_up(&sq->wait[rw]);
+		else
+			wake_up_all(&sq->wait[rw]);
+	}
 
 	throtl_charge_bio(tg, bio);
 
@@ -2301,7 +2315,8 @@ static void throtl_upgrade_state(struct throtl_data *td)
 }
 #endif
 
-bool __blk_throtl_bio(struct bio *bio)
+bool __blk_throtl_bio(struct bio *bio, wait_queue_head_t **waitq,
+			 wait_queue_entry_t *wait)
 {
 	struct request_queue *q = bdev_get_queue(bio->bi_bdev);
 	struct blkcg_gq *blkg = bio->bi_blkg;
@@ -2385,6 +2400,18 @@ again:
 	tg->last_low_overflow_time[rw] = jiffies;
 
 	td->nr_queued[rw]++;
+
+	if (rw == WRITE) {
+		u64 bps_limit = tg_bps_limit(tg, rw);
+
+		if (bps_limit != U64_MAX &&
+		    (wq_has_sleeper(&sq->wait[rw]) ||
+		     sq->nr_queued_bytes[rw] > div_u64(bps_limit, 2))) {
+			*waitq = &sq->wait[rw];
+			prepare_to_wait_exclusive(*waitq, wait, TASK_UNINTERRUPTIBLE);
+		}
+	}
+
 	throtl_add_bio_tg(bio, qn, tg);
 	throttled = true;
 
