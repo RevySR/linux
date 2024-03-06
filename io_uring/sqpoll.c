@@ -97,9 +97,34 @@ static __cold void io_sqd_update_thread_idle(struct io_sq_data *sqd)
 	struct io_ring_ctx *ctx;
 	unsigned sq_thread_idle = 0;
 
-	list_for_each_entry(ctx, &sqd->ctx_list, sqd_list)
-		sq_thread_idle = max(sq_thread_idle, ctx->sq_thread_idle);
+	sqd->idle_mode_us = false;
+	list_for_each_entry(ctx, &sqd->ctx_list, sqd_list) {
+		bool idle_mode_us = ctx->flags & IORING_SETUP_IDLE_US;
+		unsigned int tmp_idle = idle_mode_us ? ctx->sq_thread_idle :
+			jiffies_to_usecs(ctx->sq_thread_idle);
+
+		if (idle_mode_us && !sqd->idle_mode_us)
+			sqd->idle_mode_us = true;
+
+		if (sq_thread_idle < tmp_idle)
+			sq_thread_idle = tmp_idle;
+	}
+
+	if (!sqd->idle_mode_us)
+		sq_thread_idle = usecs_to_jiffies(sq_thread_idle);
 	sqd->sq_thread_idle = sq_thread_idle;
+}
+
+static inline u64 io_current_time(bool idle_mode_us)
+{
+	return idle_mode_us ? (ktime_get_ns() >> 10) : get_jiffies_64();
+}
+
+static inline bool io_time_after(bool idle_mode_us, u64 timeout)
+{
+	u64 now = io_current_time(idle_mode_us);
+
+	return time_after64(now, timeout);
 }
 
 void io_sq_thread_finish(struct io_ring_ctx *ctx)
@@ -262,7 +287,7 @@ static int io_sq_thread(void *data)
 {
 	struct io_sq_data *sqd = data;
 	struct io_ring_ctx *ctx;
-	unsigned long timeout = 0;
+	u64 timeout = 0;
 	char buf[TASK_COMM_LEN];
 	DEFINE_WAIT(wait);
 
@@ -294,7 +319,7 @@ static int io_sq_thread(void *data)
 		if (io_sqd_events_pending(sqd) || signal_pending(current)) {
 			if (io_sqd_handle_event(sqd))
 				break;
-			timeout = jiffies + sqd->sq_thread_idle;
+			timeout = io_current_time(sqd->idle_mode_us) + sqd->sq_thread_idle;
 		}
 
 		cap_entries = !list_is_singular(&sqd->ctx_list);
@@ -307,9 +332,9 @@ static int io_sq_thread(void *data)
 		if (io_run_task_work())
 			sqt_spin = true;
 
-		if (sqt_spin || !time_after(jiffies, timeout)) {
+		if (sqt_spin || !io_time_after(sqd->idle_mode_us, timeout)) {
 			if (sqt_spin)
-				timeout = jiffies + sqd->sq_thread_idle;
+				timeout = io_current_time(sqd->idle_mode_us) + sqd->sq_thread_idle;
 			if (unlikely(need_resched())) {
 				mutex_unlock(&sqd->lock);
 				cond_resched();
@@ -356,7 +381,7 @@ static int io_sq_thread(void *data)
 		}
 
 		finish_wait(&sqd->wait, &wait);
-		timeout = jiffies + sqd->sq_thread_idle;
+		timeout = io_current_time(sqd->idle_mode_us) + sqd->sq_thread_idle;
 	}
 
 	io_uring_cancel_generic(true, sqd);
@@ -386,6 +411,8 @@ void io_sqpoll_wait_sq(struct io_ring_ctx *ctx)
 
 	finish_wait(&ctx->sqo_sq_wait, &wait);
 }
+
+#define DEFAULT_SQ_IDLE_US 10
 
 __cold int io_sq_offload_create(struct io_ring_ctx *ctx,
 				struct io_uring_params *p)
@@ -437,9 +464,22 @@ __cold int io_sq_offload_create(struct io_ring_ctx *ctx,
 
 		ctx->sq_creds = get_current_cred();
 		ctx->sq_data = sqd;
-		ctx->sq_thread_idle = msecs_to_jiffies(p->sq_thread_idle);
-		if (!ctx->sq_thread_idle)
-			ctx->sq_thread_idle = HZ;
+		if ((ctx->flags & IORING_SETUP_IDLE_US) &&
+		    !(ctx->flags & IORING_SETUP_SQPOLL_PERCPU)) {
+			ret = -EINVAL;
+			goto err;
+		}
+
+		/*
+		 * for ms mode: ctx->sq_thread_idle is jiffies
+		 * for us mode: ctx->sq_thread_idle is time in terms of microsecond
+		 */
+		if (ctx->flags & IORING_SETUP_IDLE_US)
+			ctx->sq_thread_idle = p->sq_thread_idle ?
+				p->sq_thread_idle : DEFAULT_SQ_IDLE_US;
+		else
+			ctx->sq_thread_idle = p->sq_thread_idle ?
+				msecs_to_jiffies(p->sq_thread_idle) : HZ;
 
 		io_sq_thread_park(sqd);
 		list_add(&ctx->sqd_list, &sqd->ctx_list);
@@ -496,9 +536,9 @@ __cold int io_sq_offload_create(struct io_ring_ctx *ctx,
 		wake_up_new_task(tsk);
 		if (ret)
 			goto err;
-	} else if (p->flags & (IORING_SETUP_SQ_AFF |
+	} else if (p->flags & (IORING_SETUP_SQ_AFF | IORING_SETUP_IDLE_US |
 			       IORING_SETUP_SQPOLL_PERCPU)) {
-		/* Can't have SQ_AFF or SQPOLL_PERCPU without SQPOLL */
+		/* Can't have SQ_AFF or IDLE_US or SQPOLL_PERCPU without SQPOLL */
 		ret = -EINVAL;
 		goto err;
 	}
