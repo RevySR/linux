@@ -165,6 +165,7 @@ enum {
  * Only one task is allowed to submit requests
  */
 #define IORING_SETUP_SINGLE_ISSUER	(1U << 12)
+#define IORING_SETUP_SQPOLL_PERCPU	(1U << 31) /* percpu SQ poll thread */
 
 /*
  * Defer running task work to get events.

@@ -137,6 +137,8 @@ struct io_defer_entry {
 	u32			seq;
 };
 
+extern struct io_sq_data __percpu **percpu_sqd;
+
 /* requests with any of those set should undergo io_disarm_next() */
 #define IO_DISARM_MASK (REQ_F_ARM_LTIMEOUT | REQ_F_LINK_TIMEOUT | REQ_F_FAIL)
 #define IO_REQ_LINK_FLAGS (REQ_F_LINK | REQ_F_HARDLINK)
@@ -4190,7 +4192,7 @@ static long io_uring_setup(u32 entries, struct io_uring_params __user *params)
 			IORING_SETUP_SQE128 | IORING_SETUP_CQE32 |
 			IORING_SETUP_SINGLE_ISSUER | IORING_SETUP_DEFER_TASKRUN |
 			IORING_SETUP_NO_MMAP | IORING_SETUP_REGISTERED_FD_ONLY |
-			IORING_SETUP_NO_SQARRAY))
+			IORING_SETUP_NO_SQARRAY | IORING_SETUP_SQPOLL_PERCPU))
 		return -EINVAL;
 
 	return io_uring_create(entries, &p, params);
@@ -4479,7 +4481,7 @@ static __cold int io_register_iowq_max_workers(struct io_ring_ctx *ctx,
 	if (sqd) {
 		mutex_unlock(&ctx->uring_lock);
 		mutex_unlock(&sqd->lock);
-		io_put_sq_data(sqd);
+		io_put_sq_data(ctx, sqd);
 		mutex_lock(&ctx->uring_lock);
 	}
 
@@ -4507,9 +4509,8 @@ err:
 	if (sqd) {
 		mutex_unlock(&ctx->uring_lock);
 		mutex_unlock(&sqd->lock);
-		io_put_sq_data(sqd);
+		io_put_sq_data(ctx, sqd);
 		mutex_lock(&ctx->uring_lock);
-
 	}
 	return ret;
 }
@@ -4730,6 +4731,8 @@ out_fput:
 
 static int __init io_uring_init(void)
 {
+	int cpu;
+
 #define __BUILD_BUG_VERIFY_OFFSET_SIZE(stype, eoffset, esize, ename) do { \
 	BUILD_BUG_ON(offsetof(stype, ename) != eoffset); \
 	BUILD_BUG_ON(sizeof_field(stype, ename) != esize); \
@@ -4819,6 +4822,9 @@ static int __init io_uring_init(void)
 				sizeof_field(struct io_kiocb, cmd.data), NULL);
 
 	iou_wq = alloc_workqueue("iou_exit", WQ_UNBOUND, 64);
+	percpu_sqd = alloc_percpu(struct io_sq_data *);
+	for_each_possible_cpu(cpu)
+		*per_cpu_ptr(percpu_sqd, cpu) = NULL;
 
 #ifdef CONFIG_SYSCTL
 	register_sysctl_init("kernel", kernel_io_uring_disabled_table);
