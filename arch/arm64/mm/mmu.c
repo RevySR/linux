@@ -511,6 +511,9 @@ void __init mark_linear_text_alias_ro(void)
 
 #ifdef CONFIG_KFENCE
 
+static unsigned long __ro_after_init
+kfence_pool_size = ((CONFIG_KFENCE_NUM_OBJECTS + 1) * 2 * PAGE_SIZE);
+
 bool __ro_after_init kfence_early_init = !!CONFIG_KFENCE_SAMPLE_INTERVAL;
 
 /* early_param() will be parsed before map_mem() below. */
@@ -531,7 +534,7 @@ static phys_addr_t __init arm64_kfence_alloc_pool(void)
 	if (!kfence_early_init)
 		return 0;
 
-	kfence_pool = memblock_phys_alloc(KFENCE_POOL_SIZE, PAGE_SIZE);
+	kfence_pool = memblock_phys_alloc(kfence_pool_size, PAGE_SIZE);
 	if (!kfence_pool) {
 		pr_err("failed to allocate kfence pool\n");
 		kfence_early_init = false;
@@ -539,7 +542,7 @@ static phys_addr_t __init arm64_kfence_alloc_pool(void)
 	}
 
 	/* Temporarily mark as NOMAP. */
-	memblock_mark_nomap(kfence_pool, KFENCE_POOL_SIZE);
+	memblock_mark_nomap(kfence_pool, kfence_pool_size);
 
 	return kfence_pool;
 }
@@ -550,11 +553,11 @@ static void __init arm64_kfence_map_pool(phys_addr_t kfence_pool, pgd_t *pgdp)
 		return;
 
 	/* KFENCE pool needs page-level mapping. */
-	__map_memblock(pgdp, kfence_pool, kfence_pool + KFENCE_POOL_SIZE,
+	__map_memblock(pgdp, kfence_pool, kfence_pool + kfence_pool_size,
 			pgprot_tagged(PAGE_KERNEL),
 			NO_BLOCK_MAPPINGS | NO_CONT_MAPPINGS);
-	memblock_clear_nomap(kfence_pool, KFENCE_POOL_SIZE);
-	__kfence_pool = phys_to_virt(kfence_pool);
+	memblock_clear_nomap(kfence_pool, kfence_pool_size);
+	__kfence_pool_early_init = phys_to_virt(kfence_pool);
 }
 #else /* CONFIG_KFENCE */
 
