@@ -63,6 +63,11 @@ ifeq ($(SRCARCH),arm64)
 	DYNAMIC_CHECK := y
 endif
 
+ifeq ($(SRCARCH),loongarch)
+	BUILD_ORC := y
+	STATIC_CHECK := y
+endif
+
 export BUILD_ORC STATIC_CHECK DYNAMIC_CHECK
 export srctree OUTPUT CFLAGS SRCARCH AWK
 include $(srctree)/tools/build/Makefile.include

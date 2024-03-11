@@ -18,6 +18,10 @@
 #define bp_reg fp_reg
 #endif
 
+#ifdef __loongarch__
+#define bp_reg fp_reg
+#endif
+
 bool __weak orc_ignore_section(struct section *sec)
 {
 	return false;
