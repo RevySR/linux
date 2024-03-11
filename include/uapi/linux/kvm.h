@@ -2311,4 +2311,25 @@ struct kvm_s390_zpci_op {
 /* flags for kvm_s390_zpci_op->u.reg_aen.flags */
 #define KVM_S390_ZPCIOP_REGAEN_HOST    (1 << 0)
 
+/* CSV3 command */
+enum csv3_cmd_id {
+	KVM_CSV3_NR_MIN = 0xc0,
+
+	KVM_CSV3_INIT = KVM_CSV3_NR_MIN,
+	KVM_CSV3_LAUNCH_ENCRYPT_DATA,
+	KVM_CSV3_LAUNCH_ENCRYPT_VMCB,
+
+	KVM_CSV3_NR_MAX,
+};
+
+struct kvm_csv3_init_data {
+	__u64 nodemask;
+};
+
+struct kvm_csv3_launch_encrypt_data {
+	__u64 gpa;
+	__u64 uaddr;
+	__u32 len;
+};
+
 #endif /* __LINUX_KVM_H */
