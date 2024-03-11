@@ -48,6 +48,7 @@
 
 #include "svm.h"
 #include "svm_ops.h"
+#include "csv.h"
 
 #include "kvm_onhyperv.h"
 #include "svm_onhyperv.h"
@@ -5507,6 +5508,9 @@ static int __init svm_init(void)
 
 	if (!kvm_is_svm_supported())
 		return -EOPNOTSUPP;
+
+	if (boot_cpu_data.x86_vendor == X86_VENDOR_HYGON)
+		csv_init(&svm_x86_ops);
 
 	r = kvm_x86_vendor_init(&svm_init_ops);
 	if (r)
