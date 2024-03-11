@@ -52,6 +52,7 @@
 #include <linux/psi.h>
 #include <linux/khugepaged.h>
 #include <linux/delayacct.h>
+#include <linux/kfence.h>
 #include <asm/div64.h>
 #include "internal.h"
 #include "shuffle.h"
@@ -958,6 +959,12 @@ static inline bool free_page_is_bad(struct page *page)
 	if (likely(page_expected_state(page, PAGE_FLAGS_CHECK_AT_FREE)))
 		return false;
 
+#ifdef CONFIG_KFENCE
+	/* It's not performance sensitive when reaching here */
+	if (PageKfence(page))
+		return false;
+#endif
+
 	/* Something has gone sideways, find it */
 	free_page_is_bad_report(page);
 	return true;
@@ -1151,7 +1158,7 @@ static __always_inline bool free_pages_prepare(struct page *page,
 	}
 
 	page_cpupid_reset_last(page);
-	page->flags &= ~PAGE_FLAGS_CHECK_AT_PREP;
+	page->flags &= ~PAGE_FLAGS_CHECK_AT_PREP | __PG_KFENCE;
 	reset_page_owner(page, order);
 	page_table_check_free(page, order);
 
@@ -1283,6 +1290,9 @@ static void __free_pages_ok(struct page *page, unsigned int order,
 	struct zone *zone = page_zone(page);
 
 	if (!free_pages_prepare(page, order, fpi_flags))
+		return;
+
+	if (unlikely(!order && kfence_free_page(page)))
 		return;
 
 	/*
@@ -2398,6 +2408,10 @@ static void free_unref_page_commit(struct zone *zone, struct per_cpu_pages *pcp,
 	bool free_high;
 
 	__count_vm_events(PGFREE, 1 << order);
+
+	if (unlikely(!order && kfence_free_page(page)))
+		return;
+
 	pindex = order_to_pindex(migratetype, order);
 	list_add(&page->pcp_list, &pcp->lists[pindex]);
 	pcp->count += 1 << order;
@@ -4362,7 +4376,9 @@ unsigned long __alloc_pages_bulk(gfp_t gfp, int preferred_nid,
 			continue;
 		}
 
-		page = __rmqueue_pcplist(zone, 0, ac.migratetype, alloc_flags,
+		page = kfence_alloc_page(0, preferred_nid, gfp);
+		if (likely(!page))
+			page = __rmqueue_pcplist(zone, 0, ac.migratetype, alloc_flags,
 								pcp, pcp_list);
 		if (unlikely(!page)) {
 			/* Try and allocate at least one page */
@@ -4445,6 +4461,12 @@ struct page *__alloc_pages(gfp_t gfp, unsigned int order, int preferred_nid,
 	 * memory until all local zones are considered.
 	 */
 	alloc_flags |= alloc_flags_nofragment(ac.preferred_zoneref->zone, gfp);
+
+	page = kfence_alloc_page(order, preferred_nid, alloc_gfp);
+	if (unlikely(page)) {
+		prep_new_page(page, 0, alloc_gfp, alloc_flags);
+		goto out;
+	}
 
 	/* First allocation attempt */
 	page = get_page_from_freelist(alloc_gfp, order, alloc_flags, &ac);

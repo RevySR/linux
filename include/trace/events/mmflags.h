@@ -60,9 +60,16 @@
 #define __def_gfpflag_names_kasan
 #endif
 
-#define show_gfp_flags(flags)						\
-	(flags) ? __print_flags(flags, "|",				\
-	__def_gfpflag_names __def_gfpflag_names_kasan			\
+#ifdef CONFIG_KFENCE
+#define __def_gfpflag_names_kfence ,			\
+	gfpflag_string(__GFP_NOKFENCE)
+#else
+#define __def_gfpflag_names_kfence
+#endif
+
+#define show_gfp_flags(flags)								\
+	(flags) ? __print_flags(flags, "|",						\
+	__def_gfpflag_names __def_gfpflag_names_kasan __def_gfpflag_names_kfence	\
 	) : "none"
 
 #ifdef CONFIG_MMU

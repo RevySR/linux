@@ -85,6 +85,7 @@ EXPORT_SYMBOL_GPL(kfence_sample_interval); /* Export for test modules. */
 DEFINE_STATIC_KEY_FALSE(kfence_short_canary);
 DEFINE_STATIC_KEY_FALSE(kfence_skip_interval);
 static DEFINE_STATIC_KEY_FALSE(kfence_once_enabled);
+DEFINE_STATIC_KEY_TRUE(kfence_order0_page);
 
 #define KFENCE_MAX_OBJECTS_PER_AREA (PUD_SIZE / PAGE_SIZE / 2 - 1)
 
@@ -206,6 +207,33 @@ static const struct kernel_param_ops pool_mode_param_ops = {
 };
 module_param_cb(pool_mode, &pool_mode_param_ops, &kfence_pool_node_mode, 0600);
 
+static int param_set_order0_page(const char *val, const struct kernel_param *kp)
+{
+	bool res;
+	int ret = kstrtobool(val, &res);
+
+	if (ret < 0)
+		return ret;
+
+	if (res)
+		static_branch_enable(&kfence_order0_page);
+	else
+		static_branch_disable(&kfence_order0_page);
+
+	return 0;
+}
+
+static int param_get_order0_page(char *buffer, const struct kernel_param *kp)
+{
+	return sprintf(buffer, "%d\n", static_branch_likely(&kfence_order0_page) ? 1 : 0);
+}
+
+static const struct kernel_param_ops order0_page_param_ops = {
+	.set = param_set_order0_page,
+	.get = param_get_order0_page,
+};
+module_param_cb(order0_page, &order0_page_param_ops, NULL, 0600);
+
 static int param_set_fault(const char *val, const struct kernel_param *kp)
 {
 	bool mode;
@@ -321,6 +349,9 @@ enum kfence_counter_id {
 	KFENCE_COUNTER_ALLOCS,
 	KFENCE_COUNTER_FREES,
 	KFENCE_COUNTER_ZOMBIES,
+	KFENCE_COUNTER_ALLOCATED_PAGE,
+	KFENCE_COUNTER_ALLOCS_PAGE,
+	KFENCE_COUNTER_FREES_PAGE,
 	KFENCE_COUNTER_BUGS,
 	KFENCE_COUNTER_SKIP_INCOMPAT,
 	KFENCE_COUNTER_SKIP_CAPACITY,
@@ -332,10 +363,13 @@ struct kfence_counter {
 };
 static struct kfence_counter __percpu *counters;
 static const char *const counter_names[] = {
-	[KFENCE_COUNTER_ALLOCATED]	= "currently allocated",
-	[KFENCE_COUNTER_ALLOCS]		= "total allocations",
-	[KFENCE_COUNTER_FREES]		= "total frees",
-	[KFENCE_COUNTER_ZOMBIES]	= "zombie allocations",
+	[KFENCE_COUNTER_ALLOCATED]	= "currently slab allocated",
+	[KFENCE_COUNTER_ALLOCS]		= "total slab allocations",
+	[KFENCE_COUNTER_FREES]		= "total slab frees",
+	[KFENCE_COUNTER_ZOMBIES]	= "zombie slab allocations",
+	[KFENCE_COUNTER_ALLOCATED_PAGE]	= "currently page allocated",
+	[KFENCE_COUNTER_ALLOCS_PAGE]	= "total page allocations",
+	[KFENCE_COUNTER_FREES_PAGE]	= "total page frees",
 	[KFENCE_COUNTER_BUGS]		= "total bugs",
 	[KFENCE_COUNTER_SKIP_INCOMPAT]	= "skipped allocations (incompatible)",
 	[KFENCE_COUNTER_SKIP_CAPACITY]	= "skipped allocations (capacity)",
@@ -773,6 +807,78 @@ static void *kfence_guarded_alloc(struct kmem_cache *cache, size_t size, gfp_t g
 	return addr;
 }
 
+static struct page *kfence_guarded_alloc_page(int node, unsigned long *stack_entries,
+					      size_t num_stack_entries, u32 alloc_stack_hash)
+{
+	struct kfence_counter *this_cpu_counter = raw_cpu_ptr(counters);
+	struct kfence_metadata *meta;
+	unsigned long flags;
+	struct page *page;
+	void *addr;
+	const bool random_fault = CONFIG_KFENCE_STRESS_TEST_FAULTS &&
+				  !get_random_u32_below(CONFIG_KFENCE_STRESS_TEST_FAULTS);
+
+	/* Try to obtain a free object. */
+	meta = get_free_meta(node);
+	if (!meta) {
+		raw_cpu_ptr(counters)->counter[KFENCE_COUNTER_SKIP_CAPACITY]++;
+		return NULL;
+	}
+
+	if (unlikely(!raw_spin_trylock_irqsave(&meta->lock, flags))) {
+		/*
+		 * This is extremely unlikely -- we are reporting on a
+		 * use-after-free, which locked meta->lock, and the reporting
+		 * code via printk calls kmalloc() which ends up in
+		 * kfence_alloc() and tries to grab the same object that we're
+		 * reporting on. While it has never been observed, lockdep does
+		 * report that there is a possibility of deadlock. Fix it by
+		 * using trylock and bailing out gracefully.
+		 * Put the object back on the freelist.
+		 */
+		put_free_meta(meta);
+
+		return NULL;
+	}
+
+	__init_meta(meta, PAGE_SIZE, NULL, stack_entries, num_stack_entries, alloc_stack_hash);
+
+	raw_spin_unlock_irqrestore(&meta->lock, flags);
+
+	addr = (void *)meta->addr;
+	alloc_covered_add(alloc_stack_hash, 1);
+
+	page = virt_to_page(addr);
+	if (PageSlab(page)) {
+		struct slab *slab = page_slab(page);
+
+		/*
+		 * For performance considerations,
+		 * we clean slab info here (when allocating pages).
+		 * So that slabs can reuse their flags and obj_cgroups
+		 * without being cleared or freed if the previous user
+		 * is slab too.
+		 */
+		slab->slab_cache = NULL;
+#ifdef CONFIG_MEMCG
+		page->memcg_data = 0;
+#endif
+		__ClearPageSlab(page);
+	}
+	page->mapping = NULL;
+#ifdef CONFIG_DEBUG_VM
+	atomic_set(&page->_refcount, 0);
+#endif
+
+	if (random_fault)
+		kfence_protect(meta->addr); /* Random "faults" by protecting the object. */
+
+	this_cpu_counter->counter[KFENCE_COUNTER_ALLOCATED_PAGE]++;
+	this_cpu_counter->counter[KFENCE_COUNTER_ALLOCS_PAGE]++;
+
+	return page;
+}
+
 static inline void put_free_meta_to_node(struct kfence_metadata *object,
 					 struct kfence_freelist_node *kfence_freelist)
 {
@@ -911,6 +1017,20 @@ static void kfence_guarded_free(void *addr, struct kfence_metadata *meta, bool z
 		/* See kfence_shutdown_cache(). */
 		this_cpu_counter->counter[KFENCE_COUNTER_ZOMBIES]++;
 	}
+}
+
+static void kfence_guarded_free_page(struct page *page, void *addr, struct kfence_metadata *meta)
+{
+	struct kfence_counter *this_cpu_counter = raw_cpu_ptr(counters);
+
+	if (!__free_meta(addr, meta, false, true))
+		return;
+
+	put_free_meta(meta);
+
+	this_cpu_counter->counter[KFENCE_COUNTER_ALLOCATED_PAGE]--;
+	this_cpu_counter->counter[KFENCE_COUNTER_FREES_PAGE]++;
+
 }
 
 static void rcu_guarded_free(struct rcu_head *h)
@@ -2365,6 +2485,66 @@ alloc:
 				    alloc_stack_hash, node);
 }
 
+#define GFP_KFENCE_NOT_ALLOC ((GFP_ZONEMASK & ~__GFP_HIGHMEM) | __GFP_NOKFENCE | __GFP_THISNODE)
+struct page *__kfence_alloc_page(int node, gfp_t flags)
+{
+	unsigned long stack_entries[KFENCE_STACK_DEPTH];
+	size_t num_stack_entries;
+	u32 alloc_stack_hash;
+
+	if (!static_branch_likely(&kfence_order0_page))
+		return NULL;
+
+	if ((flags & GFP_KFENCE_NOT_ALLOC) || (flags & GFP_USER) == GFP_USER) {
+		raw_cpu_ptr(counters)->counter[KFENCE_COUNTER_SKIP_INCOMPAT]++;
+		return NULL;
+	}
+
+	if (static_branch_likely(&kfence_skip_interval))
+		goto alloc;
+
+	if (atomic_inc_return(&kfence_allocation_gate) > 1)
+		return NULL;
+#ifdef CONFIG_KFENCE_STATIC_KEYS
+	/*
+	 * waitqueue_active() is fully ordered after the update of
+	 * kfence_allocation_gate per atomic_inc_return().
+	 */
+	if (waitqueue_active(&allocation_wait)) {
+		/*
+		 * Calling wake_up() here may deadlock when allocations happen
+		 * from within timer code. Use an irq_work to defer it.
+		 */
+		irq_work_queue(&wake_up_kfence_timer_work);
+	}
+#endif
+
+alloc:
+	if (!READ_ONCE(kfence_enabled))
+		return NULL;
+
+	num_stack_entries = stack_trace_save(stack_entries, KFENCE_STACK_DEPTH, 0);
+
+	if (!static_branch_likely(&kfence_skip_interval)) {
+		/*
+		 * Do expensive check for coverage of allocation in slow-path after
+		 * allocation_gate has already become non-zero, even though it might
+		 * mean not making any allocation within a given sample interval.
+		 *
+		 * This ensures reasonable allocation coverage when the pool is almost
+		 * full, including avoiding long-lived allocations of the same source
+		 * filling up the pool (e.g. pagecache allocations).
+		 */
+		alloc_stack_hash = get_alloc_stack_hash(stack_entries, num_stack_entries);
+		if (should_skip_covered() && alloc_covered_contains(alloc_stack_hash)) {
+			raw_cpu_ptr(counters)->counter[KFENCE_COUNTER_SKIP_COVERED]++;
+			return NULL;
+		}
+	}
+
+	return kfence_guarded_alloc_page(node, stack_entries, num_stack_entries, alloc_stack_hash);
+}
+
 size_t kfence_ksize(const void *addr)
 {
 	const struct kfence_metadata *meta = addr_to_metadata((unsigned long)addr);
@@ -2409,6 +2589,13 @@ void __kfence_free(void *addr)
 		call_rcu(&meta->rcu_head, rcu_guarded_free);
 	else
 		kfence_guarded_free(addr, meta, false);
+}
+
+void __kfence_free_page(struct page *page, void *addr)
+{
+	struct kfence_metadata *meta = addr_to_metadata((unsigned long)addr);
+
+	kfence_guarded_free_page(page, addr, meta);
 }
 
 bool kfence_handle_page_fault(unsigned long addr, bool is_write, struct pt_regs *regs)
