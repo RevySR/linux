@@ -28,7 +28,10 @@ function do_prep() {
     cp ${DIST_SRCROOT}/arch/x86/configs/anolis-debug_defconfig	${DIST_RPMBUILDDIR_OUTPUT}/SOURCES/kernel-${DIST_KERNELVERSION}-x86_64-debug.config
     cp ${DIST_SRCROOT}/arch/arm64/configs/anolis_defconfig		${DIST_RPMBUILDDIR_OUTPUT}/SOURCES/kernel-${DIST_KERNELVERSION}-aarch64.config
     cp ${DIST_SRCROOT}/arch/arm64/configs/anolis-debug_defconfig	${DIST_RPMBUILDDIR_OUTPUT}/SOURCES/kernel-${DIST_KERNELVERSION}-aarch64-debug.config
-
+    cp ${DIST_SRCROOT}/arch/loongarch/configs/anolis_defconfig \
+    ${DIST_RPMBUILDDIR_OUTPUT}/SOURCES/kernel-${DIST_KERNELVERSION}-loongarch64.config
+    cp ${DIST_SRCROOT}/arch/loongarch/configs/anolis-debug_defconfig \
+    ${DIST_RPMBUILDDIR_OUTPUT}/SOURCES/kernel-${DIST_KERNELVERSION}-loongarch64-debug.config
 }
 
 do_prep
