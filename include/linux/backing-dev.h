@@ -392,6 +392,8 @@ static inline void wb_blkcg_offline(struct cgroup_subsys_state *css)
 }
 
 #ifdef CONFIG_CGROUPS
+struct cgroup_subsys;
+
 static inline void insert_memcg_blkcg_link(struct cgroup_subsys *ss,
 					   struct list_head *tmp_links,
 					   struct css_set *cset)
