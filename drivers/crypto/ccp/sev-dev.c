@@ -66,6 +66,10 @@ static bool psp_dead;
 static int psp_timeout;
 
 static int csv_comm_mode = CSV_COMM_MAILBOX_ON;
+extern int is_hygon_psp;
+extern struct psp_misc_dev *psp_misc;
+extern int psp_mutex_lock_timeout(struct psp_mutex *mutex, uint64_t ms);
+extern int psp_mutex_unlock(struct psp_mutex *mutex);
 
 /* Trusted Memory Region (TMR):
  *   The TMR is a 1MB area that must be 1MB aligned.  Use the page allocator
@@ -553,7 +557,13 @@ static int csv_do_ringbuf_cmds(int *psp_ret)
 	struct sev_user_data_status data;
 	int rc;
 
-	mutex_lock(&sev_cmd_mutex);
+	if (is_hygon_psp) {
+		if (psp_mutex_lock_timeout(&psp_misc->data_pg_aligned->mb_mutex,
+				PSP_MUTEX_TIMEOUT) != 1)
+			return -EBUSY;
+	} else {
+		mutex_lock(&sev_cmd_mutex);
+	}
 
 	rc = __csv_ring_buffer_enter_locked(psp_ret);
 	if (rc)
@@ -566,7 +576,10 @@ static int csv_do_ringbuf_cmds(int *psp_ret)
 	csv_comm_mode = CSV_COMM_MAILBOX_ON;
 
 cmd_unlock:
-	mutex_unlock(&sev_cmd_mutex);
+	if (is_hygon_psp)
+		psp_mutex_unlock(&psp_misc->data_pg_aligned->mb_mutex);
+	else
+		mutex_unlock(&sev_cmd_mutex);
 
 	return rc;
 }
@@ -575,9 +588,18 @@ static int sev_do_cmd(int cmd, void *data, int *psp_ret)
 {
 	int rc;
 
-	mutex_lock(&sev_cmd_mutex);
+	if (is_hygon_psp) {
+		if (psp_mutex_lock_timeout(&psp_misc->data_pg_aligned->mb_mutex,
+				PSP_MUTEX_TIMEOUT) != 1)
+			return -EBUSY;
+	} else {
+		mutex_lock(&sev_cmd_mutex);
+	}
 	rc = __sev_do_cmd_locked(cmd, data, psp_ret);
-	mutex_unlock(&sev_cmd_mutex);
+	if (is_hygon_psp)
+		psp_mutex_unlock(&psp_misc->data_pg_aligned->mb_mutex);
+	else
+		mutex_unlock(&sev_cmd_mutex);
 
 	return rc;
 }
@@ -696,9 +718,18 @@ int sev_platform_init(int *error)
 {
 	int rc;
 
-	mutex_lock(&sev_cmd_mutex);
+	if (is_hygon_psp) {
+		if (psp_mutex_lock_timeout(&psp_misc->data_pg_aligned->mb_mutex,
+				PSP_MUTEX_TIMEOUT) != 1)
+			return -EBUSY;
+	} else {
+		mutex_lock(&sev_cmd_mutex);
+	}
 	rc = __sev_platform_init_locked(error);
-	mutex_unlock(&sev_cmd_mutex);
+	if (is_hygon_psp)
+		psp_mutex_unlock(&psp_misc->data_pg_aligned->mb_mutex);
+	else
+		mutex_unlock(&sev_cmd_mutex);
 
 	return rc;
 }
@@ -737,9 +768,18 @@ static int sev_platform_shutdown(int *error)
 {
 	int rc;
 
-	mutex_lock(&sev_cmd_mutex);
+	if (is_hygon_psp) {
+		if (psp_mutex_lock_timeout(&psp_misc->data_pg_aligned->mb_mutex,
+				PSP_MUTEX_TIMEOUT) != 1)
+			return -EBUSY;
+	} else {
+		mutex_lock(&sev_cmd_mutex);
+	}
 	rc = __sev_platform_shutdown_locked(NULL);
-	mutex_unlock(&sev_cmd_mutex);
+	if (is_hygon_psp)
+		psp_mutex_unlock(&psp_misc->data_pg_aligned->mb_mutex);
+	else
+		mutex_unlock(&sev_cmd_mutex);
 
 	return rc;
 }
@@ -1415,7 +1455,13 @@ static long sev_ioctl(struct file *file, unsigned int ioctl, unsigned long arg)
 			return -EINVAL;
 	}
 
-	mutex_lock(&sev_cmd_mutex);
+	if (is_hygon_psp) {
+		if (psp_mutex_lock_timeout(&psp_misc->data_pg_aligned->mb_mutex,
+				PSP_MUTEX_TIMEOUT) != 1)
+			return -EBUSY;
+	} else {
+		mutex_lock(&sev_cmd_mutex);
+	}
 
 	if (boot_cpu_data.x86_vendor == X86_VENDOR_HYGON) {
 		switch (input.cmd) {
@@ -1475,7 +1521,10 @@ result_to_user:
 	if (copy_to_user(argp, &input, sizeof(struct sev_issue_cmd)))
 		ret = -EFAULT;
 out:
-	mutex_unlock(&sev_cmd_mutex);
+	if (is_hygon_psp)
+		psp_mutex_unlock(&psp_misc->data_pg_aligned->mb_mutex);
+	else
+		mutex_unlock(&sev_cmd_mutex);
 
 	return ret;
 }

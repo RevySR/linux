@@ -14,6 +14,7 @@
 #include <linux/list.h>
 #include <linux/bits.h>
 #include <linux/interrupt.h>
+#include <linux/miscdevice.h>
 
 #include "sp-dev.h"
 
@@ -56,6 +57,21 @@ struct psp_device {
 	void *dbc_data;
 
 	unsigned int capability;
+};
+
+#define PSP_MUTEX_TIMEOUT 10000
+struct psp_mutex {
+	uint64_t locked;
+};
+
+struct psp_dev_data {
+	struct psp_mutex mb_mutex;
+};
+
+struct psp_misc_dev {
+	struct kref refcount;
+	struct psp_dev_data *data_pg_aligned;
+	struct miscdevice misc;
 };
 
 void psp_set_sev_irq_handler(struct psp_device *psp, psp_irq_handler_t handler,
