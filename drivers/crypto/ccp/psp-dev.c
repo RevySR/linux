@@ -9,6 +9,7 @@
 
 #include <linux/kernel.h>
 #include <linux/irqreturn.h>
+#include <linux/delay.h>
 #include <linux/pci.h>
 
 #include "sp-dev.h"
@@ -22,6 +23,14 @@ struct psp_device *psp_master;
 
 struct psp_misc_dev *psp_misc;
 int is_hygon_psp;
+#define HYGON_PSP_IOC_TYPE 'H'
+enum HYGON_PSP_OPCODE {
+	HYGON_PSP_MUTEX_ENABLE = 1,
+	HYGON_PSP_MUTEX_DISABLE,
+	HYGON_PSP_OPCODE_MAX_NR,
+};
+int psp_mutex_enabled;
+extern struct mutex sev_cmd_mutex;
 
 uint64_t atomic64_exchange(uint64_t *dst, uint64_t val)
 {
@@ -55,7 +64,7 @@ int psp_mutex_lock_timeout(struct psp_mutex *mutex, uint64_t ms)
 			ret = 1;
 			break;
 		}
-	} while (time_before(jiffies, je));
+	} while ((ms == 0) || time_before(jiffies, je));
 
 	return ret;
 }
@@ -261,11 +270,51 @@ static ssize_t write_psp(struct file *file, const char __user *buf, size_t count
 	return written;
 }
 
+static long ioctl_psp(struct file *file, unsigned int ioctl, unsigned long arg)
+{
+	unsigned int opcode = 0;
+
+	if (_IOC_TYPE(ioctl) != HYGON_PSP_IOC_TYPE) {
+		printk(KERN_ERR "%s: invalid ioctl type: 0x%x\n", __func__, _IOC_TYPE(ioctl));
+		return -EINVAL;
+	}
+	opcode = _IOC_NR(ioctl);
+	switch (opcode) {
+	case HYGON_PSP_MUTEX_ENABLE:
+		psp_mutex_lock_timeout(&psp_misc->data_pg_aligned->mb_mutex, 0);
+		// And get the sev lock to make sure no one is using it now.
+		mutex_lock(&sev_cmd_mutex);
+		psp_mutex_enabled = 1;
+		mutex_unlock(&sev_cmd_mutex);
+		// Wait 10ms just in case someone is right before getting the psp lock.
+		mdelay(10);
+		psp_mutex_unlock(&psp_misc->data_pg_aligned->mb_mutex);
+		break;
+
+	case HYGON_PSP_MUTEX_DISABLE:
+		mutex_lock(&sev_cmd_mutex);
+		// And get the psp lock to make sure no one is using it now.
+		psp_mutex_lock_timeout(&psp_misc->data_pg_aligned->mb_mutex, 0);
+		psp_mutex_enabled = 0;
+		psp_mutex_unlock(&psp_misc->data_pg_aligned->mb_mutex);
+		// Wait 10ms just in case someone is right before getting the sev lock.
+		mdelay(10);
+		mutex_unlock(&sev_cmd_mutex);
+		break;
+
+	default:
+		printk(KERN_ERR "%s: invalid ioctl number: %d\n", __func__, opcode);
+		return -EINVAL;
+	}
+	return 0;
+}
+
 static const struct file_operations psp_fops = {
 	.owner          = THIS_MODULE,
 	.mmap		= mmap_psp,
 	.read		= read_psp,
 	.write		= write_psp,
+	.unlocked_ioctl = ioctl_psp,
 };
 
 static int hygon_psp_additional_setup(struct sp_device *sp)
@@ -349,6 +398,7 @@ int psp_dev_init(struct sp_device *sp)
 
 	if (pdev->vendor == PCI_VENDOR_ID_HYGON) {
 		is_hygon_psp = 1;
+		psp_mutex_enabled = 0;
 		ret = hygon_psp_additional_setup(sp);
 		if (ret) {
 			dev_err(dev, "psp: unable to do additional setup\n");

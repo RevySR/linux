@@ -59,7 +59,7 @@ struct psp_device {
 	unsigned int capability;
 };
 
-#define PSP_MUTEX_TIMEOUT 10000
+#define PSP_MUTEX_TIMEOUT 600000
 struct psp_mutex {
 	uint64_t locked;
 };
