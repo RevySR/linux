@@ -40,6 +40,8 @@ void __init csv_early_update_memory_dec(u64 vaddr, u64 pages);
 
 void __init csv_early_memory_enc_dec(u64 vaddr, u64 size, bool enc);
 
+void csv_memory_enc_dec(u64 vaddr, u64 pages, bool enc);
+
 #else	/* !CONFIG_HYGON_CSV */
 
 #define csv_smr		NULL
@@ -62,6 +64,8 @@ static inline void __init csv_early_update_memory_dec(u64 vaddr, u64 pages) { }
 
 static inline void __init csv_early_memory_enc_dec(u64 vaddr, u64 size,
 						   bool enc) { }
+
+static inline void csv_memory_enc_dec(u64 vaddr, u64 pages, bool enc) { }
 
 #endif	/* CONFIG_HYGON_CSV */
 
