@@ -204,6 +204,14 @@ static int sev_cmd_buffer_len(int cmd)
 			return sizeof(struct csv3_data_dbg_read_vmsa);
 		case CSV3_CMD_DBG_READ_MEM:
 			return sizeof(struct csv3_data_dbg_read_mem);
+		case CSV3_CMD_SEND_ENCRYPT_DATA:
+			return sizeof(struct csv3_data_send_encrypt_data);
+		case CSV3_CMD_SEND_ENCRYPT_CONTEXT:
+			return sizeof(struct csv3_data_send_encrypt_context);
+		case CSV3_CMD_RECEIVE_ENCRYPT_DATA:
+			return sizeof(struct csv3_data_receive_encrypt_data);
+		case CSV3_CMD_RECEIVE_ENCRYPT_CONTEXT:
+			return sizeof(struct csv3_data_receive_encrypt_context);
 		default:
 			break;
 		}
