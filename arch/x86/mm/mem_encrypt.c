@@ -12,6 +12,7 @@
 #include <linux/swiotlb.h>
 #include <linux/cc_platform.h>
 #include <linux/mem_encrypt.h>
+#include <asm/csv.h>
 
 /* Override for DMA direct allocation check - ARCH_HAS_FORCE_DMA_UNENCRYPTED */
 bool force_dma_unencrypted(struct device *dev)
@@ -58,6 +59,9 @@ static void print_hygon_cc_feature_info(void)
 	/* Encrypted Register State */
 	if (cc_platform_has(CC_ATTR_GUEST_STATE_ENCRYPT))
 		pr_info(" HYGON CSV2");
+
+	if (csv3_active())
+		pr_info(" HYGON CSV3");
 }
 
 static void print_mem_encrypt_feature_info(void)
