@@ -2,6 +2,8 @@
 #ifndef _UAPI_ASM_SW64_MMAN_H
 #define _UAPI_ASM_SW64_MMAN_H
 
+#include <asm-generic/mman-common.h>
+
 #define PROT_READ		0x1		/* page can be read */
 #define PROT_WRITE		0x2		/* page can be written */
 #define PROT_EXEC		0x4		/* page can be executed */
