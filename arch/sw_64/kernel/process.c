@@ -103,6 +103,24 @@ int copy_thread(struct task_struct *p, const struct kernel_clone_args *args)
 	return 0;
 }
 
+/*
+ * Fill in the user structure for a ELF core dump.
+ * @regs: should be signal_pt_regs() or task_pt_reg(task)
+ */
+void sw64_elf_core_copy_regs(elf_greg_t *dest, struct pt_regs *regs)
+{
+	int i;
+	struct thread_info *ti;
+
+	ti = (void *)((__u64)regs & ~(THREAD_SIZE - 1));
+
+	for (i = 0; i < 31; i++)
+		dest[i] = regs->regs[i];
+	dest[31] = regs->pc;
+	dest[32] = ti->pcb.tp;
+}
+EXPORT_SYMBOL(sw64_elf_core_copy_regs);
+
 unsigned long arch_randomize_brk(struct mm_struct *mm)
 {
 	return randomize_page(mm->brk, 0x02000000);
