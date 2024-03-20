@@ -614,7 +614,8 @@ get_free_meta_from_node(struct kfence_freelist_node *kfence_freelist)
 		object = list_entry(kfence_freelist->freelist.next, struct kfence_metadata, list);
 		list_del_init(&object->list);
 	}
-	percpu_ref_get(&object->kpa->refcnt);
+	if (object)
+		percpu_ref_get(&object->kpa->refcnt);
 	raw_spin_unlock_irqrestore(&kfence_freelist->lock, flags);
 
 	return object;
@@ -685,8 +686,8 @@ static struct kfence_metadata *get_free_meta(int real_node)
 		list_del_init(&object->list);
 		c->count--;
 	}
-
-	percpu_ref_get(&object->kpa->refcnt);
+	if (object)
+		percpu_ref_get(&object->kpa->refcnt);
 
 	put_cpu_ptr(c);
 	local_irq_restore(flags);
