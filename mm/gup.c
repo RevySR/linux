@@ -1973,7 +1973,7 @@ static void collect_longterm_unpinnable_pages(
 			continue;
 		}
 
-		if (!folio_test_lru(folio) && drain_allow) {
+		if (drain_allow) {
 			lru_add_drain_all();
 			drain_allow = false;
 		}
