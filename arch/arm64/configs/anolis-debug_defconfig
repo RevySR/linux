@@ -114,7 +114,6 @@ CONFIG_PREEMPT_VOLUNTARY=y
 CONFIG_PREEMPT_COUNT=y
 # CONFIG_PREEMPT_DYNAMIC is not set
 CONFIG_SCHED_CORE=y
-CONFIG_SCHED_ACPU=y
 
 #
 # CPU/Task time and stats accounting
@@ -2503,6 +2502,7 @@ CONFIG_ATA_PIIX=y
 # CONFIG_SATA_ULI is not set
 # CONFIG_SATA_VIA is not set
 # CONFIG_SATA_VITESSE is not set
+# CONFIG_SATA_ZHAOXIN is not set
 
 #
 # PATA SFF controllers with BMDMA
@@ -3414,11 +3414,13 @@ CONFIG_I2C_NFORCE2=m
 # CONFIG_I2C_SIS96X is not set
 # CONFIG_I2C_VIA is not set
 # CONFIG_I2C_VIAPRO is not set
+# CONFIG_I2C_ZHAOXIN is not set
 
 #
 # ACPI drivers
 #
 # CONFIG_I2C_SCMI is not set
+# CONFIG_I2C_ZHAOXIN_SMBUS is not set
 
 #
 # I2C system bus drivers (mostly embedded / system-on-chip)
@@ -4485,6 +4487,7 @@ CONFIG_FB_EFI=y
 CONFIG_FB_SIMPLE=y
 CONFIG_FB_SSD1307=m
 # CONFIG_FB_SM712 is not set
+# CONFIG_FB_LS2K500 is not set
 CONFIG_FB_CORE=y
 CONFIG_FB_NOTIFY=y
 # CONFIG_FIRMWARE_EDID is not set
@@ -6924,6 +6927,7 @@ CONFIG_WQ_WATCHDOG=y
 CONFIG_SCHED_DEBUG=y
 CONFIG_SCHED_INFO=y
 CONFIG_SCHEDSTATS=y
+CONFIG_SCHED_ACPU=y
 # end of Scheduler Debugging
 
 # CONFIG_DEBUG_TIMEKEEPING is not set
