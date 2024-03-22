@@ -285,9 +285,13 @@ extern const struct kmalloc_info_struct {
 /* Kmalloc array related functions */
 void setup_kmalloc_cache_index_table(void);
 void create_kmalloc_caches(slab_flags_t);
+void create_oot_kmalloc_caches(slab_flags_t flags);
 
 /* Find the kmalloc slab corresponding for a certain size */
 struct kmem_cache *kmalloc_slab(size_t size, gfp_t flags, unsigned long caller);
+
+struct kmem_cache *oot_kmalloc_slab(int i, size_t size, gfp_t flags,
+				    unsigned long caller);
 
 void *__kmem_cache_alloc_node(struct kmem_cache *s, gfp_t gfpflags,
 			      int node, size_t orig_size,
@@ -363,7 +367,8 @@ static inline bool is_kmalloc_cache(struct kmem_cache *s)
 			      SLAB_ACCOUNT | \
 			      SLAB_KMALLOC | \
 			      SLAB_NO_MERGE | \
-			      SLAB_NO_USER_FLAGS)
+			      SLAB_NO_USER_FLAGS | \
+			      SLAB_OOT)
 
 bool __kmem_cache_empty(struct kmem_cache *);
 int __kmem_cache_shutdown(struct kmem_cache *);

@@ -2119,6 +2119,7 @@ static void free_slab(struct kmem_cache *s, struct slab *slab)
 
 static void discard_slab(struct kmem_cache *s, struct slab *slab)
 {
+	WARN_ON_ONCE(s->flags & SLAB_OOT);
 	dec_slabs_node(s, slab_nid(slab), slab->objects);
 	free_slab(s, slab);
 }
@@ -2713,7 +2714,8 @@ static void put_cpu_partial(struct kmem_cache *s, struct slab *slab, int drain)
 	oldslab = this_cpu_read(s->cpu_slab->partial);
 
 	if (oldslab) {
-		if (drain && oldslab->slabs >= s->cpu_partial_slabs) {
+		if (drain && oldslab->slabs >= s->cpu_partial_slabs
+			  && !(s->flags & SLAB_OOT)) {
 			/*
 			 * Partial array is full. Move the existing set to the
 			 * per node partial list. Postpone the actual unfreezing
@@ -3691,7 +3693,8 @@ static void __slab_free(struct kmem_cache *s, struct slab *slab,
 		return;
 	}
 
-	if (unlikely(!new.inuse && n->nr_partial >= s->min_partial))
+	if (unlikely(!new.inuse && n->nr_partial >= s->min_partial)
+				&& !(s->flags & SLAB_OOT))
 		goto slab_empty;
 
 	/*
@@ -5069,6 +5072,7 @@ void __init kmem_cache_init(void)
 	/* Now we can use the kmem_cache to allocate kmalloc slabs */
 	setup_kmalloc_cache_index_table();
 	create_kmalloc_caches(0);
+	create_oot_kmalloc_caches(SLAB_OOT);
 
 	/* Setup random freelists for each cache */
 	init_freelist_randomization();
