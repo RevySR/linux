@@ -35,7 +35,7 @@ int check_version(const struct load_info *info,
 	for (i = 0; i < num_versions; i++) {
 		u32 crcval;
 
-		if (strcmp(versions[i].name, symname) != 0)
+		if (strcmp(versions[i].name, find_true_name(symname, mod)) != 0)
 			continue;
 
 		crcval = *crc;

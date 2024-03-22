@@ -295,6 +295,54 @@ static bool find_exported_symbol_in_section(const struct symsearch *syms,
 	return true;
 }
 
+#define OOT_POOL_NUM	16
+
+struct redirect_sym {
+	char *src_name;
+	char *dst_name[OOT_POOL_NUM];
+};
+
+#define DEFINE_REDIRECT_SYM(__src_name, __dst_name)			\
+{									\
+	.src_name = __src_name,						\
+	.dst_name = {							\
+		__dst_name "_0",					\
+		__dst_name "_1",					\
+		__dst_name "_2",					\
+		__dst_name "_3",					\
+		__dst_name "_4",					\
+		__dst_name "_5",					\
+		__dst_name "_6",					\
+		__dst_name "_7",					\
+		__dst_name "_8",					\
+		__dst_name "_9",					\
+		__dst_name "_10",					\
+		__dst_name "_11",					\
+		__dst_name "_12",					\
+		__dst_name "_13",					\
+		__dst_name "_14",					\
+		__dst_name "_15",					\
+	}								\
+}
+
+static struct redirect_sym redirect_syms[] = {
+	DEFINE_REDIRECT_SYM("kmalloc_caches", "oot_kmalloc_caches"),
+	DEFINE_REDIRECT_SYM("__kmalloc", "oot___kmalloc"),
+	DEFINE_REDIRECT_SYM("__kmalloc_node", "oot___kmalloc_node"),
+	{},
+};
+
+const char *find_true_name(const char *name, struct module *mod)
+{
+	struct redirect_sym *rsym;
+
+	for (rsym = redirect_syms; rsym->src_name; rsym++)
+		if (!strcmp(name, rsym->src_name))
+			return rsym->dst_name[mod->oot_isolation_index];
+
+	return name;
+}
+
 /*
  * Find an exported symbol and return it, along with, (optional) crc and
  * (optional) module which owns it.  Needs preempt disabled or module_mutex.
@@ -1112,7 +1160,7 @@ static const struct kernel_symbol *resolve_symbol(struct module *mod,
 						  char ownername[])
 {
 	struct find_symbol_arg fsa = {
-		.name	= name,
+		.name	= find_true_name(name, mod),
 		.gplok	= !(mod->taints & (1 << TAINT_PROPRIETARY_MODULE)),
 		.warn	= true,
 	};
@@ -1237,6 +1285,38 @@ static void free_mod_mem(struct module *mod)
 	module_memory_free(mod->mem[MOD_DATA].base, MOD_DATA);
 }
 
+struct module *oot_table[OOT_POOL_NUM];
+
+static void get_oot_mempool(struct module *mod)
+{
+	int i;
+
+	//TODO: check this mod need oot mempool
+	mutex_lock(&module_mutex);
+	for (i = 0; i < OOT_POOL_NUM; i++) {
+		if (!oot_table[i]) {
+			oot_table[i] = mod;
+			mod->oot_isolation_index = i;
+			pr_info("Module %s use oot-kmalloc-%d.\n", mod->name, i);
+			break;
+		}
+	}
+	mutex_unlock(&module_mutex);
+	if (mod->oot_isolation_index == -1)
+		pr_info("Module %s can't use oot-kmalloc because pool exhausted.\n", mod->name);
+}
+
+static void put_oot_mempool(struct module *mod)
+{
+	//TODO: check this mod need oot mempool
+	mutex_lock(&module_mutex);
+	if (oot_table[mod->oot_isolation_index] == mod)
+		oot_table[mod->oot_isolation_index] = NULL;
+	else
+		WARN_ON("oot mempool dismatch with owner!!!\n");
+	mutex_unlock(&module_mutex);
+}
+
 /* Free a module, remove from lists, etc. */
 static void free_module(struct module *mod)
 {
@@ -1251,6 +1331,8 @@ static void free_module(struct module *mod)
 	mutex_lock(&module_mutex);
 	mod->state = MODULE_STATE_UNFORMED;
 	mutex_unlock(&module_mutex);
+
+	put_oot_mempool(mod);
 
 	/* Arch-specific cleanup. */
 	module_arch_cleanup(mod);
@@ -2917,6 +2999,8 @@ static int load_module(struct load_info *info, const char __user *uargs,
 	/* Set up MODINFO_ATTR fields */
 	setup_modinfo(mod, info);
 
+	get_oot_mempool(mod);
+
 	/* Fix up syms, so that st_value is a pointer to location. */
 	err = simplify_symbols(mod, info);
 	if (err < 0)
@@ -3012,6 +3096,7 @@ static int load_module(struct load_info *info, const char __user *uargs,
  free_arch_cleanup:
 	module_arch_cleanup(mod);
  free_modinfo:
+	put_oot_mempool(mod);
 	free_modinfo(mod);
  free_unload:
 	module_unload_free(mod);

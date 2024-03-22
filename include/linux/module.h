@@ -583,7 +583,7 @@ struct module {
 #ifdef CONFIG_DYNAMIC_DEBUG_CORE
 	struct _ddebug_info dyndbg_info;
 #endif
-
+	unsigned int	oot_isolation_index;
 	CK_KABI_RESERVE(1)
 	CK_KABI_RESERVE(2)
 	CK_KABI_RESERVE(3)
@@ -614,6 +614,8 @@ bool is_module_address(unsigned long addr);
 bool __is_module_percpu_address(unsigned long addr, unsigned long *can_addr);
 bool is_module_percpu_address(unsigned long addr);
 bool is_module_text_address(unsigned long addr);
+
+const char *find_true_name(const char *name, struct module *mod);
 
 static inline bool within_module_mem_type(unsigned long addr,
 					  const struct module *mod,
