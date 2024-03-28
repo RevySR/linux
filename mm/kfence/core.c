@@ -778,7 +778,7 @@ static void *kfence_guarded_alloc(struct kmem_cache *cache, size_t size, gfp_t g
 	__SetPageSlab(page);
 	slab->slab_cache = cache;
 #ifdef CONFIG_MEMCG
-	slab->memcg_data = (unsigned long)meta->objcg | MEMCG_DATA_OBJCGS;
+	slab->memcg_data = (unsigned long)&meta->objcg | MEMCG_DATA_OBJCGS;
 #endif
 #if defined(CONFIG_SLUB)
 	slab->objects = 1;
