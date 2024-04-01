@@ -60,8 +60,8 @@ config HYGON_PSP2CPU_CMD
 	help
 	  Hygon PSP2CPU Command Support
 
-config TDM_HYGON
-	tristate "Hygon TDM Interface"
+config TDM_DEV_HYGON
+	bool "Hygon TDM Interface"
 	default y
 	depends on CRYPTO_DEV_CCP_DD
 	depends on HYGON_PSP2CPU_CMD

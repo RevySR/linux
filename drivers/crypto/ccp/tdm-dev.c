@@ -22,7 +22,12 @@
 #include <crypto/hash.h>
 #include <linux/kallsyms.h>
 #include <linux/ftrace.h>
-#include "tdm_hygon.h"
+#include "tdm-dev.h"
+
+#ifdef pr_fmt
+#undef pr_fmt
+#endif
+#define pr_fmt(fmt) "tdm: " fmt
 
 #define TDM_CMD_ID_MAX		16
 #define TDM2PSP_CMD(id)		(0x110 | (id))
@@ -57,6 +62,9 @@ static unsigned int p2c_cmd_id = TDM_P2C_CMD_ID;
 static struct task_struct *kthread;
 static DECLARE_KFIFO(kfifo_error_task, unsigned char, TDM_KFIFO_SIZE);
 static spinlock_t kfifo_lock;
+static int tdm_support;
+static int tdm_init_flag;
+static int tdm_destroy_flag;
 
 static int list_check_exist(uint32_t task_id)
 {
@@ -303,7 +311,7 @@ static int tdm_get_cmd_context_hash(uint32_t flag, uint8_t *hash)
 	int ret = 0;
 	struct context_message ctx_msg = {0};
 	unsigned long return_address = 0;
-#if IS_BUILTIN(CONFIG_TDM_HYGON)
+#if IS_BUILTIN(CONFIG_CRYPTO_DEV_CCP_DD)
 	struct module *p_module = NULL;
 #elif IS_ENABLED(CONFIG_KALLSYMS)
 	char symbol_buf[128] = {0};
@@ -324,7 +332,7 @@ static int tdm_get_cmd_context_hash(uint32_t flag, uint8_t *hash)
 
 	return_address = CALLER_ADDR1;
 	if (return_address) {
-#if IS_BUILTIN(CONFIG_TDM_HYGON)
+#if IS_BUILTIN(CONFIG_CRYPTO_DEV_CCP_DD)
 		p_module = __module_address(return_address);
 		// caller is module
 		if (p_module)
@@ -375,7 +383,7 @@ end:
 static int tdm_verify_phy_addr_valid(struct addr_range_info *range)
 {
 	int ret = 0;
-#if IS_BUILTIN(CONFIG_TDM_HYGON)
+#if IS_BUILTIN(CONFIG_CRYPTO_DEV_CCP_DD)
 	int i;
 	uint64_t phy_addr_start, phy_addr_end;
 
@@ -520,6 +528,29 @@ end:
 	return ret;
 }
 
+int psp_check_tdm_support(void)
+{
+	int ret = 0;
+	struct tdm_version version;
+
+	if (boot_cpu_data.x86_vendor == X86_VENDOR_HYGON) {
+		if (tdm_support)
+			goto end;
+
+		ret = psp_get_fw_info(&version);
+		if (ret) {
+			tdm_support = 0;
+			goto end;
+		}
+
+		tdm_support = 1;
+	}
+
+end:
+	return tdm_support;
+}
+EXPORT_SYMBOL_GPL(psp_check_tdm_support);
+
 int psp_get_fw_info(struct tdm_version *version)
 {
 	int ret = 0;
@@ -552,7 +583,7 @@ int psp_get_fw_info(struct tdm_version *version)
 
 	if (error) {
 		ret = -error;
-		pr_err("get_fw_info exception error: 0x%x\n", error);
+		pr_warn("get_fw_info exception: 0x%x\n", error);
 		goto free_cmdresp;
 	}
 
@@ -1493,9 +1524,12 @@ static struct miscdevice misc = {
 	.fops = &tdm_fops,
 };
 
-static int __init hygon_tdm_init(void)
+int tdm_dev_init(void)
 {
 	int ret = 0;
+
+	if (tdm_init_flag)
+		return 0;
 
 	INIT_KFIFO(kfifo_error_task);
 	INIT_LIST_HEAD(&dyn_head.head);
@@ -1513,17 +1547,38 @@ static int __init hygon_tdm_init(void)
 	if (IS_ERR(kthread)) {
 		pr_err("kthread_create fail\n");
 		ret = PTR_ERR(kthread);
-		return ret;
+		goto unreg;
 	}
 
 	wake_up_process(kthread);
+
+	ret = misc_register(&misc);
+	if (ret) {
+		pr_err("misc_register for tdm failed\n");
+		goto stop_kthread;
+	}
+
+	tdm_init_flag = 1;
 	pr_info("TDM driver loaded successfully!\n");
 
-	return misc_register(&misc);
+	return ret;
+
+stop_kthread:
+	if (kthread) {
+		kthread_stop(kthread);
+		kthread = NULL;
+	}
+unreg:
+	psp_unregister_cmd_notifier(p2c_cmd_id, tdm_interrupt_handler);
+
+	return ret;
 }
 
-static void __exit hygon_tdm_exit(void)
+int tdm_dev_destroy(void)
 {
+	if (tdm_destroy_flag)
+		goto end;
+
 	if (kthread) {
 		kthread_stop(kthread);
 		kthread = NULL;
@@ -1532,18 +1587,8 @@ static void __exit hygon_tdm_exit(void)
 	psp_unregister_cmd_notifier(p2c_cmd_id, tdm_interrupt_handler);
 
 	misc_deregister(&misc);
+	tdm_destroy_flag = 1;
+end:
+	return 0;
 }
 
-MODULE_AUTHOR("niuyongwen@hygon.cn");
-MODULE_LICENSE("GPL");
-MODULE_VERSION("0.7");
-MODULE_DESCRIPTION("The dynamic measure driver");
-
-/*
- * hygon_tdm_init must be done after ccp module init.
- * That's why we use a device_initcall_sync which is
- * called after all the device_initcall(includes ccp) but before the
- * late_initcall(includes ima).
- */
-device_initcall_sync(hygon_tdm_init);
-module_exit(hygon_tdm_exit);

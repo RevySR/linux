@@ -22,8 +22,8 @@
  * Version: 0.3 (fw version 1.2)
  *	1.add remote authentication support.
  */
-#ifndef __TDM_HYGON_H__
-#define __TDM_HYGON_H__
+#ifndef __TDM_DEV_H__
+#define __TDM_DEV_H__
 
 #include <linux/sched.h>
 #include <linux/version.h>
@@ -481,6 +481,7 @@ struct tdm_show_device {
 /*Public api definition for tdm*/
 typedef int (*measure_exception_handler_t)(uint32_t task_id);
 
+int psp_check_tdm_support(void);
 int psp_get_fw_info(struct tdm_version *version);
 int psp_create_measure_task(struct addr_range_info *range, struct measure_data *data,
 		uint32_t flag, struct authcode_2b *code);
@@ -498,4 +499,6 @@ int tdm_get_report(uint32_t task_id, struct task_selection_2b *selection,
 int tdm_get_vpcr_audit(struct pcr_select pcr, struct tpm2b_digest *digest,
 		struct tdm_pcr_value_2b *pcr_values);
 
-#endif /* __TDM_HYGON_H__*/
+int tdm_dev_init(void);
+int tdm_dev_destroy(void);
+#endif /* __TDM_DEV_H__*/
