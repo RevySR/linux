@@ -60,6 +60,14 @@ config HYGON_PSP2CPU_CMD
 	help
 	  Hygon PSP2CPU Command Support
 
+config TDM_HYGON
+	tristate "Hygon TDM Interface"
+	default y
+	depends on CRYPTO_DEV_CCP_DD
+	depends on HYGON_PSP2CPU_CMD
+	help
+	  Hygon TDM driver
+
 config CRYPTO_DEV_CCP_DEBUGFS
 	bool "Enable CCP Internals in DebugFS"
 	default n
