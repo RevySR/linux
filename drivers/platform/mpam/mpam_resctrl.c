@@ -359,9 +359,10 @@ int resctrl_arch_rmid_read(struct rdt_resource	*r, struct rdt_domain *d,
 		return -EINVAL;
 	}
 
-	cfg.mon = mon;
-	if (cfg.mon == USE_RMID_IDX)
+	if (mon == USE_RMID_IDX)
 		cfg.mon = resctrl_arch_rmid_idx_encode(closid, rmid);
+	else
+		cfg.mon = mon;
 
 	cfg.match_pmg = true;
 	cfg.pmg = rmid;
