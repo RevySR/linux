@@ -677,6 +677,16 @@ struct vpsp_ret {
 #define GET_PSP_VID(hpa)        ((__u16)((__u64)(hpa) >> PSP_VID_SHIFT) & PSP_VID_MASK)
 #define CLEAR_PSP_VID(hpa)      ((__u64)(hpa) & ~((__u64)PSP_VID_MASK << PSP_VID_SHIFT))
 
+#ifdef CONFIG_HYGON_PSP2CPU_CMD
+
+typedef int (*p2c_notifier_t)(uint32_t id, uint64_t data);
+
+int psp_register_cmd_notifier(uint32_t cmd_id, int (*notifier)(uint32_t id, uint64_t data));
+
+int psp_unregister_cmd_notifier(uint32_t cmd_id, int (*notifier)(uint32_t id, uint64_t data));
+
+#endif
+
 #ifdef CONFIG_CRYPTO_DEV_SP_PSP
 
 int psp_do_cmd(int cmd, void *data, int *psp_ret);

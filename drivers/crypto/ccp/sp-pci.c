@@ -129,9 +129,13 @@ static umode_t psp_firmware_is_visible(struct kobject *kobj, struct attribute *a
 
 	if (!psp)
 		return 0;
-
+#ifdef CONFIG_X86
+	if (attr == &dev_attr_bootloader_version.attr &&
+	    psp->vdata->bootloader_info_reg && boot_cpu_data.x86_vendor != X86_VENDOR_HYGON)
+#else
 	if (attr == &dev_attr_bootloader_version.attr &&
 	    psp->vdata->bootloader_info_reg)
+#endif
 		val = ioread32(psp->io_regs + psp->vdata->bootloader_info_reg);
 
 	if (attr == &dev_attr_tee_version.attr &&
@@ -462,6 +466,11 @@ static const struct psp_vdata pspv1 = {
 	.feature_reg		= 0x105fc,	/* C2PMSG_63 */
 	.inten_reg		= 0x10610,	/* P2CMSG_INTEN */
 	.intsts_reg		= 0x10614,	/* P2CMSG_INTSTS */
+#ifdef CONFIG_HYGON_PSP2CPU_CMD
+	.p2c_cmdresp_reg	= 0x105e8,
+	.p2c_cmdbuff_addr_lo_reg = 0x105ec,
+	.p2c_cmdbuff_addr_hi_reg = 0x105f0,
+#endif
 };
 
 static const struct psp_vdata pspv2 = {
@@ -512,6 +521,11 @@ static const struct psp_vdata psp_csvv1 = {
 	.feature_reg		= 0x105fc,
 	.inten_reg		= 0x10670,
 	.intsts_reg		= 0x10674,
+#ifdef CONFIG_HYGON_PSP2CPU_CMD
+	.p2c_cmdresp_reg        = 0x105e8,
+	.p2c_cmdbuff_addr_lo_reg = 0x105ec,
+	.p2c_cmdbuff_addr_hi_reg = 0x105f0,
+#endif
 };
 
 #endif

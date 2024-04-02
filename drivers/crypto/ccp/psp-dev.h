@@ -33,6 +33,11 @@
 
 #define MAX_PSP_NAME_LEN		16
 
+#ifdef CONFIG_HYGON_PSP2CPU_CMD
+#define PSP_X86_CMD			BIT(2)
+#define P2C_NOTIFIERS_MAX		16
+#endif
+
 extern struct psp_device *psp_master;
 
 typedef void (*psp_irq_handler_t)(int, void *, unsigned int);
