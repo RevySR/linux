@@ -629,4 +629,4 @@ end:
 	/* return psp_ret to guest */
 	kvm_write_guest(kvm, psp_ret_gpa, &psp_ret, sizeof(psp_ret));
 	return ret;
-}
+} EXPORT_SYMBOL_GPL(kvm_pv_psp_op);
