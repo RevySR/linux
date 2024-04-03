@@ -151,14 +151,22 @@ const_debug unsigned int sysctl_sched_nr_migrate = SCHED_NR_MIGRATE_BREAK;
 
 __read_mostly int scheduler_running;
 
-#ifdef CONFIG_SCHED_CORE
-
-DEFINE_STATIC_KEY_FALSE(__sched_core_enabled);
-
 #ifdef CONFIG_SCHED_ACPU
 DEFINE_STATIC_KEY_FALSE(acpu_enabled);
 unsigned int sysctl_sched_acpu_enabled;
 #endif
+
+#ifdef CONFIG_CFS_BANDWIDTH
+/*
+ * Percent of burst assigned to cfs_b->runtime on tg_set_cfs_bandwidth,
+ * 0 by default.
+ */
+unsigned int sysctl_sched_cfs_bw_burst_onset_percent;
+#endif
+
+#ifdef CONFIG_SCHED_CORE
+
+DEFINE_STATIC_KEY_FALSE(__sched_core_enabled);
 
 /* kernel prio, less is more */
 static inline int __task_prio(const struct task_struct *p)
@@ -174,14 +182,6 @@ static inline int __task_prio(const struct task_struct *p)
 
 	return MAX_RT_PRIO + MAX_NICE; /* 120, squash fair */
 }
-
-#ifdef CONFIG_CFS_BANDWIDTH
-/*
- * Percent of burst assigned to cfs_b->runtime on tg_set_cfs_bandwidth,
- * 0 by default.
- */
-unsigned int sysctl_sched_cfs_bw_burst_onset_percent;
-#endif
 
 /*
  * l(a,b)
