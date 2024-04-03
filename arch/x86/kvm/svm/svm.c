@@ -5064,10 +5064,15 @@ static int svm_vm_init(struct kvm *kvm)
 static int kvm_hygon_arch_hypercall(struct kvm *kvm, u64 nr, u64 a0, u64 a1, u64 a2, u64 a3)
 {
 	int ret = 0;
+	struct kvm_vpsp vpsp = {
+		.kvm = kvm,
+		.write_guest = kvm_write_guest,
+		.read_guest = kvm_read_guest
+	};
 
 	switch (nr) {
 	case KVM_HC_PSP_OP:
-		ret = kvm_pv_psp_op(kvm, a0, a1, a2, a3);
+		ret = kvm_pv_psp_op(&vpsp, a0, a1, a2, a3);
 		break;
 
 	default:
