@@ -2451,9 +2451,19 @@ static void mpam_dt_create_foundling_msc(void)
 	}
 }
 
+static int __init arm64_mpam_register_cpus(void)
+{
+	u64 mpamidr = read_sysreg_s(SYS_MPAMIDR_EL1);
+	u16 partid_max = FIELD_GET(MPAMIDR_PARTID_MAX, mpamidr);
+	u8 pmg_max = FIELD_GET(MPAMIDR_PMG_MAX, mpamidr);
+
+	return mpam_register_requestor(partid_max, pmg_max);
+}
+
 static int __init mpam_msc_driver_init(void)
 {
 	bool mpam_not_available = false;
+	int err;
 
 	if (!mpam_cpus_have_feature())
 		return -EOPNOTSUPP;
@@ -2464,6 +2474,26 @@ static int __init mpam_msc_driver_init(void)
 		mpam_current_machine = acpi_mpam_get_machine_type();
 	else
 		mpam_current_machine = mpam_dt_get_machine_type();
+
+	if (!acpi_disabled)
+		fw_num_msc = acpi_mpam_count_msc();
+	else
+		fw_num_msc = mpam_dt_count_msc();
+
+	if (fw_num_msc <= 0) {
+		pr_err("No MSC devices found in firmware\n");
+		return -EINVAL;
+	}
+
+	/*
+	 * Access MPAM system registers after MPAM ACPI table is parsed, since
+	 * some BIOSs disable MPAM system registers accessing but export MPAM in
+	 * ID_AA64PFR0_EL1. So we can only rely on the MPAM ACPI table to
+	 * determine whether MPAM feature is enabled.
+	 */
+	err = arm64_mpam_register_cpus();
+	if (err)
+		return err;
 
 	/*
 	 * If the MPAM CPU interface is not implemented, or reserved by
@@ -2476,16 +2506,6 @@ static int __init mpam_msc_driver_init(void)
 
 	if (mpam_not_available)
 		return 0;
-
-	if (!acpi_disabled)
-		fw_num_msc = acpi_mpam_count_msc();
-	else
-		fw_num_msc = mpam_dt_count_msc();
-
-	if (fw_num_msc <= 0) {
-		pr_err("No MSC devices found in firmware\n");
-		return -EINVAL;
-	}
 
 	if (acpi_disabled)
 		mpam_dt_create_foundling_msc();
