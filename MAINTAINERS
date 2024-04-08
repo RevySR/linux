@@ -23902,6 +23902,11 @@ L:	linux-hwmon@vger.kernel.org
 S:	Maintained
 F:	drivers/hwmon/zhaoxin-cputemp.c
 
+ZHAOXIN ZXPAUSE INSTRUCTION SUPPORT
+M:	LeoLiu-oc <LeoLiu-oc@zhaoxin.com>
+S:	Maintained
+F:	arch/x86/kernel/cpu/zxpause.c
+
 ZONEFS FILESYSTEM
 M:	Damien Le Moal <dlemoal@kernel.org>
 M:	Naohiro Aota <naohiro.aota@wdc.com>
