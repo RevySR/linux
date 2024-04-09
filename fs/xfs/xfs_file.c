@@ -1218,6 +1218,12 @@ xfs_file_remap_range(
 
 	if (xfs_file_sync_writes(file_in) || xfs_file_sync_writes(file_out))
 		xfs_log_force_inode(dest);
+
+	if (src->i_reflink_flags & XFS_REFLINK_PRIMARY) {
+		/* TODO: WARN_ON if src->i_reflink_ino is still valid */
+		src->i_reflink_ino = dest->i_ino;
+	}
+
 out_unlock:
 	xfs_iunlock2_remapping(src, dest);
 	if (ret)

@@ -502,37 +502,12 @@ out_trans_cancel:
 	return error;
 }
 
-struct xfs_rmap_info {
-	bool			found;		/* output */
-	uint64_t		owner;		/* intput */
-	xfs_agblock_t		startblock;	/* input */;
-	struct xfs_rmap_irec	rec;		/* output */
-};
-
-STATIC int
-xfs_reflink_query_rmap_owner_helper(
-	struct xfs_btree_cur		*cur,
-	const struct xfs_rmap_irec	*rec,
-	void				*priv)
-{
-	struct xfs_rmap_info *info = priv;
-
-	if ((rec->rm_owner != info->owner) &&
-	    (info->startblock >= rec->rm_startblock) &&
-	    (info->startblock < (rec->rm_startblock + rec->rm_blockcount))) {
-		info->rec = *rec;
-		info->found = true;
-		return -ECANCELED;
-	}
-	return 0;
-}
-
 STATIC int
 xfs_reflink_unshare_range(
-	struct xfs_mount	*mp,
-	struct xfs_bmbt_irec	*oimap,
-	struct xfs_rmap_irec	*rmap)
+	struct xfs_inode	*src,
+	struct xfs_bmbt_irec	*oimap)
 {
+	struct xfs_mount	*mp = src->i_mount;
 	struct xfs_inode	*ip;
 	xfs_fileoff_t		offset_fsb = oimap->br_startoff;
 	xfs_filblks_t		count_fsb = oimap->br_blockcount;
@@ -545,7 +520,10 @@ xfs_reflink_unshare_range(
 	struct xfs_bmbt_irec	imap = *oimap;
 	struct xfs_bmbt_irec	cmap;
 
-	error = xfs_iget(mp, NULL, rmap->rm_owner, 0, 0, &ip);
+	if (WARN_ON(!src->i_reflink_ino))
+		return -EINVAL;
+
+	error = xfs_iget(mp, NULL, src->i_reflink_ino, 0, 0, &ip);
 	if (error < 0)
 		return error;
 
@@ -643,86 +621,6 @@ error:
 	return error;
 }
 
-STATIC int
-xfs_reflink_query_rmap_owner(
-	struct xfs_inode	*ip,
-	struct xfs_mount	*mp,
-	struct xfs_bmbt_irec	*imap,
-	struct xfs_rmap_info	*info)
-{
-	struct xfs_trans	*tp = NULL;
-	struct xfs_btree_cur	*cur = NULL;
-	struct xfs_rmap_irec	rmap_low, rmap_high;
-	struct xfs_perag	*pag;
-	struct xfs_buf		*agbp = NULL;
-	xfs_fsblock_t		fsbno = imap->br_startblock;
-	xfs_filblks_t		bcnt = imap->br_blockcount;
-	xfs_agnumber_t		agno = XFS_FSB_TO_AGNO(mp, fsbno);
-	xfs_agblock_t		agbno = XFS_FSB_TO_AGBNO(mp, fsbno);
-	int			error = 0;
-
-	error = xfs_trans_alloc_empty(mp, &tp);
-	if (error)
-		return error;
-
-	pag = xfs_perag_get(mp, agno);
-	error = xfs_alloc_read_agf(pag, tp, 0, &agbp);
-	if (error) {
-		xfs_perag_put(pag);
-		goto out_cancel_tp;
-	}
-
-	cur = xfs_rmapbt_init_cursor(mp, tp, agbp, pag);
-	xfs_perag_put(pag);
-
-	/* Construct a range for rmap query */
-	memset(&rmap_low, 0, sizeof(rmap_low));
-	memset(&rmap_high, 0xFF, sizeof(rmap_high));
-	rmap_low.rm_startblock = rmap_high.rm_startblock = agbno;
-	rmap_low.rm_blockcount = rmap_high.rm_blockcount = bcnt;
-
-	error = xfs_rmap_query_range(cur, &rmap_low, &rmap_high,
-			xfs_reflink_query_rmap_owner_helper, info);
-	if (error == -ECANCELED)
-		error = 0;
-
-	xfs_btree_del_cursor(cur, error);
-	xfs_trans_brelse(tp, agbp);
-
-out_cancel_tp:
-	xfs_trans_cancel(tp);
-	return error;
-}
-
-STATIC int
-xfs_reflink_unshare_other_owners(
-	struct xfs_inode	*ip,
-	struct xfs_mount	*mp,
-	struct xfs_bmbt_irec	*imap)
-{
-	int			error;
-	struct xfs_rmap_info	info;
-	int i = 0;
-
-	do {
-		info.found = false;
-		info.owner = ip->i_ino;
-		info.startblock = XFS_FSB_TO_AGBNO(mp, imap->br_startblock);
-		error = xfs_reflink_query_rmap_owner(ip, mp, imap, &info);
-		if (error < 0 || !info.found)
-			return error;
-
-		xfs_reflink_unshare_range(mp, imap, &info.rec);
-		/*
-		 * FIXME: 64 is chosen as limition intentionally, in case there
-		 * are too many snapshot files, unshare operations here will take
-		 * too much time, needs a better solution.
-		 */
-	} while (++i <= 64);
-
-	return 0;
-}
-
 /* Allocate all CoW reservations covering a range of blocks in a file. */
 int
 xfs_reflink_allocate_cow(
@@ -733,7 +631,6 @@ xfs_reflink_allocate_cow(
 	uint			*lockmode,
 	bool			convert_now)
 {
-	struct xfs_mount	*mp = ip->i_mount;
 	int			error;
 	bool			found;
 
@@ -754,7 +651,7 @@ xfs_reflink_allocate_cow(
 
 	if (ip->i_reflink_flags & XFS_REFLINK_PRIMARY) {
 		xfs_iunlock(ip, *lockmode);
-		xfs_reflink_unshare_other_owners(ip, mp, imap);
+		xfs_reflink_unshare_range(ip, imap);
 		xfs_ilock(ip, *lockmode);
 	}
 
