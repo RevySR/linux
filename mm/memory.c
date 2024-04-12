@@ -5070,12 +5070,10 @@ void set_pte_range(struct vm_fault *vmf, struct folio *folio,
 		entry = pte_mkuffd_wp(entry);
 	/* copy-on-write page */
 	if (write && !(vma->vm_flags & VM_SHARED)) {
-		add_mm_counter(vma->vm_mm, MM_ANONPAGES, nr);
 		VM_BUG_ON_FOLIO(nr != 1, folio);
 		folio_add_new_anon_rmap(folio, vma, addr, RMAP_EXCLUSIVE);
 		folio_add_lru_vma(folio, vma);
 	} else {
-		add_mm_counter(vma->vm_mm, mm_counter_file(page), nr);
 		folio_add_file_rmap_ptes(folio, page, nr, vma);
 	}
 	set_ptes(vma->vm_mm, addr, vmf->pte, entry, nr);
@@ -5113,11 +5111,13 @@ vm_fault_t finish_fault(struct vm_fault *vmf)
 	struct page *page;
 	struct folio *folio;
 	vm_fault_t ret;
-	int nr_pages;
+	int type, nr_pages;
 	unsigned long addr = vmf->address;
+	bool is_cow = (vmf->flags & FAULT_FLAG_WRITE) &&
+		!(vma->vm_flags & VM_SHARED);
 
 	/* Did we COW the page? */
-	if ((vmf->flags & FAULT_FLAG_WRITE) && !(vma->vm_flags & VM_SHARED))
+	if (is_cow)
 		page = vmf->cow_page;
 	else
 		page = vmf->page;
@@ -5196,6 +5196,8 @@ vm_fault_t finish_fault(struct vm_fault *vmf)
 
 	folio_ref_add(folio, nr_pages - 1);
 	set_pte_range(vmf, folio, page, nr_pages, addr);
+	type = is_cow ? MM_ANONPAGES : mm_counter_file(page);
+	add_mm_counter(vma->vm_mm, type, nr_pages);
 	ret = 0;
 
 unlock:
