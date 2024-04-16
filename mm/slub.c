@@ -1865,14 +1865,34 @@ static void *setup_object(struct kmem_cache *s, void *object)
 /*
  * Slab allocation and freeing
  */
-static inline struct slab *alloc_slab_page(gfp_t flags, int node,
-		struct kmem_cache_order_objects oo)
+static inline struct slab *alloc_slab_page(struct kmem_cache *s,
+		gfp_t flags, int node, struct kmem_cache_order_objects oo)
 {
 	struct folio *folio;
-	struct slab *slab;
+	struct slab *slab, *t;
 	unsigned int order = oo_order(oo);
+	int nid;
 
 	flags |= __GFP_NOKFENCE;
+
+#ifdef CONFIG_MODULES
+	if (unlikely(s->is_oot)) {
+		spin_lock(&s->oot_lock);
+		list_for_each_entry_safe(slab, t, &s->oot_page_list, slab_list) {
+			nid = page_to_nid(&(slab_folio(slab)->page));
+			if (nid == node ||
+			   (node == NUMA_NO_NODE && nid == numa_node_id())) {
+				list_del(&slab->slab_list);
+				s->oot_page_num--;
+				spin_unlock(&s->oot_lock);
+				folio = slab_folio(slab);
+				goto find;
+			}
+		}
+		spin_unlock(&s->oot_lock);
+	}
+#endif
+
 	if (node == NUMA_NO_NODE)
 		folio = (struct folio *)alloc_pages(flags, order);
 	else
@@ -1881,6 +1901,7 @@ static inline struct slab *alloc_slab_page(gfp_t flags, int node,
 	if (!folio)
 		return NULL;
 
+find:
 	slab = folio_slab(folio);
 	__folio_set_slab(folio);
 	/* Make the flag visible before any changes to folio->mapping */
@@ -2021,7 +2042,7 @@ static struct slab *allocate_slab(struct kmem_cache *s, gfp_t flags, int node)
 	if ((alloc_gfp & __GFP_DIRECT_RECLAIM) && oo_order(oo) > oo_order(s->min))
 		alloc_gfp = (alloc_gfp | __GFP_NOMEMALLOC) & ~__GFP_RECLAIM;
 
-	slab = alloc_slab_page(alloc_gfp, node, oo);
+	slab = alloc_slab_page(s, alloc_gfp, node, oo);
 	if (unlikely(!slab)) {
 		oo = s->min;
 		alloc_gfp = flags;
@@ -2029,7 +2050,7 @@ static struct slab *allocate_slab(struct kmem_cache *s, gfp_t flags, int node)
 		 * Allocation may have failed due to fragmentation.
 		 * Try a lower order alloc if possible
 		 */
-		slab = alloc_slab_page(alloc_gfp, node, oo);
+		slab = alloc_slab_page(s, alloc_gfp, node, oo);
 		if (unlikely(!slab))
 			return NULL;
 		stat(s, ORDER_FALLBACK);
@@ -2078,6 +2099,8 @@ static struct slab *new_slab(struct kmem_cache *s, gfp_t flags, int node)
 		flags & (GFP_RECLAIM_MASK | GFP_CONSTRAINT_MASK), node);
 }
 
+extern unsigned int oot_page_limit;
+
 static void __free_slab(struct kmem_cache *s, struct slab *slab)
 {
 	struct folio *folio = slab_folio(slab);
@@ -2091,6 +2114,20 @@ static void __free_slab(struct kmem_cache *s, struct slab *slab)
 	__folio_clear_slab(folio);
 	mm_account_reclaimed_pages(pages);
 	unaccount_slab(slab, order, s);
+
+#ifdef CONFIG_MODULES
+	if (unlikely(s->is_oot)) {
+		if (s->oot_page_num < oot_page_limit) {
+			spin_lock(&s->oot_lock);
+			list_add(&(slab->slab_list), &s->oot_page_list);
+			s->oot_page_num++;
+			spin_unlock(&s->oot_lock);
+			return;
+		}
+		pr_info_once("Page in buddy may tainted by module in oot list\n");
+	}
+#endif
+
 	__free_pages(&folio->page, order);
 }
 
@@ -2119,7 +2156,6 @@ static void free_slab(struct kmem_cache *s, struct slab *slab)
 
 static void discard_slab(struct kmem_cache *s, struct slab *slab)
 {
-	WARN_ON_ONCE(s->flags & SLAB_OOT);
 	dec_slabs_node(s, slab_nid(slab), slab->objects);
 	free_slab(s, slab);
 }
@@ -2714,8 +2750,7 @@ static void put_cpu_partial(struct kmem_cache *s, struct slab *slab, int drain)
 	oldslab = this_cpu_read(s->cpu_slab->partial);
 
 	if (oldslab) {
-		if (drain && oldslab->slabs >= s->cpu_partial_slabs
-			  && !(s->flags & SLAB_OOT)) {
+		if (drain && oldslab->slabs >= s->cpu_partial_slabs) {
 			/*
 			 * Partial array is full. Move the existing set to the
 			 * per node partial list. Postpone the actual unfreezing
@@ -3693,8 +3728,7 @@ static void __slab_free(struct kmem_cache *s, struct slab *slab,
 		return;
 	}
 
-	if (unlikely(!new.inuse && n->nr_partial >= s->min_partial)
-				&& !(s->flags & SLAB_OOT))
+	if (unlikely(!new.inuse && n->nr_partial >= s->min_partial))
 		goto slab_empty;
 
 	/*
@@ -5072,7 +5106,7 @@ void __init kmem_cache_init(void)
 	/* Now we can use the kmem_cache to allocate kmalloc slabs */
 	setup_kmalloc_cache_index_table();
 	create_kmalloc_caches(0);
-	create_oot_kmalloc_caches(SLAB_OOT);
+	create_oot_kmalloc_caches(0);
 
 	/* Setup random freelists for each cache */
 	init_freelist_randomization();

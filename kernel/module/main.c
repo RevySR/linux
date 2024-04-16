@@ -127,6 +127,12 @@ static void mod_update_bounds(struct module *mod)
 int modules_disabled;
 core_param(nomodule, modules_disabled, bint, 0);
 
+#undef MODULE_PARAM_PREFIX
+#define MODULE_PARAM_PREFIX "module."
+
+unsigned int oot_page_limit = -1;
+module_param(oot_page_limit, uint, 0600);
+
 /* Waiting for a module to finish initializing? */
 static DECLARE_WAIT_QUEUE_HEAD(module_wq);
 

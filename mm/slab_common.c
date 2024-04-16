@@ -650,6 +650,8 @@ static struct kmem_cache *__init create_kmalloc_cache(const char *name,
 
 	create_boot_cache(s, name, size, flags | SLAB_KMALLOC, 0, size);
 	list_add(&s->list, &slab_caches);
+	INIT_LIST_HEAD(&s->oot_page_list);
+	spin_lock_init(&s->oot_lock);
 	s->refcount = 1;
 	return s;
 }
@@ -1063,18 +1065,21 @@ do {									\
 			OOT_KMALLOC_CACHES(index)[__type][__i] = create_kmalloc_cache(	\
 					OOT_KMALLOC_INFO(index)[__i].name[__type],	\
 					OOT_KMALLOC_INFO(index)[__i].size, _flags);	\
+			OOT_KMALLOC_CACHES(index)[__type][__i]->is_oot = true;		\
 		}									\
 		if (KMALLOC_MIN_SIZE <= 32 && __i == 6 &&					\
 				!OOT_KMALLOC_CACHES(index)[__type][1]) {			\
 			OOT_KMALLOC_CACHES(index)[__type][1] = create_kmalloc_cache(	\
 					OOT_KMALLOC_INFO(index)[1].name[__type],		\
 					OOT_KMALLOC_INFO(index)[1].size, _flags);	\
+			OOT_KMALLOC_CACHES(index)[__type][1]->is_oot = true;		\
 		}									\
 		if (KMALLOC_MIN_SIZE <= 64 && __i == 7 &&					\
 				!OOT_KMALLOC_CACHES(index)[__type][2]) {			\
 			OOT_KMALLOC_CACHES(index)[__type][2] = create_kmalloc_cache(	\
 					OOT_KMALLOC_INFO(index)[2].name[__type],		\
 					OOT_KMALLOC_INFO(index)[2].size, _flags);	\
+			OOT_KMALLOC_CACHES(index)[__type][2]->is_oot = true;		\
 		}									\
 	}										\
 } while (0)

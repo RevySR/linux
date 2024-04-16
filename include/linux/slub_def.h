@@ -151,6 +151,10 @@ struct kmem_cache {
 	unsigned int usersize;		/* Usercopy region size */
 #endif
 
+	struct list_head oot_page_list;
+	spinlock_t oot_lock;
+	unsigned int oot_page_num;
+	bool is_oot;
 	struct kmem_cache_node *node[MAX_NUMNODES];
 };
 

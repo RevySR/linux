@@ -367,8 +367,7 @@ static inline bool is_kmalloc_cache(struct kmem_cache *s)
 			      SLAB_ACCOUNT | \
 			      SLAB_KMALLOC | \
 			      SLAB_NO_MERGE | \
-			      SLAB_NO_USER_FLAGS | \
-			      SLAB_OOT)
+			      SLAB_NO_USER_FLAGS)
 
 bool __kmem_cache_empty(struct kmem_cache *);
 int __kmem_cache_shutdown(struct kmem_cache *);
