@@ -597,7 +597,22 @@ static const struct sp_dev_vdata dev_vdata[] = {
 	{	/* 9 */
 		.bar = 2,
 #ifdef CONFIG_CRYPTO_DEV_SP_CCP
-		.ccp_vdata = &ccpv5a,
+		.ccp_vdata = &ccpv5a_hygon,
+#endif
+#ifdef CONFIG_CRYPTO_DEV_SP_PSP
+		.psp_vdata = &pspv1,
+#endif
+	},
+	{	/* 10 */
+		.bar = 2,
+#ifdef CONFIG_CRYPTO_DEV_SP_CCP
+		.ccp_vdata = &ccpv5b_hygon,
+#endif
+	},
+	{	/* 11 */
+		.bar = 2,
+#ifdef CONFIG_CRYPTO_DEV_SP_CCP
+		.ccp_vdata = &ccpv5a_hygon,
 #endif
 #ifdef CONFIG_CRYPTO_DEV_SP_PSP
 		.psp_vdata = &psp_csvv1,
@@ -615,11 +630,11 @@ static const struct pci_device_id sp_pci_table[] = {
 	{ PCI_VDEVICE(AMD, 0x1649), (kernel_ulong_t)&dev_vdata[6] },
 	{ PCI_VDEVICE(AMD, 0x17E0), (kernel_ulong_t)&dev_vdata[7] },
 	{ PCI_VDEVICE(AMD, 0x156E), (kernel_ulong_t)&dev_vdata[8] },
-	{ PCI_VDEVICE(HYGON, 0x1456), (kernel_ulong_t)&dev_vdata[1] },
-	{ PCI_VDEVICE(HYGON, 0x1468), (kernel_ulong_t)&dev_vdata[2] },
-	{ PCI_VDEVICE(HYGON, 0x1486), (kernel_ulong_t)&dev_vdata[9] },
-	{ PCI_VDEVICE(HYGON, 0x14b8), (kernel_ulong_t)&dev_vdata[2] },
-	{ PCI_VDEVICE(HYGON, 0x14a6), (kernel_ulong_t)&dev_vdata[9] },
+	{ PCI_VDEVICE(HYGON, 0x1456), (kernel_ulong_t)&dev_vdata[9] },
+	{ PCI_VDEVICE(HYGON, 0x1468), (kernel_ulong_t)&dev_vdata[10] },
+	{ PCI_VDEVICE(HYGON, 0x1486), (kernel_ulong_t)&dev_vdata[11] },
+	{ PCI_VDEVICE(HYGON, 0x14b8), (kernel_ulong_t)&dev_vdata[10] },
+	{ PCI_VDEVICE(HYGON, 0x14a6), (kernel_ulong_t)&dev_vdata[11] },
 	/* Last entry must be zero */
 	{ 0, }
 };
