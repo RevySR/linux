@@ -113,14 +113,13 @@ void rdt_staged_configs_clear(void)
 static bool resctrl_is_mbm_enabled(void)
 {
 	return (resctrl_arch_is_mbm_total_enabled() ||
-		resctrl_arch_is_mbm_local_enabled() ||
-		resctrl_arch_is_mbm_bps_enabled());
+		resctrl_arch_is_mbm_local_enabled());
 }
 
 static bool resctrl_is_mbm_event(int e)
 {
 	return (e >= QOS_L3_MBM_TOTAL_EVENT_ID &&
-		e <= QOS_MC_MBM_BPS_EVENT_ID);
+		e <= QOS_L3_MBM_LOCAL_EVENT_ID);
 }
 
 /*
