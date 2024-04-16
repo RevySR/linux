@@ -2055,7 +2055,7 @@ static irqreturn_t __mpam_irq_handler(int irq, struct mpam_msc *msc)
 
 	partid = FIELD_GET(MPAMF_ESR_PARTID_OR_MON, reg);
 	pmg = FIELD_GET(MPAMF_ESR_PMG, reg);
-	ris = FIELD_GET(MPAMF_ESR_PMG, reg);
+	ris = FIELD_GET(MPAMF_ESR_RIS, reg);
 
 	pr_err("error irq from msc:%u '%s', partid:%u, pmg: %u, ris: %u\n",
 	       msc->id, mpam_errcode_names[errcode], partid, pmg, ris);
