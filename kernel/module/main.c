@@ -133,6 +133,26 @@ core_param(nomodule, modules_disabled, bint, 0);
 unsigned int oot_page_limit = -1;
 module_param(oot_page_limit, uint, 0600);
 
+char oot_list[256];
+
+static int set_oot_list(const char *list, const struct kernel_param *kp)
+{
+	strscpy((char *)kp->arg, list, 255);
+
+	return 0;
+}
+
+static int get_oot_list(char *buffer, const struct kernel_param *kp)
+{
+	return sprintf(buffer, "%s\n", (char *)kp->arg);
+}
+
+static const struct kernel_param_ops oot_list_param_ops = {
+	.set = set_oot_list,
+	.get = get_oot_list,
+};
+module_param_cb(oot_list, &oot_list_param_ops, oot_list, 0600);
+
 /* Waiting for a module to finish initializing? */
 static DECLARE_WAIT_QUEUE_HEAD(module_wq);
 
@@ -341,6 +361,9 @@ static struct redirect_sym redirect_syms[] = {
 const char *find_true_name(const char *name, struct module *mod)
 {
 	struct redirect_sym *rsym;
+
+	if (likely(mod->oot_isolation_index == -1))
+		return name;
 
 	for (rsym = redirect_syms; rsym->src_name; rsym++)
 		if (!strcmp(name, rsym->src_name))
@@ -1296,8 +1319,28 @@ struct module *oot_table[OOT_POOL_NUM];
 static void get_oot_mempool(struct module *mod)
 {
 	int i;
+	char *s, *token, *tmp;
+	bool in_list = false;
 
-	//TODO: check this mod need oot mempool
+	mod->oot_isolation_index = -1;
+
+	s = kstrdup(oot_list, GFP_KERNEL);
+	if (!s)
+		return;
+
+	tmp = strstrip(s);
+	for (token = strsep(&tmp, ","); token != NULL;
+						token = strsep(&tmp, ",")) {
+		if (!strcmp(token, mod->name)) {
+			in_list = true;
+			break;
+		}
+	}
+	kfree(s);
+
+	if (!in_list)
+		return;
+
 	mutex_lock(&module_mutex);
 	for (i = 0; i < OOT_POOL_NUM; i++) {
 		if (!oot_table[i]) {
@@ -1314,7 +1357,9 @@ static void get_oot_mempool(struct module *mod)
 
 static void put_oot_mempool(struct module *mod)
 {
-	//TODO: check this mod need oot mempool
+	if (mod->oot_isolation_index == -1)
+		return;
+
 	mutex_lock(&module_mutex);
 	if (oot_table[mod->oot_isolation_index] == mod)
 		oot_table[mod->oot_isolation_index] = NULL;
