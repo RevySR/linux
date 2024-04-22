@@ -520,12 +520,20 @@ xfs_reflink_unshare_range(
 	struct xfs_bmbt_irec	imap = *oimap;
 	struct xfs_bmbt_irec	cmap;
 
-	if (WARN_ON(!src->i_reflink_ino))
+retry:
+	mutex_lock(&mp->m_reflink_opt_lock);
+	if (WARN_ON(!src->i_reflink_opt_ip)) {
+		mutex_unlock(&mp->m_reflink_opt_lock);
 		return -EINVAL;
+	}
 
-	error = xfs_iget(mp, NULL, src->i_reflink_ino, 0, 0, &ip);
-	if (error < 0)
-		return error;
+	if (!igrab(VFS_I(src->i_reflink_opt_ip))) {
+		mutex_unlock(&mp->m_reflink_opt_lock);
+		delay(1);
+		goto retry;
+	}
+	ip = src->i_reflink_opt_ip;
+	mutex_unlock(&mp->m_reflink_opt_lock);
 
 	xfs_ilock(ip, lockmode);
 	xfs_flush_unmap_range(ip, XFS_FSB_TO_B(mp, imap.br_startoff),
@@ -1606,6 +1614,18 @@ xfs_reflink_remap_prep(
 	/* Don't share DAX file data with non-DAX file. */
 	if (IS_DAX(inode_in) != IS_DAX(inode_out))
 		goto out_unlock;
+
+	if (src->i_reflink_flags & XFS_REFLINK_PRIMARY) {
+		if (!(dest->i_reflink_flags & XFS_REFLINK_SECONDARY))
+			goto out_unlock;
+		if (pos_in != pos_out)
+			goto out_unlock;
+		if (src->i_reflink_opt_ip || dest->i_reflink_opt_ip) {
+			xfs_warn(src->i_mount,
+				 "src(XFS_REFLINK_PRIMARY) and/or dest(XFS_REFLINK_SECONDARY) is already paired with FICLONE");
+			goto out_unlock;
+		}
+	}
 
 	/*
 	 * For inodes flagged with XFS_REFLINK_{PRIMARY, SECONDARY},

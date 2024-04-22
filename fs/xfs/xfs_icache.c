@@ -108,7 +108,7 @@ xfs_inode_alloc(
 	ip->i_nblocks = 0;
 	ip->i_forkoff = 0;
 	ip->i_reflink_flags = 0;
-	ip->i_reflink_ino = 0;
+	ip->i_reflink_opt_ip = NULL;
 	ip->i_sick = 0;
 	ip->i_checked = 0;
 	INIT_WORK(&ip->i_ioend_work, xfs_end_io);
@@ -388,7 +388,7 @@ xfs_iget_recycle(
 	ip->i_flags &= ~XFS_IRECLAIM_RESET_FLAGS;
 	ip->i_flags |= XFS_INEW;
 	ip->i_reflink_flags = 0;
-	ip->i_reflink_ino = 0;
+	ip->i_reflink_opt_ip = NULL;
 	xfs_perag_clear_inode_tag(pag, XFS_INO_TO_AGINO(mp, ip->i_ino),
 			XFS_ICI_RECLAIM_TAG);
 	inode->i_state = I_NEW;

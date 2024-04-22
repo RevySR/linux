@@ -1219,9 +1219,11 @@ xfs_file_remap_range(
 	if (xfs_file_sync_writes(file_in) || xfs_file_sync_writes(file_out))
 		xfs_log_force_inode(dest);
 
-	if (src->i_reflink_flags & XFS_REFLINK_PRIMARY) {
-		/* TODO: WARN_ON if src->i_reflink_ino is still valid */
-		src->i_reflink_ino = dest->i_ino;
+	if (remapped && (src->i_reflink_flags & XFS_REFLINK_PRIMARY)) {
+		mutex_lock(&mp->m_reflink_opt_lock);
+		src->i_reflink_opt_ip = dest;
+		dest->i_reflink_opt_ip = src;
+		mutex_unlock(&mp->m_reflink_opt_lock);
 	}
 
 out_unlock:

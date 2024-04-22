@@ -1698,6 +1698,30 @@ xfs_inode_needs_inactive(
 	return xfs_can_free_eofblocks(ip);
 }
 
+STATIC void
+xfs_reflink_opt_disconnect(
+	struct xfs_mount        *mp,
+	struct xfs_inode        *ip,
+	bool                    unexpected)
+{
+	bool valid = false;
+
+	if (!(ip->i_reflink_flags & (XFS_REFLINK_PRIMARY |
+				XFS_REFLINK_SECONDARY)))
+		return;
+
+	mutex_lock(&mp->m_reflink_opt_lock);
+	if (ip->i_reflink_opt_ip) {
+		ip->i_reflink_opt_ip->i_reflink_opt_ip = NULL;
+		ip->i_reflink_opt_ip = NULL;
+		valid = true;
+	}
+	mutex_unlock(&mp->m_reflink_opt_lock);
+	if (valid && unexpected)
+		xfs_warn(mp, "unexpectedly, inactive reflink file in advance %llu",
+			 ip->i_ino);
+}
+
 /*
  * xfs_inactive
  *
@@ -1753,6 +1777,7 @@ xfs_inactive(
 		if (xfs_can_free_eofblocks(ip))
 			error = xfs_free_eofblocks(ip);
 
+		xfs_reflink_opt_disconnect(mp, ip, true);
 		goto out;
 	}
 
@@ -1783,6 +1808,8 @@ xfs_inactive(
 		error = xfs_inactive_truncate(ip);
 	if (error)
 		goto out;
+
+	xfs_reflink_opt_disconnect(mp, ip, false);
 
 	/*
 	 * If there are attributes associated with the file then blow them away

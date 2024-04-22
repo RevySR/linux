@@ -88,10 +88,10 @@ typedef struct xfs_inode {
 	/* flags for controlling reflink cow behavior */
 	uint32_t		i_reflink_flags;
 	/*
-	 * Saved reflink ino for the sake of quick unshare, currently we
+	 * Saved reflink ip for the sake of quick unshare, currently we
 	 * only support one reflink file under flag XFS_REFLINK_PRIMARY
 	 */
-	xfs_ino_t		i_reflink_ino;
+	struct xfs_inode	*i_reflink_opt_ip;
 
 	/* VFS inode */
 	struct inode		i_vnode;	/* embedded VFS inode */
