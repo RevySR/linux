@@ -206,6 +206,8 @@ enum mapping_flags {
 	AS_RELEASE_ALWAYS,	/* Call ->release_folio(), even if no private data */
 	AS_STABLE_WRITES,	/* must wait for writeback before modifying
 				   folio contents */
+
+	AS_FSDAX_NORMAP = 30,
 };
 
 /**

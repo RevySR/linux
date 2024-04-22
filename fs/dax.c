@@ -322,23 +322,34 @@ static unsigned long dax_end_pfn(void *entry)
 
 static inline bool dax_page_is_shared(struct page *page)
 {
-	return page->mapping == PAGE_MAPPING_DAX_SHARED;
+	return (unsigned long)READ_ONCE(page->mapping) & PAGE_MAPPING_DAX_SHARED;
 }
 
 /*
  * Set the page->mapping with PAGE_MAPPING_DAX_SHARED flag, increase the
  * refcount.
  */
-static inline void dax_page_share_get(struct page *page)
+static inline void dax_page_share_get(struct page *page,
+			struct address_space *mapping, pgoff_t index)
 {
-	if (page->mapping != PAGE_MAPPING_DAX_SHARED) {
+	struct address_space *oldmapping = READ_ONCE(page->mapping);
+
+	if (!((unsigned long)oldmapping & PAGE_MAPPING_DAX_SHARED)) {
 		/*
 		 * Reset the index if the page was already mapped
 		 * regularly before.
 		 */
-		if (page->mapping)
+		if (oldmapping)
 			page->share = 1;
-		page->mapping = PAGE_MAPPING_DAX_SHARED;
+
+		if (test_bit(AS_FSDAX_NORMAP, &mapping->flags)) {
+			/* Note that we (ab)use page->private to keep index for now */
+			WRITE_ONCE(page->private, index);
+			/* paired with smp_mb() in xfs_dax_notify_ddev_failure2() */
+			smp_mb();
+		}
+		WRITE_ONCE(page->mapping,
+			   (void *)((unsigned long)mapping | PAGE_MAPPING_DAX_SHARED));
 	}
 	page->share++;
 }
@@ -367,7 +378,7 @@ static void dax_associate_entry(void *entry, struct address_space *mapping,
 		struct page *page = pfn_to_page(pfn);
 
 		if (shared) {
-			dax_page_share_get(page);
+			dax_page_share_get(page, mapping, index);
 		} else {
 			WARN_ON_ONCE(page->mapping);
 			page->mapping = mapping;
