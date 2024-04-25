@@ -213,7 +213,7 @@ enum erofs_kmap_type {
 };
 
 struct erofs_buf {
-	struct inode *inode;
+	struct address_space *mapping;
 	struct page *page;
 	void *base;
 	enum erofs_kmap_type kmap_type;

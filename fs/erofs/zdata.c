@@ -939,7 +939,7 @@ static int z_erofs_read_fragment(struct super_block *sb, struct folio *folio,
 	if (!packed_inode)
 		return -EFSCORRUPTED;
 
-	buf.inode = packed_inode;
+	buf.mapping = packed_inode->i_mapping;
 	for (; cur < end; cur += cnt, pos += cnt) {
 		cnt = min(end - cur, sb->s_blocksize - erofs_blkoff(sb, pos));
 		src = erofs_bread(&buf, pos, EROFS_KMAP);
