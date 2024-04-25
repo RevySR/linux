@@ -69,6 +69,19 @@ config TDM_DEV_HYGON
 	help
 	  Hygon TDM driver
 
+config CRYPTO_DEV_HCT
+	tristate "HCT CCP device"
+	default m
+	depends on X86_64
+	select VFIO_MDEV
+	help
+	  Provides hygon crypto technology ccp device driver.
+	  Support virtualize ccp devices based on mediated devices.
+	  Support multi-process and virtual machines.
+	  Support host-noiommu mode memory encryption function.
+	  Support compiling hct.ko when mdev module is disabled.
+	  If you choose 'M' here, this module will be called hct ccp.
+
 config TDM_KERNEL_GUARD
 	tristate "Hygon TDM kernel guard"
 	default y
