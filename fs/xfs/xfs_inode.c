@@ -1717,9 +1717,12 @@ xfs_reflink_opt_disconnect(
 		valid = true;
 	}
 	mutex_unlock(&mp->m_reflink_opt_lock);
-	if (valid && unexpected)
-		xfs_warn(mp, "unexpectedly, inactive reflink file in advance %llu",
-			 ip->i_ino);
+	if (valid) {
+		wake_up_all(&mp->m_reflink_opt_wait);
+		if (unexpected)
+			xfs_warn(mp, "unexpectedly, inactive reflink file in advance %llu",
+				 ip->i_ino);
+	}
 }
 
 /*

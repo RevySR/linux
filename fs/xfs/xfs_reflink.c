@@ -506,7 +506,8 @@ out_trans_cancel:
 STATIC int
 xfs_reflink_unshare_range(
 	struct xfs_inode	*src,
-	struct xfs_bmbt_irec	*oimap)
+	struct xfs_bmbt_irec	*oimap,
+	bool *secondary_evicting)
 {
 	struct xfs_mount	*mp = src->i_mount;
 	struct xfs_inode	*ip;
@@ -521,19 +522,13 @@ xfs_reflink_unshare_range(
 	struct xfs_bmbt_irec	imap = *oimap;
 	struct xfs_bmbt_irec	cmap;
 
-retry:
 	mutex_lock(&mp->m_reflink_opt_lock);
-	if (WARN_ON(!src->i_reflink_opt_ip)) {
-		mutex_unlock(&mp->m_reflink_opt_lock);
-		return -EINVAL;
-	}
-
-	if (!igrab(VFS_I(src->i_reflink_opt_ip))) {
-		mutex_unlock(&mp->m_reflink_opt_lock);
-		delay(1);
-		goto retry;
-	}
 	ip = src->i_reflink_opt_ip;
+	if (!ip || !igrab(VFS_I(ip))) {
+		mutex_unlock(&mp->m_reflink_opt_lock);
+		*secondary_evicting = true;
+		return 0;
+	}
 	mutex_unlock(&mp->m_reflink_opt_lock);
 
 	xfs_ilock(ip, lockmode);
@@ -651,6 +646,7 @@ xfs_reflink_allocate_cow(
 {
 	int			error;
 	bool			found;
+	bool			secondary_evicting = false;
 
 	ASSERT(xfs_isilocked(ip, XFS_ILOCK_EXCL));
 	if (!ip->i_cowfp) {
@@ -669,8 +665,22 @@ xfs_reflink_allocate_cow(
 
 	if (ip->i_reflink_flags & XFS_REFLINK_PRIMARY) {
 		xfs_iunlock(ip, *lockmode);
-		xfs_reflink_unshare_range(ip, imap);
+		error = xfs_reflink_unshare_range(ip, imap,
+				&secondary_evicting);
 		xfs_ilock(ip, *lockmode);
+		if (error) {
+			xfs_warn(ip->i_mount,
+				 "failed to unshare secondary range @ ino %llu",
+				 ip->i_ino);
+		} else if (secondary_evicting) {
+			/*
+			 * It's impossible to have another reflink here (racing with
+			 * FICLONE) since ip takes XFS_MMAPLOCK_SHARED lock and FICLONE
+			 * needs XFS_MMAPLOCK_EXEC.
+			 */
+			*shared = false;
+			return 0;
+		}
 	}
 
 	/*

@@ -847,6 +847,7 @@ enum {
 
 #define	XFS_IOC_SET_REFLINK_FLAGS	_IOW('X', 200, uint32_t)
 #define	XFS_IOC_GET_REFLINK_FLAGS	_IOR('X', 201, uint32_t)
+#define	XFS_IOC_WAIT_REFLINK_SECONDARY	_IOW('X', 202, uint32_t)
 
 #ifndef HAVE_BBMACROS
 /*

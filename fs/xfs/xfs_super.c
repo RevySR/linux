@@ -1527,6 +1527,11 @@ xfs_fs_fill_super(
 #endif
 	sb->s_op = &xfs_super_operations;
 
+	spin_lock_init(&mp->m_reflink_opt_gclock);
+	INIT_LIST_HEAD(&mp->m_reflink_opt_gclist);
+	INIT_WORK(&mp->m_reflink_opt_gcwork, xfs_inodegc_reflink_opt_worker);
+	init_waitqueue_head(&mp->m_reflink_opt_wait);
+
 	/*
 	 * Delay mount work if the debug hook is set. This is debug
 	 * instrumention to coordinate simulation of xfs mount failures with

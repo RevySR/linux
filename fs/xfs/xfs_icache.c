@@ -116,7 +116,7 @@ xfs_inode_alloc(
 	spin_lock_init(&ip->i_ioend_lock);
 	ip->i_next_unlinked = NULLAGINO;
 	ip->i_prev_unlinked = 0;
-
+	INIT_LIST_HEAD(&ip->i_reflink_opt_gclist);
 	return ip;
 }
 
@@ -1837,7 +1837,7 @@ xfs_inodegc_set_reclaimable(
  * This is the last chance to make changes to an otherwise unreferenced file
  * before incore reclamation happens.
  */
-static int
+int
 xfs_inodegc_inactivate(
 	struct xfs_inode	*ip)
 {
@@ -1848,6 +1848,40 @@ xfs_inodegc_inactivate(
 	xfs_inodegc_set_reclaimable(ip);
 	return error;
 
+}
+
+void
+xfs_inodegc_reflink_opt_worker(
+	struct work_struct	*work)
+{
+	struct xfs_mount	*mp = container_of(work, struct xfs_mount,
+						   m_reflink_opt_gcwork);
+	struct xfs_inode	*ip;
+
+	while (1) {
+		spin_lock(&mp->m_reflink_opt_gclock);
+		/*
+		 * fg ioctl can handle a specific inode too.  In that case,
+		 * we will not see such inode on the list anymore.
+		 */
+		if (list_empty(&mp->m_reflink_opt_gclist)) {
+			spin_unlock(&mp->m_reflink_opt_gclock);
+			break;
+		}
+		ip = list_first_entry(&mp->m_reflink_opt_gclist,
+				struct xfs_inode, i_reflink_opt_gclist);
+		/*
+		 * Or we detach it ourselves in the gclock, in that case,
+		 * fg ioctl will hit list_empty (fg ioctl also check
+		 * list_empty under gclock).
+		 */
+		list_del_init(&ip->i_reflink_opt_gclist);
+		spin_unlock(&mp->m_reflink_opt_gclock);
+
+		ASSERT(ip->i_flags & XFS_NEED_INACTIVE);
+		xfs_iflags_set(ip, XFS_INACTIVATING);
+		xfs_inodegc_inactivate(ip);
+	}
 }
 
 void
@@ -2084,6 +2118,22 @@ xfs_inodegc_queue(
 	unsigned long		queue_delay = 1;
 
 	trace_xfs_inode_set_need_inactive(ip);
+
+	if ((ip->i_reflink_flags & XFS_REFLINK_SECONDARY) &&
+	    /* ip->i_reflink_opt_ip won't be changed here since we're the owner */
+	    READ_ONCE(ip->i_reflink_opt_ip)) {
+		/* gclist will be attached before marking XFS_NEED_INACTIVE */
+		spin_lock(&mp->m_reflink_opt_gclock);
+		list_add_tail(&ip->i_reflink_opt_gclist,
+			      &mp->m_reflink_opt_gclist);
+		queue_work(mp->m_inodegc_wq,
+			   &mp->m_reflink_opt_gcwork);
+		spin_unlock(&mp->m_reflink_opt_gclock);
+		wake_up_all(&mp->m_reflink_opt_wait);
+		xfs_iflags_set(ip, XFS_NEED_INACTIVE);
+		return;
+	}
+
 	spin_lock(&ip->i_flags_lock);
 	ip->i_flags |= XFS_NEED_INACTIVE;
 	spin_unlock(&ip->i_flags_lock);

@@ -92,6 +92,7 @@ typedef struct xfs_inode {
 	 * only support one reflink file under flag XFS_REFLINK_PRIMARY
 	 */
 	struct xfs_inode	*i_reflink_opt_ip;
+	struct list_head        i_reflink_opt_gclist;
 
 	/* VFS inode */
 	struct inode		i_vnode;	/* embedded VFS inode */
