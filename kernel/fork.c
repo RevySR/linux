@@ -2855,22 +2855,13 @@ struct task_struct * __init fork_idle(int cpu)
  * The returned task is inactive, and the caller must fire it up through
  * wake_up_new_task(p). All signals are blocked in the created task.
  */
-struct task_struct *create_io_thread(int (*fn)(void *), void *arg, int node,
-					bool unshare)
+struct task_struct *create_io_thread(int (*fn)(void *), void *arg, int node)
 {
-	unsigned long flags = unshare ? 0 : (CLONE_FS|CLONE_FILES|
-					     CLONE_SIGHAND|CLONE_THREAD|
-					     CLONE_IO|CLONE_VM);
-	/* we use 'unshare' flag to try to create an independent io_thread,
-	 * 'unshare' describes whether child share parent's mm directly (with
-	 * refcount add one), or it should copy mm/files when copy_process().
-	 * By setting this flag, the io_thread won't share parent's mm
-	 * directly, but can be shared among different tasks, and looks more
-	 * reasonably.
-	 */
+	unsigned long flags = CLONE_FS|CLONE_FILES|CLONE_SIGHAND|CLONE_THREAD|
+				CLONE_IO;
 	struct kernel_clone_args args = {
-		.flags		= ((lower_32_bits(flags) | CLONE_UNTRACED)
-					& ~CSIGNAL),
+		.flags		= ((lower_32_bits(flags) | CLONE_VM |
+				    CLONE_UNTRACED) & ~CSIGNAL),
 		.exit_signal	= (lower_32_bits(flags) & CSIGNAL),
 		.fn		= fn,
 		.fn_arg		= arg,

@@ -194,6 +194,10 @@ static struct io_sq_data *io_get_sq_data(struct io_uring_params *p,
 		mutex_lock(&percpu_sqd_lock);
 		sqd = *per_cpu_ptr(percpu_sqd, p->sq_thread_cpu);
 		if (sqd) {
+			if (sqd->task_tgid != current->tgid) {
+				mutex_unlock(&percpu_sqd_lock);
+				return ERR_PTR(-EPERM);
+			}
 			refcount_inc(&sqd->refs);
 			mutex_unlock(&percpu_sqd_lock);
 			*percpu_found = true;
@@ -266,16 +270,8 @@ static bool io_sqd_handle_event(struct io_sq_data *sqd)
 	if (test_bit(IO_SQ_THREAD_SHOULD_PARK, &sqd->state) ||
 	    signal_pending(current)) {
 		mutex_unlock(&sqd->lock);
-		if (signal_pending(current)) {
+		if (signal_pending(current))
 			did_sig = get_signal(&ksig);
-			if (did_sig && sqd->sq_cpu != -1 &&
-			    refcount_read(&sqd->refs) != 0) {
-				mutex_lock(&percpu_sqd_lock);
-				if (*per_cpu_ptr(percpu_sqd, sqd->sq_cpu) == sqd)
-					did_sig = false;
-				mutex_unlock(&percpu_sqd_lock);
-			}
-		}
 		cond_resched();
 		mutex_lock(&sqd->lock);
 		sqd->sq_cpu = raw_smp_processor_id();
@@ -517,8 +513,7 @@ __cold int io_sq_offload_create(struct io_ring_ctx *ctx,
 
 		sqd->task_pid = current->pid;
 		sqd->task_tgid = current->tgid;
-		tsk = create_io_thread(io_sq_thread, sqd, NUMA_NO_NODE,
-				!!(ctx->flags & IORING_SETUP_SQPOLL_PERCPU));
+		tsk = create_io_thread(io_sq_thread, sqd, NUMA_NO_NODE);
 		if (IS_ERR(tsk)) {
 			ret = PTR_ERR(tsk);
 			goto err_sqpoll;
