@@ -354,7 +354,7 @@ static void blk_mq_debugfs_rq_hang_show(struct seq_file *m, struct request *rq)
 	struct bio_vec *bvec;
 	struct bvec_iter_all iter_all;
 
-	seq_printf(m, "%p {.op=", rq);
+	seq_printf(m, "%px {.op=", rq);
 	if (strcmp(op_str, "UNKNOWN") == 0)
 		seq_printf(m, "%u", op);
 	else
