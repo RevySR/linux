@@ -564,7 +564,7 @@ int allocate_memcg_blkcg_links(int count, struct list_head *tmp_links)
 	struct memcg_blkcg_link *link;
 	int i;
 
-	if (!cgwb_v1)
+	if (!cgroup_writeback_support_v1())
 		return 0;
 
 	for (i = 0; i < count; i++) {
@@ -594,7 +594,7 @@ void insert_memcg_blkcg_link(struct cgroup_subsys *ss,
 	struct cgroup_subsys_state *memcg_css;
 	int err;
 
-	if (!cgwb_v1)
+	if (!cgroup_writeback_support_v1())
 		return;
 
 	if (ss->id != io_cgrp_id && ss->id != memory_cgrp_id)
@@ -682,7 +682,7 @@ static void delete_blkcg_link(struct cgroup_subsys_state *blkcg_css)
 void delete_memcg_blkcg_link(struct cgroup_subsys *ss,
 			     struct cgroup_subsys_state *css)
 {
-	if (!cgwb_v1)
+	if (!cgroup_writeback_support_v1())
 		return;
 
 	if (ss->id != io_cgrp_id && ss->id != memory_cgrp_id)
