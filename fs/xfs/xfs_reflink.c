@@ -502,6 +502,7 @@ out_trans_cancel:
 	return error;
 }
 
+#ifdef CONFIG_FS_DAX
 STATIC int
 xfs_reflink_unshare_range(
 	struct xfs_inode	*src,
@@ -628,6 +629,15 @@ error:
 	xfs_irele(ip);
 	return error;
 }
+#else
+STATIC int
+xfs_reflink_unshare_range(
+	struct xfs_inode	*src,
+	struct xfs_bmbt_irec	*oimap)
+{
+	return 0;
+}
+#endif
 
 /* Allocate all CoW reservations covering a range of blocks in a file. */
 int
