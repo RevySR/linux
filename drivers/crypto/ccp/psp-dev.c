@@ -236,11 +236,15 @@ static irqreturn_t psp_irq_handler_hygon(int irq, void *data)
 }
 #endif
 
-static void hygon_fixup_psp_caps(struct psp_device *psp)
+static int hygon_fixup_psp_caps(struct psp_device *psp)
 {
-	if (boot_cpu_data.x86_vendor == X86_VENDOR_HYGON)
-		psp->capability &= ~(PSP_CAPABILITY_TEE |
-				     PSP_CAPABILITY_PSP_SECURITY_REPORTING);
+	/* the hygon psp is unavailable if bit0 cleared in feature reg */
+	if (!(psp->capability & PSP_CAPABILITY_SEV))
+		return -ENODEV;
+
+	psp->capability &= ~(PSP_CAPABILITY_TEE |
+			     PSP_CAPABILITY_PSP_SECURITY_REPORTING);
+	return 0;
 }
 
 static unsigned int psp_get_capability(struct psp_device *psp)
@@ -263,8 +267,13 @@ static unsigned int psp_get_capability(struct psp_device *psp)
 	/*
 	 * Fix capability of Hygon psp, the meaning of Hygon psp feature
 	 * register is not exactly the same as AMD.
+	 * Return -ENODEV directly if hygon psp not configured with CSV
+	 * capability.
 	 */
-	hygon_fixup_psp_caps(psp);
+	if (boot_cpu_data.x86_vendor == X86_VENDOR_HYGON) {
+		if (hygon_fixup_psp_caps(psp))
+			return -ENODEV;
+	}
 
 	/* Detect if TSME and SME are both enabled */
 	if (psp->capability & PSP_CAPABILITY_PSP_SECURITY_REPORTING &&
