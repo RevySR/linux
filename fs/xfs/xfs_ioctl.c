@@ -1911,7 +1911,7 @@ xfs_need_wait_reflink_secondary(
 }
 
 int
-xfs_ioc_wait_reflink_secondary(
+xfs_wait_reflink_secondary(
 	struct xfs_mount	*mp,
 	struct xfs_inode	*ip,
 	u32			timeout_sec)
@@ -2297,7 +2297,7 @@ xfs_file_ioctl(
 		if (get_user(timeout_sec, (uint32_t __user *)arg))
 			return -EFAULT;
 
-		return xfs_ioc_wait_reflink_secondary(mp, ip, timeout_sec);
+		return xfs_wait_reflink_secondary(mp, ip, timeout_sec);
 	}
 
 	default:
