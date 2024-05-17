@@ -69,6 +69,7 @@ config DNET
 	  To compile this driver as a module, choose M here: the module
 	  will be called dnet.
 
+source "drivers/net/ethernet/bzwx/Kconfig"
 source "drivers/net/ethernet/dec/Kconfig"
 source "drivers/net/ethernet/dlink/Kconfig"
 source "drivers/net/ethernet/emulex/Kconfig"
