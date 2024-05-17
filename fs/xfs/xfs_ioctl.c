@@ -2264,8 +2264,23 @@ xfs_file_ioctl(
 		if (get_user(in, (uint32_t __user *)arg))
 			return -EFAULT;
 
+		/* invalid values */
+		if ((in & ~(XFS_REFLINK_PRIMARY | XFS_REFLINK_SECONDARY)) ||
+		    (in & (XFS_REFLINK_PRIMARY | XFS_REFLINK_SECONDARY)) ==
+			(XFS_REFLINK_PRIMARY | XFS_REFLINK_SECONDARY))
+			return -EINVAL;
+
+		/* clearing all flags is unallowed */
+		if (!in)
+			return -EINVAL;
+
 		xfs_ilock(ip, XFS_ILOCK_EXCL);
-		ip->i_reflink_flags = in;
+		if (!ip->i_reflink_flags) {
+			ip->i_reflink_flags = in;
+		} else if (ip->i_reflink_flags != in) {
+			xfs_iunlock(ip, XFS_ILOCK_EXCL);
+			return -EINVAL;
+		}
 		xfs_iunlock(ip, XFS_ILOCK_EXCL);
 		return 0;
 	}
