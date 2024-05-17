@@ -1356,6 +1356,11 @@ then\
     %{_sbindir}/weak-modules --add-kernel %{KVERREL}%{?1:+%{1}} || exit $?\
 fi\
 /bin/kernel-install add %{KVERREL}%{?1:+%{1}} /lib/modules/%{KVERREL}%{?1:+%{1}}/vmlinuz || exit $?\
+%ifarch aarch64  \
+grubby --update-kernel /boot/vmlinuz-%{KVERREL}%{?1:+%{1}} --args="cgroup.memory=nokmem crashkernel=0M-2G:0M,2G-64G:256M,64G-:384M iommu.passthrough=1 iommu.strict=0 nospectre_bhb ssbd=force-off"\
+%else \
+grubby --update-kernel /boot/vmlinuz-%{KVERREL}%{?1:+%{1}} --args="cgroup.memory=nokmem crashkernel=0M-2G:0M,2G-8G:192M,8G-:256M"\
+%endif  \
 %{nil}
 
 #
