@@ -1366,6 +1366,9 @@ static void ext4_put_super(struct super_block *sb)
 
 	ext4_group_desc_free(sbi);
 	ext4_flex_groups_free(sbi);
+
+	WARN_ON_ONCE(!(sbi->s_mount_state & EXT4_ERROR_FS) &&
+		     percpu_counter_sum(&sbi->s_dirtyclusters_counter));
 	ext4_percpu_param_destroy(sbi);
 #ifdef CONFIG_QUOTA
 	for (int i = 0; i < EXT4_MAXQUOTAS; i++)
@@ -1496,7 +1499,8 @@ static void ext4_destroy_inode(struct inode *inode)
 		dump_stack();
 	}
 
-	if (EXT4_I(inode)->i_reserved_data_blocks)
+	if (!(EXT4_SB(inode->i_sb)->s_mount_state & EXT4_ERROR_FS) &&
+	    WARN_ON_ONCE(EXT4_I(inode)->i_reserved_data_blocks))
 		ext4_msg(inode->i_sb, KERN_ERR,
 			 "Inode %lu (%p): i_reserved_data_blocks (%u) not cleared!",
 			 inode->i_ino, EXT4_I(inode),
