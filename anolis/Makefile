@@ -26,6 +26,9 @@ dist-genrpmtree: dist-check
 dist-rpms: dist-genrpmtree dist-check
 	sh buildpkg.sh
 
+dist-configs-check:
+	sh configs/examination/configs-check.sh
+
 clean:
 	rm -rf $(DIST_OUTPUT)
 
