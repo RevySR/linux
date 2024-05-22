@@ -142,9 +142,9 @@
 %ifarch loongarch64
 %define all_arch_configs %{name}-%{version}-loongarch64*.config
 %define asmarch loongarch
-%define make_target vmlinuz.efi
+%define make_target vmlinux
 %define hdrarch loongarch
-%define kernel_image arch/loongarch/boot/vmlinuz.efi
+%define kernel_image vmlinux
 %endif
 
 # To temporarily exclude an architecture from being built, add it to
