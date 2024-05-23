@@ -1356,6 +1356,8 @@ xfs_itruncate_extents_flags(
 	xfs_fileoff_t		first_unmap_block;
 	xfs_filblks_t		unmap_len;
 	int			error = 0;
+	bool			secondary_inactive = false;
+	int			force_count = 0;
 
 	ASSERT(xfs_isilocked(ip, XFS_ILOCK_EXCL));
 	ASSERT(!atomic_read(&VFS_I(ip)->i_count) ||
@@ -1386,9 +1388,13 @@ xfs_itruncate_extents_flags(
 		return 0;
 	}
 
+	if (!new_size && (ip->i_reflink_flags & XFS_REFLINK_SECONDARY))
+		secondary_inactive = true;
+
 	unmap_len = XFS_MAX_FILEOFF - first_unmap_block + 1;
 	while (unmap_len > 0) {
 		ASSERT(tp->t_highest_agno == NULLAGNUMBER);
+
 		error = __xfs_bunmapi(tp, ip, first_unmap_block, &unmap_len,
 				flags, XFS_ITRUNC_MAX_EXTENTS);
 		if (error)
@@ -1398,6 +1404,14 @@ xfs_itruncate_extents_flags(
 		error = xfs_defer_finish(&tp);
 		if (error)
 			goto out;
+
+		if (secondary_inactive) {
+			if (xfs_reflink_inactive_force_log_period &&
+			    ++force_count >= xfs_reflink_inactive_force_log_period) {
+				xfs_log_force(mp, 0);
+				force_count = 0;
+			}
+		}
 	}
 
 	if (whichfork == XFS_DATA_FORK) {
