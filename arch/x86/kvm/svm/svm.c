@@ -2976,9 +2976,14 @@ static int svm_get_msr(struct kvm_vcpu *vcpu, struct msr_data *msr_info)
 			 * Only support userspace get/set from/to
 			 * vmcb.control.ghcb_gpa
 			 */
-			if (!msr_info->host_initiated ||
-			    !sev_es_guest(svm->vcpu.kvm))
+			if (!msr_info->host_initiated)
 				return 1;
+
+			/* Filling the data as 0 if it's not a Hygon CSV2 guest */
+			if (!sev_es_guest(svm->vcpu.kvm)) {
+				msr_info->data = 0;
+				return 0;
+			}
 
 			msr_info->data = svm->vmcb->control.ghcb_gpa;
 
@@ -3263,9 +3268,15 @@ static int svm_set_msr(struct kvm_vcpu *vcpu, struct msr_data *msr)
 			 * Only support userspace get/set from/to
 			 * vmcb.control.ghcb_gpa
 			 */
-			if (!msr->host_initiated ||
-			    !sev_es_guest(svm->vcpu.kvm))
+			if (!msr->host_initiated)
 				return 1;
+
+			/*
+			 * Ignore write to this MSR if it's not a Hygon CSV2
+			 * guest.
+			 */
+			if (!sev_es_guest(svm->vcpu.kvm))
+				return 0;
 
 			/*
 			 * Value 0 means uninitialized userspace MSR data,
