@@ -400,7 +400,6 @@ static struct mac_device_info *loongson_dwmac_setup(void *apriv)
 		mac->dma = dma;
 	}
 
-	mac->mac = &dwmac1000_ops;
 	priv->dev->priv_flags |= IFF_UNICAST_FLT;
 
 	/* Pre-initialize the respective "mac" fields as it's done in
