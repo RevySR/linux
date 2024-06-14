@@ -7001,7 +7001,7 @@ CONFIG_SCHED_ACPU=y
 # end of Scheduler Debugging
 
 # CONFIG_DEBUG_TIMEKEEPING is not set
-# CONFIG_DEBUG_PREEMPT is not set
+CONFIG_DEBUG_PREEMPT=y
 
 #
 # Lock Debugging (spinlocks, mutexes, etc...)
