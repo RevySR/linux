@@ -3984,4 +3984,6 @@ static inline bool async_load_calc_enabled(void)
 long tg_get_cfs_quota(struct task_group *tg);
 long tg_get_cfs_period(struct task_group *tg);
 
+#include "ext.h"
+
 #endif /* _KERNEL_SCHED_SCHED_H */
