@@ -17,12 +17,14 @@
 #include <linux/pci.h>
 #include <linux/pm_runtime.h>
 #include <linux/dma-mapping.h>
+#include <linux/spinlock.h>
 
 #include "intel_th.h"
 #include "debug.h"
 
 static bool host_mode __read_mostly;
 module_param(host_mode, bool, 0444);
+static DEFINE_SPINLOCK(intel_th_lock);
 
 static DEFINE_IDA(intel_th_ida);
 
@@ -716,7 +718,7 @@ int intel_th_output_enable(struct intel_th *th, unsigned int otype)
 {
 	struct intel_th_device *thdev;
 	int src = 0, dst = 0;
-
+	spin_lock(&intel_th_lock);
 	for (src = 0, dst = 0; dst <= th->num_thdevs; src++, dst++) {
 		for (; src < ARRAY_SIZE(intel_th_subdevices); src++) {
 			if (intel_th_subdevices[src].type != INTEL_TH_OUTPUT)
@@ -729,8 +731,10 @@ int intel_th_output_enable(struct intel_th *th, unsigned int otype)
 		}
 
 		/* no unallocated matching subdevices */
-		if (src == ARRAY_SIZE(intel_th_subdevices))
+		if (src == ARRAY_SIZE(intel_th_subdevices)) {
+			spin_unlock(&intel_th_lock);
 			return -ENODEV;
+		}
 
 		for (; dst < th->num_thdevs; dst++) {
 			if (th->thdev[dst]->type != INTEL_TH_OUTPUT)
@@ -749,16 +753,18 @@ int intel_th_output_enable(struct intel_th *th, unsigned int otype)
 		if (dst == th->num_thdevs)
 			goto found;
 	}
-
+	spin_unlock(&intel_th_lock);
 	return -ENODEV;
 
 found:
 	thdev = intel_th_subdevice_alloc(th, &intel_th_subdevices[src]);
-	if (IS_ERR(thdev))
+	if (IS_ERR(thdev)) {
+		spin_unlock(&intel_th_lock);
 		return PTR_ERR(thdev);
+	}
 
 	th->thdev[th->num_thdevs++] = thdev;
-
+	spin_unlock(&intel_th_lock);
 	return 0;
 }
 EXPORT_SYMBOL_GPL(intel_th_output_enable);
@@ -767,6 +773,7 @@ static int intel_th_populate(struct intel_th *th)
 {
 	int src;
 
+	spin_lock(&intel_th_lock);
 	/* create devices for each intel_th_subdevice */
 	for (src = 0; src < ARRAY_SIZE(intel_th_subdevices); src++) {
 		const struct intel_th_subdevice *subdev =
@@ -792,13 +799,14 @@ static int intel_th_populate(struct intel_th *th)
 			/* ENODEV for individual subdevices is allowed */
 			if (PTR_ERR(thdev) == -ENODEV)
 				continue;
-
+			spin_unlock(&intel_th_lock);
 			return PTR_ERR(thdev);
 		}
 
 		th->thdev[th->num_thdevs++] = thdev;
 	}
 
+	spin_unlock(&intel_th_lock);
 	return 0;
 }
 
