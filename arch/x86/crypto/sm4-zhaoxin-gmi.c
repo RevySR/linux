@@ -23,7 +23,6 @@
 #include <linux/processor.h>
 #include <linux/cpufeature.h>
 
-
 #define SM4_ECB  (1<<6)
 #define SM4_CBC  (1<<7)
 #define SM4_CFB  (1<<8)
@@ -36,7 +35,7 @@
 
 /* Control word. */
 struct sm4_cipher_data {
-	u8 iv[SM4_BLOCK_SIZE]; /* Initialization vector */
+	u8 iv[SM4_BLOCK_SIZE];	/* Initialization vector */
 	union {
 		u32 pad;
 		struct {
@@ -45,80 +44,54 @@ struct sm4_cipher_data {
 			u32 mode:5;
 			u32 digest:1;
 		} b;
-	} cword;                    /* Control word */
-	struct sm4_ctx  keys;  /* Encryption key */
+	} cword;		/* Control word */
+	struct sm4_ctx keys;	/* Encryption key */
 };
 
 static u8 *rep_xcrypt(const u8 *input, u8 *output, void *key, u8 *iv,
-							struct sm4_cipher_data *sm4_data, u64 count)
+		      struct sm4_cipher_data *sm4_data, u64 count)
 {
 	unsigned long rax = sm4_data->cword.pad;
 
-	// Set the flag for encryption or decryption
+	/*  Set the flag for encryption or decryption */
 	if (sm4_data->cword.b.encdec == 1)
 		rax &= ~0x01;
 	else
 		rax |= 0x01;
 
 	__asm__ __volatile__(
-		#ifdef __x86_64__
-			"pushq %%rbp\n\n"
-			"pushq %%rbx\n\n"
-			"pushq %%rcx\n\n"
-			"pushq %%rsi\n\n"
-			"pushq %%rdi\n\n"
-		#else
-			"pushl %%ebp\n\n"
-			"pushl %%ebx\n\n"
-			"pushl %%ecx\n\n"
-			"pushl %%esi\n\n"
-			"pushl %%edi\n\n"
-		#endif
-		".byte 0xf3,0x0f,0xa7,0xf0\n"
-		#ifdef __x86_64__
-			"popq %%rdi\n\n"
-			"popq %%rsi\n\n"
-			"popq %%rcx\n\n"
-			"popq %%rbx\n\n"
-			"popq %%rbp\n\n"
-		#else
-			"popl %%edi\n\n"
-			"popl %%esi\n\n"
-			"popl %%ecx\n\n"
-			"popl %%ebx\n\n"
-			"popl %%ebp\n\n"
-		#endif
+		".byte 0xf3, 0x0f, 0xa7, 0xf0\n"
 		:
 		: "S"(input), "D"(output), "a"(rax), "b"(key), "c"((unsigned long)count), "d"(iv));
+
 	return iv;
 }
 
 static u8 *rep_xcrypt_ctr(const u8 *input, u8 *output, void *key, u8 *iv,
-	struct sm4_cipher_data *sm4_data, u64 count)
+			  struct sm4_cipher_data *sm4_data, u64 count)
 {
 	u8 oiv[SM4_BLOCK_SIZE] = {0};
 	u16 cnt_tmp;
 	u32 i;
 	u8 *in_tmp = (u8 *)input, *out_tmp = output;
 
-	//Backup the original IV if it is not NULL.
+	/* Backup the original IV if it is not NULL. */
 	if (iv)
 		memcpy(oiv,  iv, SM4_BLOCK_SIZE);
 
-	// Get the current counter.
+	/* Get the current counter. */
 	cnt_tmp = GETU16(&iv[14]);
 
-	// Get the available counter space before overflow.
+	/* Get the available counter space before overflow. */
 	cnt_tmp = 0x10000 - cnt_tmp;
 
-	//
-	// Check there is enough counter space for the required blocks.
-	//
+	/*
+	 * Check there is enough counter space for the required blocks.
+	 */
 	if (cnt_tmp < count) {
-
-		// Process the first part of data blocks.
+		/* Process the first part of data blocks. */
 		rep_xcrypt(in_tmp, out_tmp, key, iv, sm4_data, cnt_tmp);
-		// Only increase the counter by SW when overflow occurs.
+		/* Only increase the counter by SW when overflow occurs. */
 		memcpy(iv, oiv, SM4_BLOCK_SIZE);
 
 		for (i = 0; i < cnt_tmp; i++)
@@ -127,30 +100,30 @@ static u8 *rep_xcrypt_ctr(const u8 *input, u8 *output, void *key, u8 *iv,
 		out_tmp = output + cnt_tmp * SM4_BLOCK_SIZE;
 		in_tmp = (u8 *)(input + cnt_tmp * SM4_BLOCK_SIZE);
 
-		// Get the number of data blocks that have not been encrypted.
+		/* Get the number of data blocks that have not been encrypted. */
 		cnt_tmp = count - cnt_tmp;
-		// Process the remaining part of data blocks.
+		/* Process the remaining part of data blocks. */
 		rep_xcrypt(in_tmp, out_tmp, key, iv, sm4_data, cnt_tmp);
 	} else {
-		// Counter space is big enough, the counter will not overflow.
+		/* Counter space is big enough, the counter will not overflow. */
 		rep_xcrypt(in_tmp, out_tmp, key, iv, sm4_data, count);
 	}
 
-	// Restore the iv if not null
+	/* Restore the iv if not null */
 	if (iv)
 		memcpy(iv, oiv, SM4_BLOCK_SIZE);
 
 	return iv;
 }
 
-static u8 *rep_xcrypt_ecb_ONE(const u8 *input, u8 *output, void *key,
-						u8 *iv, struct sm4_cipher_data *sm4_data, u64 count)
+static u8 *rep_xcrypt_ecb_ONE(const u8 *input, u8 *output, void *key, u8 *iv,
+			      struct sm4_cipher_data *sm4_data, u64 count)
 {
 	struct sm4_cipher_data cw;
 
-	cw.cword.pad      = 0;
+	cw.cword.pad = 0;
 	cw.cword.b.encdec = 1;
-	cw.cword.pad     |= 0x20|SM4_ECB;
+	cw.cword.pad |= 0x20 | SM4_ECB;
 
 	return rep_xcrypt(input, output, key, iv, &cw, 1);
 }
@@ -161,8 +134,7 @@ static u8 *rep_xcrypt_ecb_ONE(const u8 *input, u8 *output, void *key,
  * @in_key: The input key.
  * @key_len:The size of the key.
  */
-int gmi_sm4_set_key(struct crypto_skcipher  *tfm, const u8 *in_key,
-					unsigned int key_len)
+static int gmi_sm4_set_key(struct crypto_skcipher *tfm, const u8 *in_key, unsigned int key_len)
 {
 	struct sm4_ctx *ctx = crypto_skcipher_ctx(tfm);
 
@@ -176,8 +148,6 @@ int gmi_sm4_set_key(struct crypto_skcipher  *tfm, const u8 *in_key,
 
 	return 0;
 }
-EXPORT_SYMBOL_GPL(gmi_sm4_set_key);
-
 
 static int sm4_cipher_common(struct skcipher_request *req, struct sm4_cipher_data *cw)
 {
@@ -186,13 +156,12 @@ static int sm4_cipher_common(struct skcipher_request *req, struct sm4_cipher_dat
 	struct skcipher_walk walk;
 	unsigned int blocks;
 	int err;
-	u8 *iv;
 
 	err = skcipher_walk_virt(&walk, req, true);
 
 	while ((blocks = (walk.nbytes / SM4_BLOCK_SIZE))) {
-		iv = rep_xcrypt(walk.src.virt.addr, walk.dst.virt.addr, ctx->rkey_enc,
-						walk.iv, cw, blocks);
+		rep_xcrypt(walk.src.virt.addr, walk.dst.virt.addr, ctx->rkey_enc, walk.iv, cw,
+			   blocks);
 
 		err = skcipher_walk_done(&walk, walk.nbytes % SM4_BLOCK_SIZE);
 	}
@@ -200,15 +169,14 @@ static int sm4_cipher_common(struct skcipher_request *req, struct sm4_cipher_dat
 	return err;
 }
 
-
 static int ecb_encrypt(struct skcipher_request *req)
 {
 	int err;
 	struct sm4_cipher_data cw;
 
-	cw.cword.pad      = 0;
+	cw.cword.pad = 0;
 	cw.cword.b.encdec = 1;
-	cw.cword.pad     |= 0x20|SM4_ECB;
+	cw.cword.pad |= 0x20 | SM4_ECB;
 
 	err = sm4_cipher_common(req, &cw);
 
@@ -220,8 +188,8 @@ static int ecb_decrypt(struct skcipher_request *req)
 	int err;
 	struct sm4_cipher_data cw;
 
-	cw.cword.pad  = 0;
-	cw.cword.pad |= 0x20|SM4_ECB;
+	cw.cword.pad = 0;
+	cw.cword.pad |= 0x20 | SM4_ECB;
 
 	err = sm4_cipher_common(req, &cw);
 
@@ -233,9 +201,9 @@ static int cbc_encrypt(struct skcipher_request *req)
 	int err;
 	struct sm4_cipher_data cw;
 
-	cw.cword.pad      = 0;
+	cw.cword.pad = 0;
 	cw.cword.b.encdec = 1;
-	cw.cword.pad     |= 0x20|SM4_CBC;
+	cw.cword.pad |= 0x20 | SM4_CBC;
 
 	err = sm4_cipher_common(req, &cw);
 
@@ -247,14 +215,13 @@ static int cbc_decrypt(struct skcipher_request *req)
 	int err;
 	struct sm4_cipher_data cw;
 
-	cw.cword.pad  = 0;
-	cw.cword.pad |= 0x20|SM4_CBC;
+	cw.cword.pad = 0;
+	cw.cword.pad |= 0x20 | SM4_CBC;
 
 	err = sm4_cipher_common(req, &cw);
 
 	return err;
 }
-
 
 /*
  * sm4_cipher_ctr is used for ZX-E and newer
@@ -266,21 +233,20 @@ static int sm4_cipher_ctr(struct skcipher_request *req, struct sm4_cipher_data *
 	struct skcipher_walk walk;
 	unsigned int blocks, nbytes;
 	int err;
-	u8 *iv, *dst, *src;
+	u8 *dst, *src;
 	u8 keystream[SM4_BLOCK_SIZE];
 	u32 i;
 
 	err = skcipher_walk_virt(&walk, req, true);
 
 	while ((nbytes = walk.nbytes) > 0) {
-
 		src = walk.src.virt.addr;
 		dst = walk.dst.virt.addr;
 
 		while (nbytes >= SM4_BLOCK_SIZE) {
 			blocks = nbytes/SM4_BLOCK_SIZE;
-			iv = rep_xcrypt_ctr(walk.src.virt.addr, walk.dst.virt.addr, ctx->rkey_enc,
-				walk.iv, cw, blocks);
+			rep_xcrypt_ctr(walk.src.virt.addr, walk.dst.virt.addr, ctx->rkey_enc,
+				       walk.iv, cw, blocks);
 
 			for (i = 0; i < blocks; i++)
 				crypto_inc(walk.iv, SM4_BLOCK_SIZE);
@@ -312,9 +278,9 @@ static int ctr_encrypt(struct skcipher_request *req)
 	int err;
 	struct sm4_cipher_data cw;
 
-	cw.cword.pad      = 0;
+	cw.cword.pad = 0;
 	cw.cword.b.encdec = 1;
-	cw.cword.pad     |= 0x20|SM4_CTR;
+	cw.cword.pad |= 0x20 | SM4_CTR;
 
 	err = sm4_cipher_ctr(req, &cw);
 
@@ -329,8 +295,8 @@ static int ctr_decrypt(struct skcipher_request *req)
 	int err;
 	struct sm4_cipher_data cw;
 
-	cw.cword.pad  = 0;
-	cw.cword.pad |= 0x20|SM4_CTR;
+	cw.cword.pad = 0;
+	cw.cword.pad |= 0x20 | SM4_CTR;
 
 	err = sm4_cipher_ctr(req, &cw);
 
@@ -347,19 +313,17 @@ static int sm4_ctr_zxc(struct skcipher_request *req, struct sm4_cipher_data *cw)
 	struct skcipher_walk walk;
 	unsigned int nbytes;
 	int err;
-	u8 *iv = NULL, *dst, *src;
+	u8 *dst, *src;
 	u8 en_iv[SM4_BLOCK_SIZE] = {0};
 
 	err = skcipher_walk_virt(&walk, req, true);
 
 	while ((nbytes = walk.nbytes) > 0) {
-
 		src = walk.src.virt.addr;
 		dst = walk.dst.virt.addr;
 
 		while (nbytes >= SM4_BLOCK_SIZE) {
-
-			iv = rep_xcrypt_ecb_ONE(walk.iv, en_iv, ctx->rkey_enc, walk.iv, cw, 1);
+			rep_xcrypt_ecb_ONE(walk.iv, en_iv, ctx->rkey_enc, walk.iv, cw, 1);
 			crypto_inc(walk.iv, SM4_BLOCK_SIZE);
 
 			crypto_xor_cpy(dst, en_iv, src, SM4_BLOCK_SIZE);
@@ -371,7 +335,6 @@ static int sm4_ctr_zxc(struct skcipher_request *req, struct sm4_cipher_data *cw)
 
 		// tail
 		if (walk.nbytes == walk.total && nbytes > 0) {
-
 			rep_xcrypt_ecb_ONE(walk.iv, en_iv, ctx->rkey_enc, walk.iv, cw, 1);
 			crypto_xor_cpy(dst, en_iv, src, nbytes);
 
@@ -394,9 +357,9 @@ static int ctr_encrypt_zxc(struct skcipher_request *req)
 	int err;
 	struct sm4_cipher_data cw;
 
-	cw.cword.pad      = 0;
+	cw.cword.pad = 0;
 	cw.cword.b.encdec = 1;
-	cw.cword.pad     |= 0x20|SM4_CTR;
+	cw.cword.pad |= 0x20 | SM4_CTR;
 
 	err = sm4_ctr_zxc(req, &cw);
 
@@ -411,9 +374,9 @@ static int ctr_decrypt_zxc(struct skcipher_request *req)
 	int err;
 	struct sm4_cipher_data cw;
 
-	cw.cword.pad      = 0;
+	cw.cword.pad = 0;
 	cw.cword.b.encdec = 0;
-	cw.cword.pad     |= 0x20|SM4_CTR;
+	cw.cword.pad |= 0x20 | SM4_CTR;
 
 	err = sm4_ctr_zxc(req, &cw);
 
@@ -421,16 +384,16 @@ static int ctr_decrypt_zxc(struct skcipher_request *req)
 }
 
 /*
- *  ofb_encrypt is used for ZX-E and newer
+ * ofb_encrypt is used for ZX-E and newer
  */
 static int ofb_encrypt(struct skcipher_request *req)
 {
 	int err;
 	struct sm4_cipher_data cw;
 
-	cw.cword.pad      = 0;
+	cw.cword.pad = 0;
 	cw.cword.b.encdec = 1;
-	cw.cword.pad     |= 0x20|SM4_OFB;
+	cw.cword.pad |= 0x20 | SM4_OFB;
 
 	err = sm4_cipher_common(req, &cw);
 
@@ -438,15 +401,15 @@ static int ofb_encrypt(struct skcipher_request *req)
 }
 
 /*
- *  ofb_decrypt is used for ZX-E and newer
+ * ofb_decrypt is used for ZX-E and newer
  */
 static int ofb_decrypt(struct skcipher_request *req)
 {
 	int err;
 	struct sm4_cipher_data cw;
 
-	cw.cword.pad  = 0;
-	cw.cword.pad |= 0x20|SM4_OFB;
+	cw.cword.pad = 0;
+	cw.cword.pad |= 0x20 | SM4_OFB;
 
 	err = sm4_cipher_common(req, &cw);
 
@@ -470,7 +433,6 @@ static int sm4_ofb_zxc(struct skcipher_request *req, struct sm4_cipher_data *cw)
 
 	while ((blocks = (walk.nbytes / SM4_BLOCK_SIZE))) {
 		while (blocks--) {
-
 			rep_xcrypt_ecb_ONE(walk.iv, walk.iv, ctx->rkey_enc, NULL, cw, 1);
 
 			for (n = 0; n < SM4_BLOCK_SIZE; n += sizeof(size_t))
@@ -482,7 +444,6 @@ static int sm4_ofb_zxc(struct skcipher_request *req, struct sm4_cipher_data *cw)
 			walk.dst.virt.addr += SM4_BLOCK_SIZE;
 
 		}
-
 		err = skcipher_walk_done(&walk, walk.nbytes % SM4_BLOCK_SIZE);
 	}
 
@@ -497,9 +458,9 @@ static int ofb_encrypt_zxc(struct skcipher_request *req)
 	int err;
 	struct sm4_cipher_data cw;
 
-	cw.cword.pad      = 0;
+	cw.cword.pad = 0;
 	cw.cword.b.encdec = 1;
-	cw.cword.pad     |= 0x20|SM4_OFB;
+	cw.cword.pad |= 0x20 | SM4_OFB;
 
 	err = sm4_ofb_zxc(req, &cw);
 
@@ -514,9 +475,9 @@ static int ofb_decrypt_zxc(struct skcipher_request *req)
 	int err;
 	struct sm4_cipher_data cw;
 
-	cw.cword.pad      = 0;
+	cw.cword.pad = 0;
 	cw.cword.b.encdec = 0;
-	cw.cword.pad     |= 0x20|SM4_OFB;
+	cw.cword.pad |= 0x20 | SM4_OFB;
 
 	err = sm4_ofb_zxc(req, &cw);
 
@@ -532,9 +493,9 @@ static int cfb_encrypt(struct skcipher_request *req)
 	int err;
 	struct sm4_cipher_data cw;
 
-	cw.cword.pad      = 0;
+	cw.cword.pad = 0;
 	cw.cword.b.encdec = 1;
-	cw.cword.pad     |= 0x20|SM4_CFB;
+	cw.cword.pad |= 0x20 | SM4_CFB;
 
 	err = sm4_cipher_common(req, &cw);
 
@@ -550,13 +511,12 @@ static int cfb_decrypt(struct skcipher_request *req)
 	int err;
 	struct sm4_cipher_data cw;
 
-	cw.cword.pad  = 0;
-	cw.cword.pad |= 0x20|SM4_CFB;
+	cw.cword.pad = 0;
+	cw.cword.pad |= 0x20 | SM4_CFB;
 
 	err = sm4_cipher_common(req, &cw);
 
 	return err;
-
 }
 
 /*
@@ -577,7 +537,6 @@ static int sm4_cfb_zxc(struct skcipher_request *req, struct sm4_cipher_data *cw)
 	while ((blocks = (walk.nbytes / SM4_BLOCK_SIZE))) {
 		while (blocks--) {
 			rep_xcrypt_ecb_ONE(walk.iv, walk.iv, ctx->rkey_enc, NULL, cw, 1);
-
 			if (cw->cword.b.encdec)
 				for (n = 0; n < SM4_BLOCK_SIZE; n += sizeof(size_t))
 					*(size_t *)(walk.dst.virt.addr + n) =
@@ -610,9 +569,9 @@ static int cfb_encrypt_zxc(struct skcipher_request *req)
 	int err;
 	struct sm4_cipher_data cw;
 
-	cw.cword.pad      = 0;
+	cw.cword.pad = 0;
 	cw.cword.b.encdec = 1;
-	cw.cword.pad     |= 0x20|SM4_CFB;
+	cw.cword.pad |= 0x20 | SM4_CFB;
 
 	err = sm4_cfb_zxc(req, &cw);
 
@@ -627,113 +586,112 @@ static int cfb_decrypt_zxc(struct skcipher_request *req)
 	int err;
 	struct sm4_cipher_data cw;
 
-	cw.cword.pad      = 0;
+	cw.cword.pad = 0;
 	cw.cword.b.encdec = 0;
-	cw.cword.pad     |= 0x20|SM4_CFB;
+	cw.cword.pad |= 0x20 | SM4_CFB;
 
 	err = sm4_cfb_zxc(req, &cw);
 
 	return err;
 }
 
-
 static struct skcipher_alg sm4_algs[] = {
 	{
 		.base = {
-			.cra_name           = "__ecb(sm4)",
-			.cra_driver_name    = "__ecb-sm4-gmi",
-			.cra_priority       = 300,
-			.cra_flags          = CRYPTO_ALG_INTERNAL,
-			.cra_blocksize      = SM4_BLOCK_SIZE,
-			.cra_ctxsize        = sizeof(struct sm4_ctx),
-			.cra_module         = THIS_MODULE,
+			.cra_name = "__ecb(sm4)",
+			.cra_driver_name = "__ecb-sm4-gmi",
+			.cra_priority = 300,
+			.cra_flags = CRYPTO_ALG_INTERNAL,
+			.cra_blocksize = SM4_BLOCK_SIZE,
+			.cra_ctxsize = sizeof(struct sm4_ctx),
+			.cra_module = THIS_MODULE,
 		},
-		.min_keysize    = SM4_KEY_SIZE,
-		.max_keysize    = SM4_KEY_SIZE,
-		.ivsize         = SM4_BLOCK_SIZE,
-		.walksize	= 8 * SM4_BLOCK_SIZE,
-		.setkey         = gmi_sm4_set_key,
-		.encrypt        = ecb_encrypt,
-		.decrypt        = ecb_decrypt,
+		.min_keysize = SM4_KEY_SIZE,
+		.max_keysize = SM4_KEY_SIZE,
+		.ivsize = SM4_BLOCK_SIZE,
+		.walksize = 8 * SM4_BLOCK_SIZE,
+		.setkey = gmi_sm4_set_key,
+		.encrypt = ecb_encrypt,
+		.decrypt = ecb_decrypt,
 	},
 
 	{
 		.base = {
-			.cra_name           = "__cbc(sm4)",
-			.cra_driver_name    = "__cbc-sm4-gmi",
-			.cra_priority       = 300,
-			.cra_flags          = CRYPTO_ALG_INTERNAL,
-			.cra_blocksize      = SM4_BLOCK_SIZE,
-			.cra_ctxsize        = sizeof(struct sm4_ctx),
-			.cra_module         = THIS_MODULE,
+			.cra_name = "__cbc(sm4)",
+			.cra_driver_name = "__cbc-sm4-gmi",
+			.cra_priority = 300,
+			.cra_flags = CRYPTO_ALG_INTERNAL,
+			.cra_blocksize = SM4_BLOCK_SIZE,
+			.cra_ctxsize = sizeof(struct sm4_ctx),
+			.cra_module = THIS_MODULE,
 		},
-		.min_keysize    = SM4_KEY_SIZE,
-		.max_keysize    = SM4_KEY_SIZE,
-		.ivsize         = SM4_BLOCK_SIZE,
-		.walksize	= 8 * SM4_BLOCK_SIZE,
-		.setkey         = gmi_sm4_set_key,
-		.encrypt        = cbc_encrypt,
-		.decrypt        = cbc_decrypt,
+		.min_keysize = SM4_KEY_SIZE,
+		.max_keysize = SM4_KEY_SIZE,
+		.ivsize = SM4_BLOCK_SIZE,
+		.walksize = 8 * SM4_BLOCK_SIZE,
+		.setkey = gmi_sm4_set_key,
+		.encrypt = cbc_encrypt,
+		.decrypt = cbc_decrypt,
 	},
 
 	{
 		.base = {
-			.cra_name           = "__ctr(sm4)",
-			.cra_driver_name    = "__ctr-sm4-gmi",
-			.cra_priority       = 300,
-			.cra_flags          = CRYPTO_ALG_INTERNAL,
-			.cra_blocksize      = 1, //SM4_BLOCK_SIZE,
-			.cra_ctxsize        = sizeof(struct sm4_ctx),
-			.cra_module         = THIS_MODULE,
+			.cra_name = "__ctr(sm4)",
+			.cra_driver_name = "__ctr-sm4-gmi",
+			.cra_priority = 300,
+			.cra_flags = CRYPTO_ALG_INTERNAL,
+			.cra_blocksize = 1, //SM4_BLOCK_SIZE,
+			.cra_ctxsize = sizeof(struct sm4_ctx),
+			.cra_module = THIS_MODULE,
 		},
-		.min_keysize    = SM4_KEY_SIZE,
-		.max_keysize    = SM4_KEY_SIZE,
-		.ivsize         = SM4_BLOCK_SIZE,
-		.chunksize	= SM4_BLOCK_SIZE,
-		.walksize	= 8 * SM4_BLOCK_SIZE,
-		.setkey         = gmi_sm4_set_key,
-		.encrypt        = ctr_encrypt,
-		.decrypt        = ctr_decrypt,
+		.min_keysize = SM4_KEY_SIZE,
+		.max_keysize = SM4_KEY_SIZE,
+		.ivsize = SM4_BLOCK_SIZE,
+		.chunksize = SM4_BLOCK_SIZE,
+		.walksize = 8 * SM4_BLOCK_SIZE,
+		.setkey = gmi_sm4_set_key,
+		.encrypt = ctr_encrypt,
+		.decrypt = ctr_decrypt,
 	},
 
 	{
 		.base = {
-			.cra_name           = "__ofb(sm4)",
-			.cra_driver_name    = "__ofb-sm4-gmi",
-			.cra_priority       = 300,
-			.cra_flags          = CRYPTO_ALG_INTERNAL,
-			.cra_blocksize      = SM4_BLOCK_SIZE,
-			.cra_ctxsize        = sizeof(struct sm4_ctx),
-			.cra_module         = THIS_MODULE,
+			.cra_name = "__ofb(sm4)",
+			.cra_driver_name = "__ofb-sm4-gmi",
+			.cra_priority = 300,
+			.cra_flags = CRYPTO_ALG_INTERNAL,
+			.cra_blocksize = SM4_BLOCK_SIZE,
+			.cra_ctxsize = sizeof(struct sm4_ctx),
+			.cra_module = THIS_MODULE,
 		},
-		.min_keysize    = SM4_KEY_SIZE,
-		.max_keysize    = SM4_KEY_SIZE,
-		.ivsize         = SM4_BLOCK_SIZE,
-		.chunksize	= SM4_BLOCK_SIZE,
-		.walksize	= 8 * SM4_BLOCK_SIZE,
-		.setkey         = gmi_sm4_set_key,
-		.encrypt        = ofb_encrypt,
-		.decrypt        = ofb_decrypt,
+		.min_keysize = SM4_KEY_SIZE,
+		.max_keysize = SM4_KEY_SIZE,
+		.ivsize = SM4_BLOCK_SIZE,
+		.chunksize = SM4_BLOCK_SIZE,
+		.walksize = 8 * SM4_BLOCK_SIZE,
+		.setkey = gmi_sm4_set_key,
+		.encrypt = ofb_encrypt,
+		.decrypt = ofb_decrypt,
 	},
 
 	{
 		.base = {
-			.cra_name           = "__cfb(sm4)",
-			.cra_driver_name    = "__cfb-sm4-gmi",
-			.cra_priority       = 300,
-			.cra_flags          = CRYPTO_ALG_INTERNAL,
-			.cra_blocksize      = SM4_BLOCK_SIZE,
-			.cra_ctxsize        = sizeof(struct sm4_ctx),
-			.cra_module         = THIS_MODULE,
+			.cra_name = "__cfb(sm4)",
+			.cra_driver_name = "__cfb-sm4-gmi",
+			.cra_priority = 300,
+			.cra_flags = CRYPTO_ALG_INTERNAL,
+			.cra_blocksize = SM4_BLOCK_SIZE,
+			.cra_ctxsize = sizeof(struct sm4_ctx),
+			.cra_module = THIS_MODULE,
 		},
-		.min_keysize    = SM4_KEY_SIZE,
-		.max_keysize    = SM4_KEY_SIZE,
-		.ivsize         = SM4_BLOCK_SIZE,
-		.chunksize	= SM4_BLOCK_SIZE,
-		.walksize	= 8 * SM4_BLOCK_SIZE,
-		.setkey         = gmi_sm4_set_key,
-		.encrypt        = cfb_encrypt,
-		.decrypt        = cfb_decrypt,
+		.min_keysize = SM4_KEY_SIZE,
+		.max_keysize = SM4_KEY_SIZE,
+		.ivsize = SM4_BLOCK_SIZE,
+		.chunksize = SM4_BLOCK_SIZE,
+		.walksize = 8 * SM4_BLOCK_SIZE,
+		.setkey = gmi_sm4_set_key,
+		.encrypt = cfb_encrypt,
+		.decrypt = cfb_decrypt,
 	}
 };
 
@@ -745,13 +703,11 @@ static int gmi_zxc_check(void)
 
 	struct cpuinfo_x86 *c = &cpu_data(0);
 
-	if ((c->x86 > 6)) {
+	if ((c->x86 > 6))
 		f_zxc = 0;
-	} else if (((c->x86 == 6) && (c->x86_model >= 0x0f))
-		|| ((c->x86 == 6) && (c->x86_model == 0x09))
-		) {
+	else if (((c->x86 == 6) && (c->x86_model >= 0x0f)) ||
+		 ((c->x86 == 6) && (c->x86_model == 0x09)))
 		f_zxc = 1;
-	}
 
 	return f_zxc;
 }
@@ -764,27 +720,25 @@ static int gmi_ccs_available(void)
 	struct cpuinfo_x86 *c = &cpu_data(0);
 	u32 eax, edx;
 
-	if (((c->x86 == 6) && (c->x86_model >= 0x0f))
-		|| ((c->x86 == 6) && (c->x86_model == 0x09))
-		|| (c->x86 > 6)) {
+	if (((c->x86 == 6) && (c->x86_model >= 0x0f)) ||
+	    ((c->x86 == 6) && (c->x86_model == 0x09)) ||
+	    (c->x86 > 6)) {
 		if (!boot_cpu_has(X86_FEATURE_CCS) || !boot_cpu_has(X86_FEATURE_CCS_EN)) {
-
 			eax = 0xC0000001;
-			__asm__ __volatile__ ("cpuid":"=d"(edx):"a"(eax) : );
+			__asm__ __volatile__ ("cpuid" : "=d"(edx) : "a"(eax) : );
 
 			if ((edx & 0x0030) != 0x0030)
 				return -ENODEV;
 
-			pr_notice("GMI SM4 is detected by CPUID\n");
+			pr_debug("GMI SM4 is detected by CPUID\n");
 			return 0;
 		}
-		pr_notice("GMI SM4 is available\n");
+		pr_debug("GMI SM4 is available\n");
 		return 0;
 
 	}
 	return -ENODEV;
 }
-
 
 static void gmi_sm4_exit(void)
 {
@@ -808,19 +762,14 @@ static int __init gmi_sm4_init(void)
 		return -ENODEV;
 
 	if (gmi_zxc_check()) {
-
 		for (i = 0; i < ARRAY_SIZE(sm4_algs); i++) {
 			if (!strcmp(sm4_algs[i].base.cra_name, "__ctr(sm4)")) {
-
 				sm4_algs[i].encrypt = ctr_encrypt_zxc;
 				sm4_algs[i].decrypt = ctr_decrypt_zxc;
 			} else if (!strcmp(sm4_algs[i].base.cra_name, "__cfb(sm4)")) {
-
 				sm4_algs[i].encrypt = cfb_encrypt_zxc;
 				sm4_algs[i].decrypt = cfb_decrypt_zxc;
-
 			} else if (!strcmp(sm4_algs[i].base.cra_name, "__ofb(sm4)")) {
-
 				sm4_algs[i].encrypt = ofb_encrypt_zxc;
 				sm4_algs[i].decrypt = ofb_decrypt_zxc;
 			}
