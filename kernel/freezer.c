@@ -71,7 +71,7 @@ bool __refrigerator(bool check_kthr_stop)
 	for (;;) {
 		bool freeze;
 
-		set_current_state(TASK_FROZEN);
+		WRITE_ONCE(current->__state, TASK_FROZEN);
 
 		spin_lock_irq(&freezer_lock);
 		freeze = freezing(current) && !(check_kthr_stop && kthread_should_stop());
