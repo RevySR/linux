@@ -24,7 +24,7 @@
 #include "smc_clc.h"
 
 #define SMC_RMBS_PER_LGR_MAX	255	/* max. # of RMBs per link group */
-#define SMC_CONN_PER_LGR_MIN	16	/* min. # of connections per link group */
+#define SMC_CONN_PER_LGR_MIN	1	/* min. # of connections per link group */
 #define SMC_CONN_PER_LGR_MAX	255	/* max. # of connections per link group,
 					 * also is the default value for SMC-R v1 and v2.0
 					 */
