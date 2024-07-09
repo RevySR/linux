@@ -1407,8 +1407,6 @@ static int _kvm_vcpu_load(struct kvm_vcpu *vcpu, int cpu)
 	/* Restore hardware PMU CSRs */
 	kvm_restore_pmu(vcpu);
 
-	kvm_make_request(KVM_REQ_RECORD_STEAL, vcpu);
-
 	/* Don't bother restoring registers multiple times unless necessary */
 	if (vcpu->arch.aux_inuse & KVM_LARCH_HWCSR_USABLE)
 		return 0;
