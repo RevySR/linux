@@ -1028,16 +1028,6 @@ static const struct dwcmshc_pltfm_data sdhci_dwcmshc_th1520_pdata = {
 	.init = th1520_init,
 };
 
-<<<<<<< HEAD
-=======
-static const struct dwcmshc_pltfm_data sdhci_dwcmshc_cv18xx_pdata = {
-	.pdata = {
-		.ops = &sdhci_dwcmshc_cv18xx_ops,
-		.quirks = SDHCI_QUIRK_CAP_CLOCK_BASE_BROKEN,
-		.quirks2 = SDHCI_QUIRK2_PRESET_VALUE_BROKEN,
-	},
-};
-
 static const struct dwcmshc_pltfm_data sdhci_dwcmshc_sg2042_pdata = {
 	.pdata = {
 		.ops = &sdhci_dwcmshc_sg2042_ops,
@@ -1047,7 +1037,6 @@ static const struct dwcmshc_pltfm_data sdhci_dwcmshc_sg2042_pdata = {
 	.init = sg2042_init,
 };
 
->>>>>>> 328fc96adb61 (mmc: sdhci-of-dwcmshc: Add support for Sophgo SG2042)
 static const struct cqhci_host_ops dwcmshc_cqhci_ops = {
 	.enable		= dwcmshc_sdhci_cqe_enable,
 	.disable	= sdhci_cqe_disable,
