@@ -2600,6 +2600,11 @@ static inline void update_nr_iowait(struct task_struct *p, long inc)
 		p->sched_class->update_nr_iowait(p, inc);
 }
 
+static inline void set_next_task_first(struct rq *rq, struct task_struct *next)
+{
+	next->sched_class->set_next_task(rq, next, true);
+}
+
 /*
  * Helper to define a sched_class instance; each one is placed in a separate
  * section which is ordered by the linker script:
