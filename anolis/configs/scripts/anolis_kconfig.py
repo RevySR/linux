@@ -455,6 +455,8 @@ class ImportOpTranslater():
     output_dir: str
     src_root: str
 
+    file_counter = 0
+
     def __init__(self, input_dir: str, output_dir: str, src_root: str) -> None:
         self.files = {}
         self.files_info = {}
@@ -468,8 +470,11 @@ class ImportOpTranslater():
 
     def __op_file(self, args: str):
         # FILE dist arch variant file_path REFRESH/NOREFRESH
+
+        # use file_counter to make file name unique
+        ImportOpTranslater.file_counter += 1
         dist, arch, subarch, path, refresh = args.split()
-        new_path = os.path.join(self.output_dir, os.path.basename(path))
+        new_path = os.path.join(self.output_dir, f"{ImportOpTranslater.file_counter}-{os.path.basename(path)}")
         if subarch != "null":
             self.files[f"{dist}-{arch}-{subarch}"] = new_path
             self.files_info[(dist, arch, subarch)] = new_path
