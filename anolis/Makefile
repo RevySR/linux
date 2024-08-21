@@ -26,8 +26,10 @@ dist-genrpmtree: dist-check
 dist-rpms: dist-genrpmtree dist-check
 	sh buildpkg.sh
 
-dist-configs-check:
-	sh configs/examination/configs-check.sh
+DIST_CONFIG_TARGETS := dist-defconfig dist-debug-defconfig dist-configs dist-configs-update dist-configs-move dist-configs-import dist-configs-export dist-configs-modify dist-configs-check dist-configs-help
+
+$(DIST_CONFIG_TARGETS):
+	make -C configs/ $@
 
 clean:
 	rm -rf $(DIST_OUTPUT)
@@ -86,5 +88,6 @@ help:
 	@echo '    DIST_BUILD_NUMBER    - the build number for unofficial build, eg: 1/2'
 	@echo '    DIST_DIY             - the kernel version for diy build'
 	@echo '    DIST_BUILD_VARIANT & DIST_BUILD_EXTRA  - see comments in buildpkg.sh'
+	@make -C configs/ dist-configs-help
 
 export
