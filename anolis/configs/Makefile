@@ -25,7 +25,7 @@ dist-configs-import:
 dist-configs-export:
 	@sh scripts/export_configs.sh
 
-dist-configs-check:
+dist-configs-check: dist-configs
 	@sh examination/configs-check.sh
 
 dist-configs-modify:

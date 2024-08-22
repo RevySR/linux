@@ -15,13 +15,25 @@ final_exit_status=0
 
 function check_arch() {
     local arch=$1
+
+    local opt="--rules ${SCRIPT_DIR}/L0-MANDATORY/${arch}.config
+              --level L0-MANDATORY
+              --rules ${SCRIPT_DIR}/L1-RECOMMEND/${arch}.config
+              --level L1-RECOMMEND "
+
+    if [ -f ${SCRIPT_DIR}/EXTRA/${arch}.config ]; then
+        opt="${opt} --rules ${SCRIPT_DIR}/EXTRA/${arch}.config
+            --level L0-MANDATORY "
+    fi
+
+    if [ -f ${SCRIPT_DIR}/../../../arch/${arch}/configs/anolis_defconfig ]; then
+        opt="${opt} ${SCRIPT_DIR}/../../../arch/${arch}/configs/anolis_defconfig"
+    else
+        opt="${opt} ${DIST_OUTPUT}/kernel-ANCK-generic-${arch}.config"
+    fi
+
     echo "* Checking configs for arch: $arch"
-    python3 ${SCRIPT_DIR}/anolis_kconfig_check.py check \
-        --rules ${SCRIPT_DIR}/L0-MANDATORY/${arch}.config \
-        --level L0-MANDATORY \
-        --rules ${SCRIPT_DIR}/L1-RECOMMEND/${arch}.config \
-        --level L1-RECOMMEND \
-        ${SCRIPT_DIR}/../../../arch/${arch}/configs/anolis_defconfig
+    python3 ${SCRIPT_DIR}/anolis_kconfig_check.py check ${opt}
 
     local ret=$?
     if [ $final_exit_status -eq 0 ]; then
