@@ -1728,8 +1728,7 @@ static void fuse_writepage_free(struct fuse_writepage_args *wpa)
 	for (i = 0; i < ap->num_pages; i++)
 		__free_page(ap->pages[i]);
 
-	if (wpa->ia.ff)
-		fuse_file_put(wpa->ia.ff, false);
+	fuse_file_put(wpa->ia.ff, false);
 
 	kfree(ap->pages);
 	kfree(wpa);
@@ -1902,7 +1901,6 @@ static void fuse_writepage_end(struct fuse_mount *fm, struct fuse_args *args,
 
 		wpa->next = next->next;
 		next->next = NULL;
-		next->ia.ff = fuse_file_get(wpa->ia.ff);
 		tree_insert(&fi->writepages, next);
 
 		/*
@@ -2121,7 +2119,6 @@ static void fuse_writepages_send(struct fuse_fill_wb_data *data)
 	int num_pages = wpa->ia.ap.num_pages;
 	int i;
 
-	wpa->ia.ff = fuse_file_get(data->ff);
 	spin_lock(&fi->lock);
 	list_add_tail(&wpa->queue_entry, &fi->queued_writes);
 	fuse_flush_writepages(inode);
@@ -2266,6 +2263,7 @@ static int fuse_writepages_fill(struct folio *folio,
 		ap = &wpa->ia.ap;
 		fuse_write_args_fill(&wpa->ia, data->ff, folio_pos(folio), 0);
 		wpa->ia.write.in.write_flags |= FUSE_WRITE_CACHE;
+		wpa->ia.ff = fuse_file_get(data->ff);
 		wpa->next = NULL;
 		ap->args.in_pages = true;
 		ap->args.end = fuse_writepage_end;
