@@ -566,6 +566,9 @@ struct i2c_algorithm {
 	int (*reg_slave)(struct i2c_client *client);
 	int (*unreg_slave)(struct i2c_client *client);
 #endif
+
+	CK_KABI_RESERVE(1)
+	CK_KABI_RESERVE(2)
 };
 
 /**
@@ -655,6 +658,9 @@ struct i2c_bus_recovery_info {
 	struct pinctrl *pinctrl;
 	struct pinctrl_state *pins_default;
 	struct pinctrl_state *pins_gpio;
+
+	CK_KABI_RESERVE(1)
+	CK_KABI_RESERVE(2)
 };
 
 int i2c_recover_bus(struct i2c_adapter *adap);
@@ -751,6 +757,9 @@ struct i2c_adapter {
 
 	/* 7bit address space */
 	DECLARE_BITMAP(addrs_in_instantiation, 1 << 7);
+
+	CK_KABI_RESERVE(1)
+	CK_KABI_RESERVE(2)
 };
 #define to_i2c_adapter(d) container_of(d, struct i2c_adapter, dev)
 

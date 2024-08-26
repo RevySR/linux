@@ -1283,6 +1283,11 @@ struct readahead_control {
 	unsigned int _batch_count;
 	bool _workingset;
 	unsigned long _pflags;
+
+	CK_KABI_RESERVE(1)
+	CK_KABI_RESERVE(2)
+	CK_KABI_RESERVE(3)
+	CK_KABI_RESERVE(4)
 };
 
 #define DEFINE_READAHEAD(ractl, f, r, m, i)				\

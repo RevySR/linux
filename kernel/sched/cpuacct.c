@@ -7,6 +7,8 @@
  * (balbir@in.ibm.com).
  */
 
+#include <linux/ck_kabi.h>
+
 /* Time spent by the tasks of the CPU accounting group executing in ... */
 enum cpuacct_stat_index {
 	CPUACCT_STAT_USER,	/* ... user mode */
@@ -50,6 +52,11 @@ struct cpuacct {
 #ifdef CONFIG_SCHED_SLI
 	unsigned long avenrun_r[3];
 #endif
+
+	CK_KABI_RESERVE(1)
+	CK_KABI_RESERVE(2)
+	CK_KABI_RESERVE(3)
+	CK_KABI_RESERVE(4)
 };
 
 static inline struct cpuacct *cgroup_ca(struct cgroup *cgrp)

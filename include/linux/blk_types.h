@@ -11,6 +11,7 @@
 #include <linux/device.h>
 #include <linux/ktime.h>
 #include <linux/sched/clock.h>
+#include <linux/ck_kabi.h>
 
 struct bio_set;
 struct bio;
@@ -76,6 +77,11 @@ struct block_device {
 	 * path
 	 */
 	struct device		bd_device;
+
+	CK_KABI_RESERVE(1)
+	CK_KABI_RESERVE(2)
+	CK_KABI_RESERVE(3)
+	CK_KABI_RESERVE(4)
 } __randomize_layout;
 
 #define bdev_whole(_bdev) \
@@ -324,6 +330,11 @@ struct bio {
 	struct bio_set		*bi_pool;
 
 	unsigned long		bi_ext_flags;	/* extend the bi_flags */
+
+	CK_KABI_RESERVE(1)
+	CK_KABI_RESERVE(2)
+	CK_KABI_RESERVE(3)
+	CK_KABI_RESERVE(4)
 
 	/*
 	 * We can inline a number of vecs at the end of the bio, to avoid
