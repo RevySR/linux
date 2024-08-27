@@ -138,8 +138,10 @@ static void __evict_pid(struct evict_pid_entry *pid)
 				}
 				mmap_write_unlock(mm);
 #ifdef CONFIG_TEXT_UNEVICTABLE
-				memcg_decrease_unevict_size(memcg, size);
-				css_put(&memcg->css);
+				if (memcg) {
+					memcg_decrease_unevict_size(memcg, size);
+					css_put(&memcg->css);
+				}
 				pid->unevict_size -= size;
 #endif
 			}
@@ -468,18 +470,18 @@ static void execute_vm_lock(struct work_struct *unused)
 		mm = get_task_mm(tsk);
 		if (mm && !(mm->def_flags & VM_LOCKED)) {
 			VMA_ITERATOR(vmi, mm, 0);
-#ifdef CONFIG_TEXT_UNEVICTABLE
-			struct mem_cgroup *memcg = get_mem_cgroup_from_mm(mm);
-#endif
 
 			if (mmap_write_trylock(mm)) {
 				struct vm_area_struct *vma, *prev = NULL;
 				vm_flags_t flag;
 				int error;
+#ifdef CONFIG_TEXT_UNEVICTABLE
+				struct mem_cgroup *memcg = get_mem_cgroup_from_mm(mm);
+#endif
 
 				for_each_vma(vmi, vma) {
 #ifdef CONFIG_TEXT_UNEVICTABLE
-					if (is_unevictable_size_overflow(memcg))
+					if (memcg && is_unevictable_size_overflow(memcg))
 						break;
 #endif
 					if (vma->vm_file &&
@@ -503,9 +505,11 @@ static void execute_vm_lock(struct work_struct *unused)
 				result->done = true;
 				mmap_write_unlock(mm);
 #ifdef CONFIG_TEXT_UNEVICTABLE
-				memcg_increase_unevict_size(memcg,
-							    result->unevict_size);
-				css_put(&memcg->css);
+				if (memcg) {
+					memcg_increase_unevict_size(memcg,
+						result->unevict_size);
+					css_put(&memcg->css);
+				}
 #endif
 			} else {
 				need_again = true;
@@ -623,7 +627,8 @@ void clean_task_unevict_size(struct task_struct *tsk)
 		if (result->unevict_size) {
 			rcu_read_lock();
 			memcg = mem_cgroup_from_task(tsk);
-			memcg_decrease_unevict_size(memcg, result->unevict_size);
+			if (memcg)
+				memcg_decrease_unevict_size(memcg, result->unevict_size);
 			rcu_read_unlock();
 		}
 		list_del(&result->list);
@@ -710,7 +715,7 @@ void mem_cgroup_cancel_unevictable(struct cgroup_taskset *tset)
 	cgroup_taskset_for_each(tsk, dst_css, tset) {
 		memcg = mem_cgroup_from_task(tsk);
 
-		if (memcg->allow_unevictable)
+		if (memcg && memcg->allow_unevictable)
 			del_unevict_task(tsk);
 	}
 }
