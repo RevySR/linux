@@ -1219,11 +1219,6 @@ int sysctl_rich_container_cpuinfo_source;
 /* when cpu.shares */
 unsigned int sysctl_rich_container_cpuinfo_sharesbase = 1024;
 
-static inline struct task_group *css_tg(struct cgroup_subsys_state *css)
-{
-	return css ? container_of(css, struct task_group, css) : NULL;
-}
-
 static inline struct task_group *task_tg(struct task_struct *tsk)
 {
 	return css_tg(task_css(tsk, cpu_cgrp_id));
