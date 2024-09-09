@@ -4082,4 +4082,99 @@ static inline void accept_memory(phys_addr_t start, phys_addr_t end)
 
 #endif
 
+#ifdef CONFIG_ASYNC_FORK
+#define ASYNC_FORK_CANDIDATE	0
+DECLARE_STATIC_KEY_FALSE(async_fork_enabled_key);
+DECLARE_STATIC_KEY_FALSE(async_fork_staging_key);
+static inline bool async_fork_enabled(void)
+{
+	return static_branch_unlikely(&async_fork_enabled_key);
+}
+static inline bool async_fork_staging(void)
+{
+	return static_branch_unlikely(&async_fork_staging_key);
+}
+
+int async_fork_cpr_fast(struct vm_area_struct *vma, struct vm_area_struct *mpnt);
+void async_fork_cpr_bind(struct mm_struct *oldmm, struct mm_struct *mm, int err);
+void async_fork_cpr_rest(void);
+void async_fork_cpr_done(struct mm_struct *mm, bool r, bool l);
+
+bool __is_pmd_async_fork(pmd_t pmd);
+void __async_fork_fixup_pmd(struct vm_area_struct *mpnt, pmd_t *pmd,
+			    unsigned long addr);
+void __async_fork_fixup_vma(struct vm_area_struct *mpnt);
+
+static inline bool is_pmd_async_fork(pmd_t pmd)
+{
+	if (async_fork_staging())
+		return __is_pmd_async_fork(pmd);
+	return false;
+}
+static inline void async_fork_fixup_pmd(struct vm_area_struct *mpnt, pmd_t *pmd,
+					unsigned long addr)
+{
+	if (async_fork_staging())
+		__async_fork_fixup_pmd(mpnt, pmd, addr);
+}
+static inline void async_fork_fixup_vma(struct vm_area_struct *mpnt)
+{
+	if (async_fork_staging())
+		__async_fork_fixup_vma(mpnt);
+}
+#else
+static inline bool async_fork_enabled(void)
+{
+	return false;
+}
+static inline bool async_fork_staging(void)
+{
+	return false;
+}
+
+static inline int async_fork_cpr_fast(struct vm_area_struct *vma,
+				      struct vm_area_struct *mpnt)
+{
+	return -EOPNOTSUPP;
+}
+static inline void async_fork_cpr_bind(struct mm_struct *oldmm,
+				       struct mm_struct *mm, int err)
+{
+}
+static inline void async_fork_cpr_rest(void)
+{
+}
+static inline void async_fork_cpr_done(struct mm_struct *mm, bool r, bool l)
+{
+}
+
+static inline bool is_pmd_async_fork(pmd_t pmd)
+{
+	return false;
+}
+static inline void async_fork_fixup_pmd(struct vm_area_struct *mpnt,
+					pmd_t *pmd, unsigned long addr)
+{
+}
+static inline void async_fork_fixup_vma(struct vm_area_struct *mpnt)
+{
+}
+#endif
+
+static inline bool is_pmd_transient(pmd_t pmd)
+{
+	if (is_pmd_async_fork(pmd))
+		return true;
+	return false;
+}
+static inline void fixup_pmd(struct vm_area_struct *vma,
+				pmd_t *pmd, unsigned long addr)
+{
+	async_fork_fixup_pmd(vma, pmd, addr);
+}
+static inline void fixup_vma(struct vm_area_struct *vma)
+{
+	async_fork_fixup_vma(vma);
+}
+
 #endif /* _LINUX_MM_H */

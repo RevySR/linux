@@ -2346,6 +2346,12 @@ static unsigned int khugepaged_scan_mm_slot(unsigned int pages, int *result,
 	if (unlikely(!mmap_read_trylock(mm)))
 		goto breakouterloop_mmap_lock;
 
+#ifdef CONFIG_ASYNC_FORK
+	/* Don't scan processes in the state of async fork. */
+	if (mm->async_fork_mm)
+		vma = NULL;
+#endif
+
 	progress++;
 	if (unlikely(hpage_collapse_test_exit(mm)))
 		goto breakouterloop;

@@ -505,6 +505,8 @@ struct vm_area_struct *vm_area_dup(struct vm_area_struct *orig)
 {
 	struct vm_area_struct *new = kmem_cache_alloc(vm_area_cachep, GFP_KERNEL);
 
+	fixup_vma(orig);
+
 	if (!new)
 		return NULL;
 
@@ -662,12 +664,23 @@ static __latent_entropy int dup_mmap(struct mm_struct *mm,
 	LIST_HEAD(uf);
 	VMA_ITERATOR(old_vmi, oldmm, 0);
 	VMA_ITERATOR(vmi, mm, 0);
+#ifdef CONFIG_ASYNC_FORK
+	unsigned long async_fork;
+#endif
 
 	uprobe_start_dup_mmap();
 	if (mmap_write_lock_killable(oldmm)) {
 		retval = -EINTR;
 		goto fail_uprobe_end;
 	}
+#ifdef CONFIG_ASYNC_FORK
+	/* Get task_async_fork with oldmm's mmap write lock hold. */
+	rcu_read_lock();
+	async_fork = task_async_fork(current);
+	if (async_fork)
+		set_bit(ASYNC_FORK_CANDIDATE, &oldmm->async_fork_flags);
+	rcu_read_unlock();
+#endif
 	flush_cache_dup_mm(oldmm);
 	uprobe_dup_mmap(oldmm, mm);
 	/*
@@ -764,8 +777,16 @@ static __latent_entropy int dup_mmap(struct mm_struct *mm,
 			goto fail_nomem_vmi_store;
 
 		mm->map_count++;
-		if (!(tmp->vm_flags & VM_WIPEONFORK))
+		if (!(tmp->vm_flags & VM_WIPEONFORK)) {
+#ifdef CONFIG_ASYNC_FORK
+			if (async_fork)
+				retval = async_fork_cpr_fast(tmp, mpnt);
+			else
+				retval = copy_page_range(tmp, mpnt);
+#else
 			retval = copy_page_range(tmp, mpnt);
+#endif
+		}
 
 		if (tmp->vm_ops && tmp->vm_ops->open)
 			tmp->vm_ops->open(tmp);
@@ -782,6 +803,10 @@ loop_out:
 out:
 	mmap_write_unlock(mm);
 	flush_tlb_mm(oldmm);
+#ifdef CONFIG_ASYNC_FORK
+	if (async_fork)
+		async_fork_cpr_bind(oldmm, mm, retval);
+#endif
 	mmap_write_unlock(oldmm);
 	dup_userfaultfd_complete(&uf);
 fail_uprobe_end:
@@ -926,6 +951,9 @@ void __mmdrop(struct mm_struct *mm)
 	cleanup_lazy_tlbs(mm);
 
 	WARN_ON_ONCE(mm == current->active_mm);
+#ifdef CONFIG_ASYNC_FORK
+	BUG_ON(mm->async_fork_mm);
+#endif
 	mm_free_pgd(mm);
 	destroy_context(mm);
 	mmu_notifier_subscriptions_destroy(mm);
@@ -1296,6 +1324,11 @@ static struct mm_struct *mm_init(struct mm_struct *mm, struct task_struct *p,
 #endif
 	mm_init_uprobes_state(mm);
 	hugetlb_count_init(mm);
+
+#ifdef CONFIG_ASYNC_FORK
+	mm->async_fork_mm = NULL;
+	mm->async_fork_flags = 0;
+#endif
 
 	if (current->mm) {
 		mm->flags = mmf_init_flags(current->mm->flags);
@@ -2771,6 +2804,12 @@ bad_fork_cleanup_namespaces:
 	exit_task_namespaces(p);
 bad_fork_cleanup_mm:
 	if (p->mm) {
+#ifdef CONFIG_ASYNC_FORK
+		if (p->mm->async_fork_mm) {
+			WARN_ON_ONCE(clone_flags & CLONE_VM);
+			async_fork_cpr_done(p->mm, true, false);
+		}
+#endif
 		mm_clear_owner(p->mm, p);
 		mmput(p->mm);
 	}
