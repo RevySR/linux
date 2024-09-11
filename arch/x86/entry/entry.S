@@ -4,6 +4,7 @@
  */
 
 #include <linux/linkage.h>
+#include <linux/objtool.h>
 #include <asm/export.h>
 #include <asm/msr-index.h>
 #include <asm/unwind_hints.h>

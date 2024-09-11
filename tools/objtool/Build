@@ -8,6 +8,7 @@ objtool-y += builtin-check.o
 objtool-y += cfi.o
 objtool-y += insn.o
 objtool-y += decode.o
+objtool-y += unwind_hints.o
 objtool-y += elf.o
 objtool-y += objtool.o
 

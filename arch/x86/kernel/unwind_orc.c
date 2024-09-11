@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: GPL-2.0-only
-#include <linux/objtool.h>
 #include <linux/module.h>
+#include <linux/objtool.h>
 #include <linux/sort.h>
 #include <asm/ptrace.h>
 #include <asm/stacktrace.h>
 #include <asm/unwind.h>
+#include <asm/unwind_hints.h>
 #include <asm/orc_types.h>
 #include <asm/orc_lookup.h>
 #include <asm/orc_header.h>
