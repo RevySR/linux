@@ -29,6 +29,13 @@ arch/x86/lib/insn.c
 '
 fi
 
+if [ "$SRCARCH" = "arm64" ]; then
+FILES="$FILES
+arch/arm64/include/asm/orc_types.h
+include/linux/orc_entry.h
+"
+fi
+
 check_2 () {
   file1=$1
   file2=$2

@@ -46,5 +46,6 @@ void objtool_pv_add(struct objtool_file *file, int idx, struct symbol *func);
 int check(struct objtool_file *file);
 int orc_dump(const char *objname);
 int orc_create(struct objtool_file *file);
+bool orc_ignore_section(struct section *sec);
 
 #endif /* _OBJTOOL_H */

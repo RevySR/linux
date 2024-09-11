@@ -14,6 +14,11 @@
 #include <objtool/warn.h>
 #include <objtool/endianness.h>
 
+bool __weak orc_ignore_section(struct section *sec)
+{
+	return false;
+}
+
 static int write_orc_entry(struct elf *elf, struct section *orc_sec,
 			   struct section *ip_sec, unsigned int idx,
 			   struct section *insn_sec, unsigned long insn_off,
@@ -86,12 +91,15 @@ int orc_create(struct objtool_file *file)
 		struct instruction *insn;
 		bool empty = true;
 
-		if (!sec->text)
+		if (!sec->text || orc_ignore_section(sec))
 			continue;
 
 		sec_for_each_insn(file, sec, insn) {
 			struct alt_group *alt_group = insn->alt_group;
 			int i;
+
+			if (!insn_can_reloc(insn))
+				continue;
 
 			if (!alt_group) {
 				if (init_orc_entry(&orc, insn->cfi, insn))
@@ -136,7 +144,7 @@ int orc_create(struct objtool_file *file)
 		}
 
 		/* Add a section terminator */
-		if (!empty) {
+		if (!empty && sec->sym) {
 			orc_list_add(&orc_list, &null, sec, sec->sh.sh_size);
 			nr++;
 		}

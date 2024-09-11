@@ -346,5 +346,8 @@ int check(struct objtool_file *file)
 
 	walk_sections(file);
 
-	return 0;
+	if (opts.orc)
+		ret = orc_create(file);
+
+	return ret;
 }

@@ -59,6 +59,7 @@ ifeq ($(SRCARCH),x86)
 endif
 
 ifeq ($(SRCARCH),arm64)
+	BUILD_ORC := y
 	DYNAMIC_CHECK := y
 endif
 
