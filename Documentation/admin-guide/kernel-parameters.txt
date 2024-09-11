@@ -3452,6 +3452,13 @@
 			Note that if CONFIG_MODULE_SIG_FORCE is set, that
 			is always true, so this option does nothing.
 
+	module.sig_enforce_subsys
+			[KNL] When CONFIG_MODULE_SIG is set, this means that
+			modules the user set without (valid) signatures will
+			fail to load. Note that CONFIG_MODULE_SIG_FORCE is set,
+			that is always true, so this option does nothing.
+			Now we support gpu, block and net.
+
 	module_blacklist=  [KNL] Do not load a comma-separated list of
 			modules.  Useful for debugging problem modules.
 
