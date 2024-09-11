@@ -107,11 +107,26 @@ int kvm_vm_ioctl_check_extension(struct kvm *kvm, long ext)
 static int kvm_vm_feature_has_attr(struct kvm *kvm, struct kvm_device_attr *attr)
 {
 	switch (attr->attr) {
-	case KVM_LOONGARCH_VM_FEAT_PMU:
-		if (cpu_has_pmp)
+	case KVM_LOONGARCH_VM_FEAT_LSX:
+		if (cpu_has_lsx)
 			return 0;
 		return -ENXIO;
-
+	case KVM_LOONGARCH_VM_FEAT_LASX:
+		if (cpu_has_lasx)
+			return 0;
+		return -ENXIO;
+	case KVM_LOONGARCH_VM_FEAT_X86BT:
+		if (cpu_has_lbt_x86)
+			return 0;
+		return -ENXIO;
+	case KVM_LOONGARCH_VM_FEAT_ARMBT:
+		if (cpu_has_lbt_arm)
+			return 0;
+		return -ENXIO;
+	case KVM_LOONGARCH_VM_FEAT_MIPSBT:
+		if (cpu_has_lbt_mips)
+			return 0;
+		return -ENXIO;
 	default:
 		return -ENXIO;
 	}
@@ -132,8 +147,8 @@ static int kvm_vm_has_attr(struct kvm *kvm, struct kvm_device_attr *attr)
 int kvm_arch_vm_ioctl(struct file *filp, unsigned int ioctl, unsigned long arg)
 {
 	int r;
-	struct kvm *kvm = filp->private_data;
 	void __user *argp = (void __user *)arg;
+	struct kvm *kvm = filp->private_data;
 	struct kvm_device_attr attr;
 
 	switch (ioctl) {
