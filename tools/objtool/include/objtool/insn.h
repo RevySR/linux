@@ -104,7 +104,8 @@ struct instruction *prev_insn_same_sym(struct objtool_file *file,
 				       struct instruction *insn);
 
 struct reloc *insn_reloc(struct objtool_file *file, struct instruction *insn);
-bool insn_cfi_match(struct instruction *insn, struct cfi_state *cfi2);
+bool insn_cfi_match(struct instruction *insn, struct cfi_state *cfi2,
+		    bool print);
 bool is_first_func_insn(struct objtool_file *file,
 			struct instruction *insn, struct symbol *sym);
 

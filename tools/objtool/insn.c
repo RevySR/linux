@@ -144,7 +144,8 @@ bool is_first_func_insn(struct objtool_file *file,
 	return false;
 }
 
-bool insn_cfi_match(struct instruction *insn, struct cfi_state *cfi2)
+bool insn_cfi_match(struct instruction *insn, struct cfi_state *cfi2,
+		    bool print)
 {
 	struct cfi_state *cfi1 = insn->cfi;
 	int i;
@@ -155,35 +156,38 @@ bool insn_cfi_match(struct instruction *insn, struct cfi_state *cfi2)
 	}
 
 	if (memcmp(&cfi1->cfa, &cfi2->cfa, sizeof(cfi1->cfa))) {
-
-		WARN_INSN(insn, "stack state mismatch: cfa1=%d%+d cfa2=%d%+d",
-			  cfi1->cfa.base, cfi1->cfa.offset,
-			  cfi2->cfa.base, cfi2->cfa.offset);
-
+		if (print) {
+			WARN_INSN(insn, "stack state mismatch: cfa1=%d%+d cfa2=%d%+d",
+				  cfi1->cfa.base, cfi1->cfa.offset,
+				  cfi2->cfa.base, cfi2->cfa.offset);
+		}
 	} else if (memcmp(&cfi1->regs, &cfi2->regs, sizeof(cfi1->regs))) {
 		for (i = 0; i < CFI_NUM_REGS; i++) {
 			if (!memcmp(&cfi1->regs[i], &cfi2->regs[i],
 				    sizeof(struct cfi_reg)))
 				continue;
-
-			WARN_INSN(insn, "stack state mismatch: reg1[%d]=%d%+d reg2[%d]=%d%+d",
-				  i, cfi1->regs[i].base, cfi1->regs[i].offset,
-				  i, cfi2->regs[i].base, cfi2->regs[i].offset);
+			if (print) {
+				WARN_INSN(insn, "stack state mismatch: reg1[%d]=%d%+d reg2[%d]=%d%+d",
+					  i, cfi1->regs[i].base, cfi1->regs[i].offset,
+					  i, cfi2->regs[i].base, cfi2->regs[i].offset);
+			}
 			break;
 		}
 
 	} else if (cfi1->type != cfi2->type) {
-
-		WARN_INSN(insn, "stack state mismatch: type1=%d type2=%d",
-			  cfi1->type, cfi2->type);
+		if (print) {
+			WARN_INSN(insn, "stack state mismatch: type1=%d type2=%d",
+				  cfi1->type, cfi2->type);
+		}
 
 	} else if (cfi1->drap != cfi2->drap ||
 		   (cfi1->drap && cfi1->drap_reg != cfi2->drap_reg) ||
 		   (cfi1->drap && cfi1->drap_offset != cfi2->drap_offset)) {
-
-		WARN_INSN(insn, "stack state mismatch: drap1=%d(%d,%d) drap2=%d(%d,%d)",
-			  cfi1->drap, cfi1->drap_reg, cfi1->drap_offset,
-			  cfi2->drap, cfi2->drap_reg, cfi2->drap_offset);
+		if (print) {
+			WARN_INSN(insn, "stack state mismatch: drap1=%d(%d,%d) drap2=%d(%d,%d)",
+				  cfi1->drap, cfi1->drap_reg, cfi1->drap_offset,
+				  cfi2->drap, cfi2->drap_reg, cfi2->drap_offset);
+		}
 
 	} else
 		return true;

@@ -22,6 +22,21 @@
 
 /* --------------------- arch support functions ------------------------- */
 
+void arch_initial_func_cfi_state(struct cfi_init_state *state)
+{
+	int i;
+
+	for (i = 0; i < CFI_NUM_REGS; i++) {
+		state->regs[i].base = CFI_UNDEFINED;
+		state->regs[i].offset = 0;
+	}
+	state->regs[CFI_FP].base = CFI_CFA;
+
+	/* initial CFA (call frame address) */
+	state->cfa.base = CFI_SP;
+	state->cfa.offset = 0;
+}
+
 unsigned long arch_dest_reloc_offset(int addend)
 {
 	return addend;

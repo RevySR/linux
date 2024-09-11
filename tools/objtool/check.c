@@ -3056,7 +3056,7 @@ static int validate_branch(struct objtool_file *file, struct symbol *func,
 
 		visited = VISITED_BRANCH << state.uaccess;
 		if (insn->visited & VISITED_BRANCH_MASK) {
-			if (!insn->hint && !insn_cfi_match(insn, &state.cfi))
+			if (!insn->hint && !insn_cfi_match(insn, &state.cfi, true))
 				return 1;
 
 			if (insn->visited & visited)
