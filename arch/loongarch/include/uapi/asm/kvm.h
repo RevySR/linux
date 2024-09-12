@@ -102,15 +102,12 @@ struct kvm_fpu {
 #define  KVM_LOONGARCH_VM_FEAT_X86BT	2
 #define  KVM_LOONGARCH_VM_FEAT_ARMBT	3
 #define  KVM_LOONGARCH_VM_FEAT_MIPSBT	4
+#define  KVM_LOONGARCH_VM_FEAT_PMU	5
 
 /* Device Control API on vcpu fd */
 #define KVM_LOONGARCH_VCPU_CPUCFG	0
 #define KVM_LOONGARCH_VCPU_PVTIME_CTRL	1
 #define  KVM_LOONGARCH_VCPU_PVTIME_GPA	0
-
-/* Device Control API on vm fd */
-#define KVM_LOONGARCH_VM_FEAT_CTRL     1000
-#define  KVM_LOONGARCH_VM_FEAT_PMU     1000
 
 struct kvm_debug_exit_arch {
 };
