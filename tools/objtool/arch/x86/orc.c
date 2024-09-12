@@ -9,6 +9,7 @@
 #include <linux/objtool_types.h>
 
 #include <objtool/check.h>
+#include <objtool/insn.h>
 #include <objtool/orc.h>
 #include <objtool/warn.h>
 #include <objtool/endianness.h>

@@ -23,7 +23,7 @@
 #include <asm/text-patching.h>
 #include <asm/page.h>
 #include <asm/setup.h>
-#include <asm/unwind.h>
+#include <asm-generic/orc_lookup.h>
 
 #if 0
 #define DEBUGP(fmt, ...)				\
@@ -370,8 +370,9 @@ int module_finalize(const Elf_Ehdr *hdr,
 	}
 
 	if (orc && orc_ip)
-		unwind_module_init(me, (void *)orc_ip->sh_addr, orc_ip->sh_size,
-				   (void *)orc->sh_addr, orc->sh_size);
+		orc_lookup_module_init(me,
+				       (void *)orc_ip->sh_addr, orc_ip->sh_size,
+				       (void *)orc->sh_addr, orc->sh_size);
 
 	return 0;
 }

@@ -29,7 +29,7 @@
 #include <asm/asm-offsets.h>
 #include <asm/thread_info.h>
 #include <asm/page_types.h>
-#include <asm/orc_lookup.h>
+#include <asm-generic/orc_lookup.h>
 #include <asm/cache.h>
 #include <asm/boot.h>
 
