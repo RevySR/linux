@@ -23,14 +23,14 @@ struct orc_entry {
 #if defined(__LITTLE_ENDIAN_BITFIELD)
 	unsigned	sp_reg:4;
 	unsigned	fp_reg:4;
-	unsigned	type:3;
+	unsigned	type:4;
 	unsigned	signal:1;
 #elif defined(__BIG_ENDIAN_BITFIELD)
 	unsigned	fp_reg:4;
 	unsigned	sp_reg:4;
-	unsigned	unused:4;
+	unsigned	unused:3;
 	unsigned	signal:1;
-	unsigned	type:3;
+	unsigned	type:4;
 #endif
 } __packed;
 
