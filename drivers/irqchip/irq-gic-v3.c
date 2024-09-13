@@ -216,11 +216,10 @@ static inline void __iomem *gic_dist_base_alias(struct irq_data *d)
 			chip = 3;
 			break;
 		default:
-			unreachable();
+			BUG();
 		}
 		return t241_dist_base_alias[chip];
 	}
-
 	return gic_data.dist_base;
 }
 
