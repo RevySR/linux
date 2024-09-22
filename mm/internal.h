@@ -8,6 +8,7 @@
 #define __MM_INTERNAL_H
 
 #include <linux/fs.h>
+#include <linux/khugepaged.h>
 #include <linux/mm.h>
 #include <linux/pagemap.h>
 #include <linux/rmap.h>
