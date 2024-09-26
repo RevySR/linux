@@ -199,6 +199,9 @@ BuildRequires: bzip2, xz, findutils, gzip, m4, perl-interpreter, perl-Carp, perl
 BuildRequires: gcc, binutils, system-rpm-config, hmaccalc, python3-devel
 BuildRequires: net-tools, hostname, bc, bison, flex, elfutils-devel, dwarves
 BuildRequires: libnl3-devel
+%ifarch x86_64
+BuildRequires: llvm
+%endif
 %if %{with_doc}
 BuildRequires: xmlto, asciidoc, python3-sphinx
 %endif
@@ -1040,6 +1043,20 @@ BuildKernel() {
 
     # build a BLS config for this kernel
     %{SOURCE43} "$KernelVer" "$RPM_BUILD_ROOT" "%{?variant}"
+
+%ifarch x86_64
+    # ensure vmlinuz' btf section is same as vmlinux
+    # since extract btf section from arm64 Image.bz is too difficult,
+    # we check for x86 only.
+    ./scripts/extract-vmlinux $KernelImage > tmp_vmlinux
+    llvm-objcopy --dump-section=.BTF=tmp_btf_vmlinuz tmp_vmlinux
+    llvm-objcopy --dump-section=.BTF=tmp_btf_vmlinux vmlinux
+    if ! cmp tmp_btf_vmlinuz tmp_btf_vmlinux ; then
+      echo "detected BTF section in vmlinuz is not same as vmlinux !!!"
+      exit 1
+    fi
+    rm -f tmp_btf_vmlinuz tmp_btf_vmlinux tmp_vmlinux
+%endif
 }
 
 ###
