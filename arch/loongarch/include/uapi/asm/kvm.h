@@ -22,6 +22,7 @@
 #define __KVM_HAVE_IRQ_LINE
 
 #define KVM_GUESTDBG_USE_SW_BP		0x00010000
+
 /*
  * for KVM_GET_REGS and KVM_SET_REGS
  */

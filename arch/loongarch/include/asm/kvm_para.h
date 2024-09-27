@@ -18,12 +18,13 @@
 /*
  * LoongArch hypercall return code
  */
-#define KVM_HCALL_STATUS_SUCCESS	0
+#define KVM_HCALL_SUCCESS		0
 #define KVM_HCALL_INVALID_CODE		-1UL
 #define KVM_HCALL_INVALID_PARAMETER	-2UL
 
 #define KVM_STEAL_PHYS_VALID		BIT_ULL(0)
 #define KVM_STEAL_PHYS_MASK		GENMASK_ULL(63, 6)
+
 struct kvm_steal_time {
 	__u64 steal;
 	__u32 version;
@@ -165,4 +166,5 @@ static inline bool kvm_check_and_clear_guest_paused(void)
 {
 	return false;
 }
+
 #endif /* _ASM_LOONGARCH_KVM_PARA_H */
