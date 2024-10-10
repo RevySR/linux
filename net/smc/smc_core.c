@@ -857,36 +857,40 @@ void smcr_iw_net_release_ports(struct net *net)
 			    rsvd_ports_base + SMC_IWARP_RSVD_PORTS_NUM - 1);
 }
 
-static void smcr_link_iw_extension(struct iw_ext_conn_param *iw_param, struct sock *clcsk)
+static void smcr_link_iw_extension_gid(struct iw_ext_conn_param *iw_param,
+				       struct smc_init_info *ini)
 {
-	iw_param->sk_addr.family = clcsk->sk_family;
-	if (iw_param->sk_addr.family == PF_INET) {
-		iw_param->sk_addr.saddr_v4 = clcsk->sk_rcv_saddr;
-		iw_param->sk_addr.daddr_v4 = clcsk->sk_daddr;
+	/* here only set ip, sport and dport will set in modify qp */
+	iw_param->sk_addr.family = PF_INET;
+	iw_param->sk_addr.saddr_v4 = smc_ib_gid_to_ipv4(ini->smcrv2.ib_gid_v2);
+	iw_param->sk_addr.daddr_v4 = smc_ib_gid_to_ipv4(ini->peer_gid);
+}
+
+static bool smcr_iw_gid_qp_check(struct sock *clcsk, struct smc_init_info *ini)
+{
+	__be32 clc_saddr, clc_daddr, gid_saddr, gid_daddr;
+
+	if (clcsk->sk_family == PF_INET) {
+		clc_saddr = clcsk->sk_rcv_saddr;
+		clc_daddr = clcsk->sk_daddr;
 #if IS_ENABLED(CONFIG_IPV6)
 	} else {
-		iw_param->sk_addr.saddr_v6 = clcsk->sk_v6_rcv_saddr;
-		iw_param->sk_addr.daddr_v6 = clcsk->sk_v6_daddr;
-
-		/* Workaround for IPv6
-		 */
-		if (ipv6_addr_v4mapped(&iw_param->sk_addr.saddr_v6) &&
-		    ipv6_addr_v4mapped(&iw_param->sk_addr.daddr_v6)) {
-			__be32 saddr_v4, daddr_v4;
-
-			saddr_v4 = iw_param->sk_addr.saddr_v6.s6_addr32[3];
-			daddr_v4 = iw_param->sk_addr.daddr_v6.s6_addr32[3];
-			memset(&iw_param->sk_addr.saddr_v6, 0, sizeof(struct in6_addr));
-			memset(&iw_param->sk_addr.daddr_v6, 0, sizeof(struct in6_addr));
-			iw_param->sk_addr.family = PF_INET;
-			iw_param->sk_addr.saddr_v4 = saddr_v4;
-			iw_param->sk_addr.daddr_v4 = daddr_v4;
+		if (ipv6_addr_v4mapped(&clcsk->sk_v6_rcv_saddr) &&
+		    ipv6_addr_v4mapped(&clcsk->sk_v6_daddr)) {
+			clc_saddr = clcsk->sk_v6_rcv_saddr.s6_addr32[3];
+			clc_daddr = clcsk->sk_v6_daddr.s6_addr32[3];
+		} else {
+			return false;
 		}
 #endif
 	}
+	gid_saddr = smc_ib_gid_to_ipv4(ini->smcrv2.ib_gid_v2);
+	gid_daddr = smc_ib_gid_to_ipv4(ini->peer_gid);
 
-	iw_param->sk_addr.sport = clcsk->sk_num;
-	iw_param->sk_addr.dport = clcsk->sk_dport;
+	/* check whether the clcsk ip is equal to gid */
+	if (clc_saddr != gid_saddr || clc_daddr != gid_daddr)
+		return false;
+	return true;
 }
 
 int smcr_link_init(struct smc_link_group *lgr, struct smc_link *lnk,
@@ -1065,6 +1069,16 @@ static int smc_lgr_create(struct smc_sock *smc, struct smc_init_info *ini)
 			/* use_rwwi is limited for single link lgr */
 			lgr->use_rwwi = ini->vendor_opt_valid && ini->rwwi_en &&
 					lgr->max_links <= 1;
+
+			/* workaround for OOB with clcsock ip and use smc_pnet */
+			if (smc_ib_is_iwarp(ibdev->ibdev, ibport) && ini->iw_gid_qp_chk &&
+			    !smcr_iw_gid_qp_check(smc->clcsock->sk, ini)) {
+				/* if peer is iw_clcsk_qp, and clcsk's IP is not equal to GID,
+				 * decline happens.
+				 */
+				rc = SMC_CLC_DECL_IW_GID_QP;
+				goto free_wq;
+			}
 		} else {
 			ibdev = ini->ib_dev;
 			ibport = ini->ib_port;
@@ -1082,7 +1096,7 @@ static int smc_lgr_create(struct smc_sock *smc, struct smc_init_info *ini)
 
 		link_idx = SMC_SINGLE_LINK;
 		lnk = &lgr->lnk[link_idx];
-		smcr_link_iw_extension(&lnk->iw_conn_param, smc->clcsock->sk);
+		smcr_link_iw_extension_gid(&lnk->iw_conn_param, ini);
 
 		rc = smcr_link_init(lgr, lnk, link_idx, ini);
 		if (rc) {

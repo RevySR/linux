@@ -467,6 +467,8 @@ static int smc_clc_fill_fce_v2x(struct smc_clc_first_contact_ext_v2x *fce_v2x,
 			fce_v2x->vendor_exp_options.valid = 1;
 			fce_v2x->vendor_exp_options.credits_en = ini->credits_en;
 			fce_v2x->vendor_exp_options.rwwi_en = ini->rwwi_en;
+			/* always tell peer iw_gid_qp support */
+			fce_v2x->vendor_exp_options.iw_gid_qp = 1;
 		}
 	}
 
@@ -975,6 +977,8 @@ int smc_clc_send_proposal(struct smc_sock *smc, struct smc_init_info *ini)
 				pclc_smcd->vendor_exp_options.credits_en = 1;
 			if (vendor_config.rwwi_en)
 				pclc_smcd->vendor_exp_options.rwwi_en = 1;
+			/* iw gid qp bit is not configurable, always support */
+			pclc_smcd->vendor_exp_options.iw_gid_qp = 1;
 		}
 		plen += sizeof(*v2_ext);
 
@@ -1323,6 +1327,13 @@ void smc_clc_vendor_opt_validate(struct smc_sock *smc,
 		ini->rwwi_en = prop_smcd->vendor_exp_options.rwwi_en;
 	else
 		ini->rwwi_en = 0;
+
+	/* iw_gid_qp is not configurable. iw_gid_qp=0 means old version with
+	 * iw_clcsk_qp(use clcsk's IP to create QP), iw_gid_qp=1 means new
+	 * version with iw_gid_qp(use GID to create QP). If peer is old version
+	 * (local is iw_gid_qp and peer is iw_clcsk_qp), gid check is needed.
+	 */
+	ini->iw_gid_qp_chk = !prop_smcd->vendor_exp_options.iw_gid_qp;
 }
 
 int smc_clc_srv_v2x_features_validate(struct smc_sock *smc,
@@ -1397,6 +1408,11 @@ int smc_clc_clnt_v2x_features_validate(struct smc_sock *smc,
 		ini->vendor_opt_valid = 1;
 		ini->credits_en = fce_v2x->vendor_exp_options.credits_en;
 		ini->rwwi_en = fce_v2x->vendor_exp_options.rwwi_en;
+		/* iw_gid_qp=0 means old version with iw_clcsk_qp, iw_gid_qp=1 means
+		 * new version with iw_gid_qp. If peer is old version(local is iw_gid_qp
+		 * and peer is iw_clcsk_qp), gid check is needed.
+		 */
+		ini->iw_gid_qp_chk = !fce_v2x->vendor_exp_options.iw_gid_qp;
 	}
 
 	return 0;

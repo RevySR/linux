@@ -435,6 +435,7 @@ struct smc_init_info {
 	u8			vendor_opt_valid : 1;
 	u8			credits_en : 1;
 	u8			rwwi_en : 1;
+	u8			iw_gid_qp_chk : 1;
 	u8			first_contact_peer;
 	u8			first_contact_local;
 	u16			feature_mask;
