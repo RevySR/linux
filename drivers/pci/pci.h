@@ -852,4 +852,7 @@ static inline pci_power_t mid_pci_get_power_state(struct pci_dev *pdev)
 	(PCI_CONF1_ADDRESS(bus, dev, func, reg) | \
 	 PCI_CONF1_EXT_REG(reg))
 
+void pci_seq_tree_add_dev(struct pci_dev *dev);
+void pci_seq_tree_remove_dev(struct pci_dev *dev);
+
 #endif /* DRIVERS_PCI_H */

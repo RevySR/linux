@@ -334,25 +334,110 @@ static const struct proc_ops proc_bus_pci_ops = {
 #endif /* HAVE_PCI_MMAP */
 };
 
+DEFINE_XARRAY_FLAGS(pci_seq_tree, 0);
+unsigned long pci_max_idx;
+
+static void pci_seq_setup_dev_tree(void)
+{
+	struct pci_dev *dev = NULL;
+	unsigned long idx = 0;
+	int ret;
+
+	xa_lock(&pci_seq_tree);
+	if (!xa_empty(&pci_seq_tree))
+		goto out;
+
+	for_each_pci_dev(dev) {
+		ret = __xa_insert(&pci_seq_tree, idx, dev, GFP_KERNEL);
+		if (ret) {
+			/*
+			 * Probably -ENOMEM, here we skip this pci_dev and
+			 * warn_on.
+			 */
+			WARN_ON_ONCE(ret < 0);
+			continue;
+		}
+		pci_dev_get(dev);
+		pci_max_idx = ++idx;
+	}
+out:
+	xa_unlock(&pci_seq_tree);
+}
+
+void pci_seq_tree_add_dev(struct pci_dev *dev)
+{
+	int ret;
+
+	if (dev) {
+		pci_dev_get(dev);
+		xa_lock(&pci_seq_tree);
+		ret = __xa_insert(&pci_seq_tree, pci_max_idx, dev, GFP_KERNEL);
+		if (!ret) {
+			pci_max_idx++;
+		} else {
+			pci_dev_put(dev);
+			WARN_ON(ret);
+		}
+		xa_unlock(&pci_seq_tree);
+	}
+}
+
+void pci_seq_tree_remove_dev(struct pci_dev *dev)
+{
+	struct pci_dev *latest_dev = NULL;
+	struct pci_dev *idev = NULL;
+	unsigned long idx = 0;
+
+	if (!dev)
+		return;
+
+	xa_lock(&pci_seq_tree);
+	/*
+	 * remove and move the latest dev to here.
+	 */
+	xa_for_each(&pci_seq_tree, idx, idev) {
+		if (idev == dev) {
+			__xa_erase(&pci_seq_tree, idx);
+			pci_dev_put(idev);
+			break;
+		}
+	}
+	if (idx != pci_max_idx - 1) {
+		latest_dev = __xa_erase(&pci_seq_tree,
+				pci_max_idx - 1);
+		WARN_ON(__xa_cmpxchg(&pci_seq_tree, idx, NULL,
+			latest_dev, GFP_KERNEL));
+	}
+	pci_max_idx--;
+	xa_unlock(&pci_seq_tree);
+}
+
 /* iterator */
 static void *pci_seq_start(struct seq_file *m, loff_t *pos)
 {
-	struct pci_dev *dev = NULL;
+	struct pci_dev *dev;
 	loff_t n = *pos;
 
-	for_each_pci_dev(dev) {
-		if (!n--)
-			break;
-	}
+	/*
+	 * This is only for hotfix, normal processes don't enter here.
+	 */
+	if (xa_empty(&pci_seq_tree))
+		pci_seq_setup_dev_tree();
+
+	dev = xa_load(&pci_seq_tree, n);
+	if (dev)
+		pci_dev_get(dev);
 	return dev;
 }
 
 static void *pci_seq_next(struct seq_file *m, void *v, loff_t *pos)
 {
-	struct pci_dev *dev = v;
+	struct pci_dev *dev;
 
 	(*pos)++;
-	dev = pci_get_device(PCI_ANY_ID, PCI_ANY_ID, dev);
+	dev = xa_load(&pci_seq_tree, *pos);
+	if (dev)
+		pci_dev_get(dev);
 	return dev;
 }
 
