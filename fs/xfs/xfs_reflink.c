@@ -628,7 +628,8 @@ error:
 STATIC int
 xfs_reflink_unshare_range(
 	struct xfs_inode	*src,
-	struct xfs_bmbt_irec	*oimap)
+	struct xfs_bmbt_irec	*oimap,
+	bool                    *secondary_evicting)
 {
 	return 0;
 }
