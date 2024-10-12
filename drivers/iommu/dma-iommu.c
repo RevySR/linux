@@ -626,7 +626,7 @@ static int iommu_dma_init_domain(struct iommu_domain *domain, dma_addr_t base,
 		}
 
 		ret = 0;
-		goto done_unlock;
+		goto iova_reserve;
 	}
 
 	init_iova_domain(iovad, 1UL << order, base_pfn);
@@ -639,6 +639,7 @@ static int iommu_dma_init_domain(struct iommu_domain *domain, dma_addr_t base,
 	    (!device_iommu_capable(dev, IOMMU_CAP_DEFERRED_FLUSH) || iommu_dma_init_fq(domain)))
 		domain->type = IOMMU_DOMAIN_DMA;
 
+iova_reserve:
 	ret = iova_reserve_iommu_regions(dev, domain);
 
 done_unlock:
