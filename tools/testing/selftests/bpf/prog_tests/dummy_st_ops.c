@@ -98,8 +98,7 @@ done:
 
 static void test_dummy_multiple_args(void)
 {
-	struct bpf_dummy_ops_state st = { 7 };
-	__u64 args[5] = {(__u64)&st, -100, 0x8a5f, 'c', 0x1234567887654321ULL};
+	__u64 args[5] = {0, -100, 0x8a5f, 'c', 0x1234567887654321ULL};
 	LIBBPF_OPTS(bpf_test_run_opts, attr,
 		.ctx_in = args,
 		.ctx_size_in = sizeof(args),
@@ -116,7 +115,6 @@ static void test_dummy_multiple_args(void)
 	fd = bpf_program__fd(skel->progs.test_2);
 	err = bpf_prog_test_run_opts(fd, &attr);
 	ASSERT_OK(err, "test_run");
-	args[0] = 7;
 	for (i = 0; i < ARRAY_SIZE(args); i++) {
 		snprintf(name, sizeof(name), "arg %zu", i);
 		ASSERT_EQ(skel->bss->test_2_args[i], args[i], name);
@@ -127,8 +125,7 @@ static void test_dummy_multiple_args(void)
 
 static void test_dummy_sleepable(void)
 {
-	struct bpf_dummy_ops_state st;
-	__u64 args[1] = {(__u64)&st};
+	__u64 args[1] = {0};
 	LIBBPF_OPTS(bpf_test_run_opts, attr,
 		.ctx_in = args,
 		.ctx_size_in = sizeof(args),
