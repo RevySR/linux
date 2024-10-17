@@ -25,6 +25,8 @@
 #include "tdm-dev.h"
 #endif
 
+#include "hygon/psp-dev.h"
+
 struct psp_device *psp_master;
 
 struct psp_misc_dev *psp_misc;
@@ -236,17 +238,6 @@ static irqreturn_t psp_irq_handler_hygon(int irq, void *data)
 }
 #endif
 
-static int hygon_fixup_psp_caps(struct psp_device *psp)
-{
-	/* the hygon psp is unavailable if bit0 cleared in feature reg */
-	if (!(psp->capability & PSP_CAPABILITY_SEV))
-		return -ENODEV;
-
-	psp->capability &= ~(PSP_CAPABILITY_TEE |
-			     PSP_CAPABILITY_PSP_SECURITY_REPORTING);
-	return 0;
-}
-
 static unsigned int psp_get_capability(struct psp_device *psp)
 {
 	unsigned int val = ioread32(psp->io_regs + psp->vdata->feature_reg);
@@ -270,8 +261,8 @@ static unsigned int psp_get_capability(struct psp_device *psp)
 	 * Return -ENODEV directly if hygon psp not configured with CSV
 	 * capability.
 	 */
-	if (boot_cpu_data.x86_vendor == X86_VENDOR_HYGON) {
-		if (hygon_fixup_psp_caps(psp))
+	if (is_vendor_hygon()) {
+		if (fixup_hygon_psp_caps(psp))
 			return -ENODEV;
 	}
 
