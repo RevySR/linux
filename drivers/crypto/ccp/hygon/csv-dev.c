@@ -79,15 +79,12 @@ int csv_cmd_buffer_len(int cmd)
 	}
 }
 
-int csv_ioctl_do_hgsc_import(struct sev_issue_cmd *argp)
+static int csv_ioctl_do_hgsc_import(struct sev_issue_cmd *argp)
 {
 	struct csv_user_data_hgsc_cert_import input;
 	struct csv_data_hgsc_cert_import *data;
 	void *hgscsk_blob, *hgsc_blob;
 	int ret;
-
-	if (!hygon_psp_hooks.sev_dev_hooks_installed)
-		return -ENODEV;
 
 	if (copy_from_user(&input, (void __user *)argp->data, sizeof(input)))
 		return -EFAULT;
@@ -127,16 +124,13 @@ e_free:
 	return ret;
 }
 
-int csv_ioctl_do_download_firmware(struct sev_issue_cmd *argp)
+static int csv_ioctl_do_download_firmware(struct sev_issue_cmd *argp)
 {
 	struct sev_data_download_firmware *data = NULL;
 	struct csv_user_data_download_firmware input;
 	int ret, order;
 	struct page *p;
 	u64 data_size;
-
-	if (!hygon_psp_hooks.sev_dev_hooks_installed)
-		return -ENODEV;
 
 	/* Only support DOWNLOAD_FIRMWARE if build greater or equal 1667 */
 	if (!csv_version_greater_or_equal(1667)) {
@@ -197,6 +191,79 @@ err_free_page:
 
 	return ret;
 }
+
+static long csv_ioctl(struct file *file, unsigned int ioctl, unsigned long arg)
+{
+	void __user *argp = (void __user *)arg;
+	struct sev_issue_cmd input;
+	int ret = -EFAULT;
+	int mutex_enabled = READ_ONCE(hygon_psp_hooks.psp_mutex_enabled);
+
+	if (!hygon_psp_hooks.sev_dev_hooks_installed)
+		return -ENODEV;
+
+	if (!psp_master || !psp_master->sev_data)
+		return -ENODEV;
+
+	if (ioctl != SEV_ISSUE_CMD)
+		return -EINVAL;
+
+	if (copy_from_user(&input, argp, sizeof(struct sev_issue_cmd)))
+		return -EFAULT;
+
+	if (input.cmd > CSV_MAX)
+		return -EINVAL;
+
+	if (mutex_enabled) {
+		if (psp_mutex_lock_timeout(&hygon_psp_hooks.psp_misc->data_pg_aligned->mb_mutex,
+					   PSP_MUTEX_TIMEOUT) != 1)
+			return -EBUSY;
+	} else {
+		mutex_lock(hygon_psp_hooks.sev_cmd_mutex);
+	}
+
+	switch (input.cmd) {
+	case CSV_HGSC_CERT_IMPORT:
+		ret = csv_ioctl_do_hgsc_import(&input);
+		break;
+	case CSV_PLATFORM_INIT:
+		ret = hygon_psp_hooks.__sev_platform_init_locked(&input.error);
+		break;
+	case CSV_PLATFORM_SHUTDOWN:
+		ret = hygon_psp_hooks.__sev_platform_shutdown_locked(&input.error);
+		break;
+	case CSV_DOWNLOAD_FIRMWARE:
+		ret = csv_ioctl_do_download_firmware(&input);
+		break;
+	default:
+		/*
+		 * If the command is compatible between CSV and SEV, the
+		 * native implementation of the driver is invoked.
+		 * Release the mutex before calling the native ioctl function
+		 * because it will acquires the mutex.
+		 */
+		if (mutex_enabled)
+			psp_mutex_unlock(&hygon_psp_hooks.psp_misc->data_pg_aligned->mb_mutex);
+		else
+			mutex_unlock(hygon_psp_hooks.sev_cmd_mutex);
+		return hygon_psp_hooks.sev_ioctl(file, ioctl, arg);
+	}
+
+	if (copy_to_user(argp, &input, sizeof(struct sev_issue_cmd)))
+		ret = -EFAULT;
+
+	if (mutex_enabled)
+		psp_mutex_unlock(&hygon_psp_hooks.psp_misc->data_pg_aligned->mb_mutex);
+	else
+		mutex_unlock(hygon_psp_hooks.sev_cmd_mutex);
+
+	return ret;
+}
+
+const struct file_operations csv_fops = {
+	.owner = THIS_MODULE,
+	.unlocked_ioctl = csv_ioctl,
+};
 
 /*
  * __csv_ring_buffer_enter_locked issues command to switch to RING BUFFER
@@ -339,7 +406,7 @@ static int __csv_do_ringbuf_cmds_locked(int *psp_ret)
  * queued in RING BUFFER queues, the user is obligate to manage RING
  * BUFFER queues including allocate, enqueue and free, etc.
  */
-int csv_do_ringbuf_cmds(int *psp_ret)
+static int csv_do_ringbuf_cmds(int *psp_ret)
 {
 	struct sev_user_data_status data;
 	int rc;
@@ -374,6 +441,15 @@ cmd_unlock:
 
 	return rc;
 }
+
+int csv_issue_ringbuf_cmds_external_user(struct file *filep, int *psp_ret)
+{
+	if (!filep || filep->f_op != &csv_fops)
+		return -EBADF;
+
+	return csv_do_ringbuf_cmds(psp_ret);
+}
+EXPORT_SYMBOL_GPL(csv_issue_ringbuf_cmds_external_user);
 
 void csv_restore_mailbox_mode_postprocess(void)
 {

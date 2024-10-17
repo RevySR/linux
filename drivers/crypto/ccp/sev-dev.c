@@ -1163,13 +1163,8 @@ static long sev_ioctl(struct file *file, unsigned int ioctl, unsigned long arg)
 	if (copy_from_user(&input, argp, sizeof(struct sev_issue_cmd)))
 		return -EFAULT;
 
-	if (boot_cpu_data.x86_vendor == X86_VENDOR_HYGON) {
-		if (input.cmd > CSV_MAX)
-			return -EINVAL;
-	} else {
-		if (input.cmd > SEV_MAX)
-			return -EINVAL;
-	}
+	if (input.cmd > SEV_MAX)
+		return -EINVAL;
 
 	if (is_vendor_hygon() && mutex_enabled) {
 		if (psp_mutex_lock_timeout(&hygon_psp_hooks.psp_misc->data_pg_aligned->mb_mutex,
@@ -1177,25 +1172,6 @@ static long sev_ioctl(struct file *file, unsigned int ioctl, unsigned long arg)
 			return -EBUSY;
 	} else {
 		mutex_lock(&sev_cmd_mutex);
-	}
-
-	if (boot_cpu_data.x86_vendor == X86_VENDOR_HYGON) {
-		switch (input.cmd) {
-		case CSV_PLATFORM_INIT:
-			ret = __sev_platform_init_locked(&input.error);
-			goto result_to_user;
-		case CSV_PLATFORM_SHUTDOWN:
-			ret = __sev_platform_shutdown_locked(&input.error);
-			goto result_to_user;
-		case CSV_DOWNLOAD_FIRMWARE:
-			ret = csv_ioctl_do_download_firmware(&input);
-			goto result_to_user;
-		case CSV_HGSC_CERT_IMPORT:
-			ret = csv_ioctl_do_hgsc_import(&input);
-			goto result_to_user;
-		default:
-			break;
-		}
 	}
 
 	switch (input.cmd) {
@@ -1233,7 +1209,6 @@ static long sev_ioctl(struct file *file, unsigned int ioctl, unsigned long arg)
 		goto out;
 	}
 
-result_to_user:
 	if (copy_to_user(argp, &input, sizeof(struct sev_issue_cmd)))
 		ret = -EFAULT;
 out:
@@ -1316,7 +1291,11 @@ static int sev_misc_init(struct sev_device *sev)
 		misc = &misc_dev->misc;
 		misc->minor = MISC_DYNAMIC_MINOR;
 		misc->name = DEVICE_NAME;
-		misc->fops = &sev_fops;
+
+		if (is_vendor_hygon())
+			misc->fops = &csv_fops;
+		else
+			misc->fops = &sev_fops;
 
 		ret = misc_register(misc);
 		if (ret)
@@ -1346,7 +1325,10 @@ static void sev_dev_install_hooks(void)
 	hygon_psp_hooks.psp_cmd_timeout = &psp_cmd_timeout;
 	hygon_psp_hooks.sev_cmd_buffer_len = sev_cmd_buffer_len;
 	hygon_psp_hooks.__sev_do_cmd_locked = __sev_do_cmd_locked;
+	hygon_psp_hooks.__sev_platform_init_locked = __sev_platform_init_locked;
+	hygon_psp_hooks.__sev_platform_shutdown_locked = __sev_platform_shutdown_locked;
 	hygon_psp_hooks.sev_wait_cmd_ioc = sev_wait_cmd_ioc;
+	hygon_psp_hooks.sev_ioctl = sev_ioctl;
 
 	hygon_psp_hooks.sev_dev_hooks_installed = true;
 }
@@ -1454,21 +1436,13 @@ void sev_dev_destroy(struct psp_device *psp)
 int sev_issue_cmd_external_user(struct file *filep, unsigned int cmd,
 				void *data, int *error)
 {
-	if (!filep || filep->f_op != &sev_fops)
+	if (!filep || filep->f_op != (is_vendor_hygon()
+				      ? &csv_fops : &sev_fops))
 		return -EBADF;
 
 	return sev_do_cmd(cmd, data, error);
 }
 EXPORT_SYMBOL_GPL(sev_issue_cmd_external_user);
-
-int csv_issue_ringbuf_cmds_external_user(struct file *filep, int *psp_ret)
-{
-	if (!filep || filep->f_op != &sev_fops)
-		return -EBADF;
-
-	return csv_do_ringbuf_cmds(psp_ret);
-}
-EXPORT_SYMBOL_GPL(csv_issue_ringbuf_cmds_external_user);
 
 void sev_pci_init(void)
 {
