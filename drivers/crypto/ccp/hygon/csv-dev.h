@@ -12,11 +12,14 @@
 
 #include <linux/psp-sev.h>
 
+#define CSV_FW_FILE		"hygon/csv.fw"
+
 extern u32 hygon_csv_build;
 
 void csv_update_api_version(struct sev_user_data_status *status);
 int csv_cmd_buffer_len(int cmd);
 int csv_ioctl_do_hgsc_import(struct sev_issue_cmd *argp);
+int csv_ioctl_do_download_firmware(struct sev_issue_cmd *argp);
 
 static inline bool csv_version_greater_or_equal(u32 build)
 {
