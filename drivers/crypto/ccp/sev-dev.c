@@ -109,13 +109,6 @@ static void *sev_es_tmr;
 #define NV_LENGTH (32 * 1024)
 static void *sev_init_ex_buffer;
 
-/*
- * Hygon CSV build info:
- *    Hygon CSV build info is 32-bit in length other than 8-bit as that
- *    in AMD SEV.
- */
-static u32 hygon_csv_build;
-
 static inline bool sev_version_greater_or_equal(u8 maj, u8 min)
 {
 	struct sev_device *sev = psp_master->sev_data;
@@ -127,11 +120,6 @@ static inline bool sev_version_greater_or_equal(u8 maj, u8 min)
 		return true;
 
 	return false;
-}
-
-static inline bool csv_version_greater_or_equal(u32 build)
-{
-	return hygon_csv_build >= build;
 }
 
 static void sev_irq_handler(int irq, void *data, unsigned int status)
@@ -880,7 +868,7 @@ static int __sev_platform_init_locked(int *error)
 
 	dev_dbg(sev->dev, "SEV firmware initialized\n");
 
-	if (boot_cpu_data.x86_vendor == X86_VENDOR_HYGON)
+	if (is_vendor_hygon())
 		dev_info(sev->dev, "CSV API:%d.%d build:%d\n", sev->api_major,
 			 sev->api_minor, hygon_csv_build);
 	else
@@ -1132,9 +1120,12 @@ static int sev_get_api_version(void)
 	sev->build = status.build;
 	sev->state = status.state;
 
-	if (boot_cpu_data.x86_vendor == X86_VENDOR_HYGON)
-		hygon_csv_build = (status.flags >> 9) |
-				  ((u32)status.build << 23);
+	/*
+	 * The api version fields of HYGON CSV firmware are not consistent
+	 * with AMD SEV firmware.
+	 */
+	if (is_vendor_hygon())
+		csv_update_api_version(&status);
 
 	return 0;
 }
