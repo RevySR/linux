@@ -1,1 +1,1 @@
-# CONFIG_SATA_QSTOR is not set
+CONFIG_SATA_QSTOR=m

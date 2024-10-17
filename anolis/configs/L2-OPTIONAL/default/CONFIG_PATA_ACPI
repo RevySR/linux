@@ -1,1 +1,1 @@
-# CONFIG_PATA_ACPI is not set
+CONFIG_PATA_ACPI=m

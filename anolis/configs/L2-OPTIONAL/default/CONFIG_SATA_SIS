@@ -1,1 +1,1 @@
-# CONFIG_SATA_SIS is not set
+CONFIG_SATA_SIS=m

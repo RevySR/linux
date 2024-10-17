@@ -1,1 +1,1 @@
-# CONFIG_SATA_ULI is not set
+CONFIG_SATA_ULI=m
