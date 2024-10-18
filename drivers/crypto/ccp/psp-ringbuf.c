@@ -67,6 +67,11 @@ int csv_queue_init(struct csv_queue *queue,
 	return 0;
 }
 
+void csv_queue_cleanup(struct csv_queue *queue)
+{
+	memset((void *)queue, 0, sizeof(struct csv_queue));
+}
+
 unsigned int csv_enqueue_cmd(struct csv_queue *queue,
 			     const void *buf, unsigned int len)
 {

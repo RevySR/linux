@@ -456,6 +456,8 @@ struct kvm_vpsp {
 
 #ifdef CONFIG_CRYPTO_DEV_SP_PSP
 
+int vpsp_do_cmd(uint32_t vid, int cmd, void *data, int *psp_ret);
+
 int psp_do_cmd(int cmd, void *data, int *psp_ret);
 
 int csv_ring_buffer_queue_init(void);
@@ -481,6 +483,8 @@ int vpsp_get_default_vid_permission(void);
 int kvm_pv_psp_op(struct kvm_vpsp *vpsp, int cmd, gpa_t data_gpa, gpa_t psp_ret_gpa,
 		gpa_t table_gpa);
 #else	/* !CONFIG_CRYPTO_DEV_SP_PSP */
+
+static inline int vpsp_do_cmd(uint32_t vid, int cmd, void *data, int *psp_ret) { return -ENODEV; }
 
 static inline int psp_do_cmd(int cmd, void *data, int *psp_ret) { return -ENODEV; }
 

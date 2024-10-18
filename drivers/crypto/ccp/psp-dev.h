@@ -64,21 +64,6 @@ struct psp_device {
 	unsigned int capability;
 };
 
-#define PSP_MUTEX_TIMEOUT 600000
-struct psp_mutex {
-	uint64_t locked;
-};
-
-struct psp_dev_data {
-	struct psp_mutex mb_mutex;
-};
-
-struct psp_misc_dev {
-	struct kref refcount;
-	struct psp_dev_data *data_pg_aligned;
-	struct miscdevice misc;
-};
-
 void psp_set_sev_irq_handler(struct psp_device *psp, psp_irq_handler_t handler,
 			     void *data);
 void psp_clear_sev_irq_handler(struct psp_device *psp);
