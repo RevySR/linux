@@ -19,7 +19,7 @@
 
 #include "hygon/psp-dev.h"
 #ifdef CONFIG_TDM_DEV_HYGON
-#include "tdm-dev.h"
+#include "hygon/tdm-dev.h"
 #endif
 
 struct psp_device *psp_master;
