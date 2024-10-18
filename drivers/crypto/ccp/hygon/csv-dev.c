@@ -17,6 +17,7 @@
 
 #include "csv-dev.h"
 #include "psp-dev.h"
+#include "ring-buffer.h"
 
 /*
  * Hygon CSV build info:

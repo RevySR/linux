@@ -14,29 +14,10 @@
 #include <linux/list.h>
 #include <linux/bits.h>
 #include <linux/interrupt.h>
-#include <linux/miscdevice.h>
 
 #include "sp-dev.h"
 
-#define PSP_RBCTL_X86_WRITES		BIT(31)
-#define PSP_RBCTL_RBMODE_ACT		BIT(30)
-#define PSP_RBCTL_CLR_INTSTAT		BIT(29)
-#define PSP_RBTAIL_QHI_TAIL_SHIFT	16
-#define PSP_RBTAIL_QHI_TAIL_MASK	0x7FF0000
-#define PSP_RBTAIL_QLO_TAIL_MASK	0x7FF
-
-#define PSP_RBHEAD_QHI_HEAD_SHIFT	16
-#define PSP_RBHEAD_QHI_HEAD_MASK	0x7FF0000
-#define PSP_RBHEAD_QLO_HEAD_MASK	0x7FF
-
-#define PSP_RBHEAD_QPAUSE_INT_STAT	BIT(30)
-
 #define MAX_PSP_NAME_LEN		16
-
-#ifdef CONFIG_HYGON_PSP2CPU_CMD
-#define PSP_X86_CMD			BIT(2)
-#define P2C_NOTIFIERS_MAX		16
-#endif
 
 extern struct psp_device *psp_master;
 

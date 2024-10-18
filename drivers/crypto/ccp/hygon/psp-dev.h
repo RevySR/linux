@@ -18,6 +18,11 @@
 #include "../psp-dev.h"
 #include "../sev-dev.h"
 
+#ifdef CONFIG_HYGON_PSP2CPU_CMD
+#define PSP_X86_CMD			BIT(2)
+#define P2C_NOTIFIERS_MAX		16
+#endif
+
 /*
  * Hooks table: a table of function and variable pointers filled in
  * when psp init.

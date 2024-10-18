@@ -11,8 +11,13 @@
  * published by the Free Software Foundation.
  */
 
-#include <linux/psp-hygon.h>
-#include "psp-ringbuf.h"
+#include <linux/align.h>
+#include <linux/string.h>
+#include <linux/minmax.h>
+
+#include <asm/barrier.h>
+
+#include "ring-buffer.h"
 
 static void enqueue_data(struct csv_queue *queue,
 			 const void *src,
@@ -38,6 +43,31 @@ static void enqueue_data(struct csv_queue *queue,
 	/*
 	 * Make sure that the data in the ring buffer is up to date before
 	 * incrementing the queue->tail index counter.
+	 */
+	smp_wmb();
+}
+
+static void dequeue_data(struct csv_queue *queue,
+			 void *dst, unsigned int len, unsigned int off)
+{
+	unsigned int size = queue->mask + 1;
+	unsigned int esize = queue->esize;
+	unsigned int l;
+
+	off &= queue->mask;
+	if (esize != 1) {
+		off *= esize;
+		size *= esize;
+		len *= esize;
+	}
+	l = min(len, size - off);
+
+	memcpy(dst, (void *)(queue->data + off), l);
+	memcpy((void *)((uintptr_t)dst + l), (void *)queue->data, len - l);
+
+	/*
+	 * Make sure that the data is copied before incrementing the
+	 * queue->tail index counter.
 	 */
 	smp_wmb();
 }
@@ -86,31 +116,6 @@ unsigned int csv_enqueue_cmd(struct csv_queue *queue,
 	return len;
 }
 
-static void dequeue_data(struct csv_queue *queue,
-			 void *dst, unsigned int len, unsigned int off)
-{
-	unsigned int size = queue->mask + 1;
-	unsigned int esize = queue->esize;
-	unsigned int l;
-
-	off &= queue->mask;
-	if (esize != 1) {
-		off *= esize;
-		size *= esize;
-		len *= esize;
-	}
-	l = min(len, size - off);
-
-	memcpy(dst, (void *)(queue->data + off), l);
-	memcpy((void *)((uintptr_t)dst + l), (void *)queue->data, len - l);
-
-	/*
-	 * Make sure that the data is copied before incrementing the
-	 * queue->tail index counter.
-	 */
-	smp_wmb();
-}
-
 unsigned int csv_dequeue_stat(struct csv_queue *queue,
 			      void *buf, unsigned int len)
 {
@@ -125,24 +130,24 @@ unsigned int csv_dequeue_stat(struct csv_queue *queue,
 	return len;
 }
 
-unsigned int csv_dequeue_cmd(struct csv_queue *queue,
+unsigned int csv_dequeue_cmd(struct csv_queue *ring_buf,
 	void *buf, unsigned int len)
 {
 	unsigned int size;
 
-	size = queue->tail - queue->head;
+	size = ring_buf->tail - ring_buf->head;
 	if (len > size)
 		len = size;
 
-	dequeue_data(queue, buf, len, queue->head);
-	queue->head += len;
+	dequeue_data(ring_buf, buf, len, ring_buf->head);
+	ring_buf->head += len;
 	return len;
 }
 
-unsigned int csv_cmd_queue_size(struct csv_queue *queue)
+unsigned int csv_cmd_queue_size(struct csv_queue *ring_buf)
 {
 	unsigned int free_size;
 
-	free_size = queue_avail_size(queue);
-	return queue->mask - free_size;
+	free_size = queue_avail_size(ring_buf);
+	return ring_buf->mask - free_size;
 }

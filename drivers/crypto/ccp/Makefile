@@ -17,7 +17,7 @@ ccp-$(CONFIG_CRYPTO_DEV_SP_PSP) += psp-dev.o \
                                    dbc.o \
                                    hygon/psp-dev.o \
                                    hygon/csv-dev.o \
-                                   psp-ringbuf.o \
+                                   hygon/ring-buffer.o \
                                    csv-dev.o \
                                    vpsp.o
 
