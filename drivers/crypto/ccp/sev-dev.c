@@ -26,15 +26,12 @@
 #include <linux/fs.h>
 #include <linux/fs_struct.h>
 #include <linux/psp.h>
-#include <linux/psp-hygon.h>
-#include <uapi/linux/psp-hygon.h>
 
 #include <asm/smp.h>
 #include <asm/cacheflush.h>
 
 #include "psp-dev.h"
 #include "sev-dev.h"
-#include "csv-dev.h"
 
 #include "hygon/psp-dev.h"
 #include "hygon/csv-dev.h"
@@ -1262,13 +1259,6 @@ static void sev_exit(struct kref *ref)
 	misc_dev = NULL;
 }
 
-/* Code to set all of the function pointers for CSV. */
-static inline void csv_install_hooks(void)
-{
-	/* Install the hook functions for CSV. */
-	csv_hooks.sev_do_cmd = sev_do_cmd;
-}
-
 static int sev_misc_init(struct sev_device *sev)
 {
 	struct device *dev = sev->dev;
@@ -1302,9 +1292,6 @@ static int sev_misc_init(struct sev_device *sev)
 			return ret;
 
 		kref_init(&misc_dev->refcount);
-
-		/* Install the hook functions for CSV */
-		csv_install_hooks();
 	} else {
 		kref_get(&misc_dev->refcount);
 	}
@@ -1327,6 +1314,7 @@ static void sev_dev_install_hooks(void)
 	hygon_psp_hooks.__sev_do_cmd_locked = __sev_do_cmd_locked;
 	hygon_psp_hooks.__sev_platform_init_locked = __sev_platform_init_locked;
 	hygon_psp_hooks.__sev_platform_shutdown_locked = __sev_platform_shutdown_locked;
+	hygon_psp_hooks.sev_do_cmd = sev_do_cmd;
 	hygon_psp_hooks.sev_wait_cmd_ioc = sev_wait_cmd_ioc;
 	hygon_psp_hooks.sev_ioctl = sev_ioctl;
 
@@ -1485,7 +1473,7 @@ void sev_pci_init(void)
 		return;
 
 	/* Set SMR for HYGON CSV3 */
-	if (boot_cpu_data.x86_vendor == X86_VENDOR_HYGON)
+	if (is_vendor_hygon() && boot_cpu_has(X86_FEATURE_CSV3))
 		csv_platform_cmd_set_secure_memory_region(sev, &error);
 
 	/* Initialize the platform */
