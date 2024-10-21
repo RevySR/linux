@@ -289,11 +289,9 @@ static void __init fdt_smp_setup(void)
 		if (cpuid >= nr_cpu_ids)
 			continue;
 
-		if (cpuid == loongson_sysconf.boot_cpu_id) {
-			cpu = 0;
-		} else {
-			cpu = cpumask_next_zero(-1, cpu_present_mask);
-		}
+		cpu = topo_add_cpu(cpuid);
+		if (cpu < 0)
+			continue;
 
 		num_processors++;
 		set_cpu_possible(cpu, true);
