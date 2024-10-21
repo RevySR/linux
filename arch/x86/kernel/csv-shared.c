@@ -168,14 +168,14 @@ void __init csv3_scan_secure_call_pages(struct boot_params *boot_params)
 }
 
 /**
- * csv3_early_secure_call - issue early secure call command at the stage where
- *			identity page table is created.
+ * csv3_early_secure_call_ident_map - issue early secure call command at the
+ *			stage where identity page table is created.
  * @base_address:	Start address of the specified memory range.
  * @num_pages:		number of the specific pages.
  * @cmd_type:		Secure call cmd type.
  */
-void __init csv3_early_secure_call(u64 base_address, u64 num_pages,
-				   enum csv3_secure_command_type cmd_type)
+void __init csv3_early_secure_call_ident_map(u64 base_address, u64 num_pages,
+					     enum csv3_secure_command_type cmd_type)
 {
 	struct csv3_secure_call_cmd *page_rd;
 	struct csv3_secure_call_cmd *page_wr;

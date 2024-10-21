@@ -30,10 +30,12 @@ void csv_update_page_attr(unsigned long address, pteval_t set, pteval_t clr)
 
 	if ((set | clr) & _PAGE_ENC) {
 		if (set & _PAGE_ENC)
-			csv3_early_secure_call(__pa(address), 1, CSV3_SECURE_CMD_ENC);
+			csv3_early_secure_call_ident_map(__pa(address), 1,
+							 CSV3_SECURE_CMD_ENC);
 
 		if (clr & _PAGE_ENC)
-			csv3_early_secure_call(__pa(address), 1, CSV3_SECURE_CMD_DEC);
+			csv3_early_secure_call_ident_map(__pa(address), 1,
+							 CSV3_SECURE_CMD_DEC);
 	}
 }
 
@@ -55,7 +57,7 @@ void csv_init_secure_call_pages(void *boot_params)
 	 * field.
 	 */
 	csv3_scan_secure_call_pages(boot_params);
-	csv3_early_secure_call(0, 0, CSV3_SECURE_CMD_RESET);
+	csv3_early_secure_call_ident_map(0, 0, CSV3_SECURE_CMD_RESET);
 	csv3_secure_call_init = 1;
 }
 
