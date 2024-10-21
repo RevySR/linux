@@ -2120,7 +2120,8 @@ static const struct sys_reg_desc sys_reg_descs[] = {
 	  .get_user = get_id_reg,
 	  .set_user = set_id_aa64pfr0_el1,
 	  .reset = read_sanitised_id_aa64pfr0_el1,
-	  .val = ID_AA64PFR0_EL1_CSV2_MASK | ID_AA64PFR0_EL1_CSV3_MASK, },
+	  .val = ID_AA64PFR0_EL1_CSV2_MASK | ID_AA64PFR0_EL1_CSV3_MASK |
+		ID_AA64PFR0_EL1_MPAM_MASK, },
 	{ SYS_DESC(SYS_ID_AA64PFR1_EL1),
 	  .access = access_id_reg,
 	  .get_user = get_id_reg,
