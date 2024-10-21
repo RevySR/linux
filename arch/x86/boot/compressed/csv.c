@@ -14,6 +14,10 @@
 #define __initdata
 #define __pa(x)	((unsigned long)(x))
 
+#include <asm/csv.h>
+#include <asm/cpuid.h>
+
+/* Include code for early secure calls */
 #include "../../kernel/csv-shared.c"
 
 static unsigned int csv3_enabled __section(".data");

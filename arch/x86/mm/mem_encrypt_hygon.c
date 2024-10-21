@@ -1,16 +1,23 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
- * Hygon China Secure Virtualization (CSV)
+ * HYGON Memory Encryption Support
  *
- * Copyright (C) Hygon Info Technologies Ltd.
+ * Copyright (C) 2024 Hygon Info Technologies Ltd.
  *
- * Author: Jiang Xin <jiangxin@hygon.cn>
+ * Author: Liyang Han <hanliyang@hygon.cn>
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 as
+ * published by the Free Software Foundation.
  */
 
+#define DISABLE_BRANCH_PROFILING
+
+#include <linux/cc_platform.h>
+#include <linux/mem_encrypt.h>
+#include <linux/printk.h>
 #include <linux/init.h>
 #include <linux/memblock.h>
-#include <linux/module.h>
-#include <linux/psp-sev.h>
 #include <linux/cma.h>
 #include <linux/minmax.h>
 #include <asm/io.h>
@@ -19,192 +26,39 @@
 #include <asm/csv.h>
 #include <asm/processor-hygon.h>
 
-#undef  pr_fmt
-#define pr_fmt(fmt) "CSV-CMA: " fmt
+u32 vendor_ebx __section(".data") = 0;
+u32 vendor_ecx __section(".data") = 0;
+u32 vendor_edx __section(".data") = 0;
 
-#define NUM_SMR_ENTRIES			(8 * 1024)
-#define CSV_CMA_SHIFT			PUD_SHIFT
-#define CSV_CMA_SIZE			(1 << CSV_CMA_SHIFT)
-#define MIN_SMR_ENTRY_SHIFT		23
-#define CSV_SMR_INFO_SIZE		(nr_node_ids * sizeof(struct csv_mem))
-
-/* 0 percent of total memory by default*/
-static unsigned char csv_mem_percentage;
-static unsigned long csv_mem_size;
-
-static int __init cmdline_parse_csv_mem_size(char *str)
+void print_hygon_cc_feature_info(void)
 {
-	unsigned long size;
-	char *endp;
-
-	if (str) {
-		size  = memparse(str, &endp);
-		csv_mem_size = size;
-		if (!csv_mem_size)
-			csv_mem_percentage = 0;
-	}
-
-	return 0;
-}
-early_param("csv_mem_size", cmdline_parse_csv_mem_size);
-
-static int __init cmdline_parse_csv_mem_percentage(char *str)
-{
-	unsigned char percentage;
-	int ret;
-
-	if (!str)
-		return 0;
-
-	ret  = kstrtou8(str, 10, &percentage);
-	if (!ret) {
-		csv_mem_percentage = min_t(unsigned char, percentage, 80);
-		if (csv_mem_percentage != percentage)
-			pr_warn("csv_mem_percentage is limited to 80.\n");
-	} else {
-		/* Disable CSV CMA. */
-		csv_mem_percentage = 0;
-		pr_err("csv_mem_percentage is invalid. (0 - 80) is expected.\n");
-	}
-
-	return ret;
-}
-early_param("csv_mem_percentage", cmdline_parse_csv_mem_percentage);
-
-struct csv_mem *csv_smr;
-EXPORT_SYMBOL_GPL(csv_smr);
-
-unsigned int csv_smr_num;
-EXPORT_SYMBOL_GPL(csv_smr_num);
-
-struct csv_cma {
-	int fast;
-	struct cma *cma;
-};
-
-struct cma_array {
-	unsigned long count;
-	struct csv_cma csv_cma[];
-};
-
-static unsigned int smr_entry_shift;
-static struct cma_array *csv_contiguous_pernuma_area[MAX_NUMNODES];
-
-static void csv_set_smr_entry_shift(unsigned int shift)
-{
-	smr_entry_shift = max_t(unsigned int, shift, MIN_SMR_ENTRY_SHIFT);
-	pr_info("SMR entry size is 0x%x\n", 1 << smr_entry_shift);
-}
-
-unsigned int csv_get_smr_entry_shift(void)
-{
-	return smr_entry_shift;
-}
-EXPORT_SYMBOL_GPL(csv_get_smr_entry_shift);
-
-static unsigned long __init present_pages_in_node(int nid)
-{
-	unsigned long range_start_pfn, range_end_pfn;
-	unsigned long nr_present = 0;
-	int i;
-
-	for_each_mem_pfn_range(i, nid, &range_start_pfn, &range_end_pfn, NULL)
-		nr_present += range_end_pfn - range_start_pfn;
-
-	return nr_present;
-}
-
-static phys_addr_t __init csv_early_percent_memory_on_node(int nid)
-{
-	return (present_pages_in_node(nid) * csv_mem_percentage / 100) << PAGE_SHIFT;
-}
-
-static void __init csv_cma_reserve_mem(void)
-{
-	int node, i;
-	unsigned long size;
-	int idx = 0;
-	int count;
-	int cma_array_size;
-	unsigned long max_spanned_size = 0;
-
-	csv_smr = memblock_alloc_node(CSV_SMR_INFO_SIZE, SMP_CACHE_BYTES, NUMA_NO_NODE);
-	if (!csv_smr) {
-		pr_err("Fail to allocate csv_smr\n");
+	/* Secure Memory Encryption */
+	if (cc_platform_has(CC_ATTR_HOST_MEM_ENCRYPT)) {
+		/*
+		 * HYGON SME is mutually exclusive with any of the
+		 * HYGON CSV features below.
+		 */
+		pr_info(" HYGON SME");
 		return;
 	}
 
-	for_each_node_state(node, N_ONLINE) {
-		int ret;
-		char name[CMA_MAX_NAME];
-		struct cma_array *array;
-		unsigned long spanned_size;
-		unsigned long start = 0, end = 0;
-		struct csv_cma *csv_cma;
+	/* Secure Encrypted Virtualization */
+	if (cc_platform_has(CC_ATTR_GUEST_MEM_ENCRYPT))
+		pr_info(" HYGON CSV");
 
-		size = csv_early_percent_memory_on_node(node);
-		count = DIV_ROUND_UP(size, 1 << CSV_CMA_SHIFT);
-		if (!count)
-			continue;
+	/* Encrypted Register State */
+	if (cc_platform_has(CC_ATTR_GUEST_STATE_ENCRYPT))
+		pr_info(" HYGON CSV2");
 
-		cma_array_size = count * sizeof(*csv_cma) + sizeof(*array);
-		array = memblock_alloc_node(cma_array_size, SMP_CACHE_BYTES, NUMA_NO_NODE);
-		if (!array) {
-			pr_err("Fail to allocate cma_array\n");
-			continue;
-		}
-
-		array->count = 0;
-		csv_contiguous_pernuma_area[node] = array;
-
-		for (i = 0; i < count; i++) {
-			csv_cma = &array->csv_cma[i];
-			csv_cma->fast = 1;
-			snprintf(name, sizeof(name), "csv-n%dc%d", node, i);
-			ret = cma_declare_contiguous_nid(0, CSV_CMA_SIZE, 0,
-					1 << CSV_MR_ALIGN_BITS, PMD_SHIFT - PAGE_SHIFT,
-					false, name, &(csv_cma->cma), node);
-			if (ret) {
-				pr_warn("Fail to reserve memory size 0x%x node %d\n",
-					1 << CSV_CMA_SHIFT, node);
-				break;
-			}
-			cma_enable_concurrency(csv_cma->cma);
-
-			if (start > cma_get_base(csv_cma->cma) || !start)
-				start = cma_get_base(csv_cma->cma);
-
-			if (end < cma_get_base(csv_cma->cma) + cma_get_size(csv_cma->cma))
-				end = cma_get_base(csv_cma->cma) + cma_get_size(csv_cma->cma);
-		}
-
-		if (!i)
-			continue;
-
-		array->count = i;
-		spanned_size = end - start;
-		if (spanned_size > max_spanned_size)
-			max_spanned_size = spanned_size;
-
-		csv_smr[idx].start = start;
-		csv_smr[idx].size  = end - start;
-		idx++;
-
-		pr_info("Node %d - reserve size 0x%016lx, (expected size 0x%016lx)\n",
-			node, (unsigned long)i * CSV_CMA_SIZE, size);
-	}
-
-	csv_smr_num = idx;
-	WARN_ON((max_spanned_size / NUM_SMR_ENTRIES) < 1);
-	if (likely((max_spanned_size / NUM_SMR_ENTRIES) >= 1))
-		csv_set_smr_entry_shift(ilog2(max_spanned_size / NUM_SMR_ENTRIES - 1) + 1);
+	if (csv3_active())
+		pr_info(" HYGON CSV3");
 }
 
 /*
  * Check whether host supports CSV3 in hygon platform.
  * Called in the guest, it always returns false.
  */
-static bool __init csv3_check_cpu_support(void)
+static bool __init __maybe_unused csv3_check_cpu_support(void)
 {
 	unsigned int eax, ebx, ecx, edx;
 	unsigned long me_mask;
@@ -259,6 +113,206 @@ static bool __init csv3_check_cpu_support(void)
 	return !!me_mask && csv3_enabled;
 }
 
+/* csv3_active() indicate whether the guest is protected by CSV3 */
+bool noinstr csv3_active(void)
+{
+	if (vendor_ebx == 0 || vendor_ecx == 0 || vendor_edx == 0) {
+		u32 eax = 0;
+
+		native_cpuid(&eax, &vendor_ebx, &vendor_ecx, &vendor_edx);
+	}
+
+	/* HygonGenuine */
+	if (vendor_ebx == CPUID_VENDOR_HygonGenuine_ebx &&
+	    vendor_ecx == CPUID_VENDOR_HygonGenuine_ecx &&
+	    vendor_edx == CPUID_VENDOR_HygonGenuine_edx)
+		return !!(sev_status & MSR_CSV3_ENABLED);
+	else
+		return false;
+}
+
+/******************************************************************************/
+/**************************** CSV3 CMA interfaces *****************************/
+/******************************************************************************/
+
+/* 0 percent of total memory by default*/
+static unsigned char csv_mem_percentage;
+static unsigned long csv_mem_size;
+
+static int __init cmdline_parse_csv_mem_size(char *str)
+{
+	unsigned long size;
+	char *endp;
+
+	if (str) {
+		size  = memparse(str, &endp);
+		csv_mem_size = size;
+		if (!csv_mem_size)
+			csv_mem_percentage = 0;
+	}
+
+	return 0;
+}
+early_param("csv_mem_size", cmdline_parse_csv_mem_size);
+
+static int __init cmdline_parse_csv_mem_percentage(char *str)
+{
+	unsigned char percentage;
+	int ret;
+
+	if (!str)
+		return 0;
+
+	ret  = kstrtou8(str, 10, &percentage);
+	if (!ret) {
+		csv_mem_percentage = min_t(unsigned char, percentage, 80);
+		if (csv_mem_percentage != percentage)
+			pr_warn("csv_mem_percentage is limited to 80.\n");
+	} else {
+		/* Disable CSV CMA. */
+		csv_mem_percentage = 0;
+		pr_err("csv_mem_percentage is invalid. (0 - 80) is expected.\n");
+	}
+
+	return ret;
+}
+early_param("csv_mem_percentage", cmdline_parse_csv_mem_percentage);
+
+#define NUM_SMR_ENTRIES			(8 * 1024)
+#define CSV_CMA_SHIFT			PUD_SHIFT
+#define CSV_CMA_SIZE			(1 << CSV_CMA_SHIFT)
+#define MIN_SMR_ENTRY_SHIFT		23
+#define CSV_SMR_INFO_SIZE		(nr_node_ids * sizeof(struct csv_mem))
+
+struct csv_mem *csv_smr;
+EXPORT_SYMBOL_GPL(csv_smr);
+
+unsigned int csv_smr_num;
+EXPORT_SYMBOL_GPL(csv_smr_num);
+
+struct csv_cma {
+	int fast;
+	struct cma *cma;
+};
+
+struct cma_array {
+	unsigned long count;
+	struct csv_cma csv_cma[];
+};
+
+static unsigned int smr_entry_shift;
+static struct cma_array *csv_contiguous_pernuma_area[MAX_NUMNODES];
+
+static void csv_set_smr_entry_shift(unsigned int shift)
+{
+	smr_entry_shift = max_t(unsigned int, shift, MIN_SMR_ENTRY_SHIFT);
+	pr_info("CSV-CMA: SMR entry size is 0x%x\n", 1 << smr_entry_shift);
+}
+
+unsigned int csv_get_smr_entry_shift(void)
+{
+	return smr_entry_shift;
+}
+EXPORT_SYMBOL_GPL(csv_get_smr_entry_shift);
+
+static unsigned long __init present_pages_in_node(int nid)
+{
+	unsigned long range_start_pfn, range_end_pfn;
+	unsigned long nr_present = 0;
+	int i;
+
+	for_each_mem_pfn_range(i, nid, &range_start_pfn, &range_end_pfn, NULL)
+		nr_present += range_end_pfn - range_start_pfn;
+
+	return nr_present;
+}
+
+static phys_addr_t __init csv_early_percent_memory_on_node(int nid)
+{
+	return (present_pages_in_node(nid) * csv_mem_percentage / 100) << PAGE_SHIFT;
+}
+
+static void __init csv_cma_reserve_mem(void)
+{
+	int node, i;
+	unsigned long size;
+	int idx = 0;
+	int count;
+	int cma_array_size;
+	unsigned long max_spanned_size = 0;
+
+	csv_smr = memblock_alloc_node(CSV_SMR_INFO_SIZE, SMP_CACHE_BYTES, NUMA_NO_NODE);
+	if (!csv_smr) {
+		pr_err("CSV-CMA: Fail to allocate csv_smr\n");
+		return;
+	}
+
+	for_each_node_state(node, N_ONLINE) {
+		int ret;
+		char name[CMA_MAX_NAME];
+		struct cma_array *array;
+		unsigned long spanned_size;
+		unsigned long start = 0, end = 0;
+		struct csv_cma *csv_cma;
+
+		size = csv_early_percent_memory_on_node(node);
+		count = DIV_ROUND_UP(size, 1 << CSV_CMA_SHIFT);
+		if (!count)
+			continue;
+
+		cma_array_size = count * sizeof(*csv_cma) + sizeof(*array);
+		array = memblock_alloc_node(cma_array_size, SMP_CACHE_BYTES, NUMA_NO_NODE);
+		if (!array) {
+			pr_err("CSV-CMA: Fail to allocate cma_array\n");
+			continue;
+		}
+
+		array->count = 0;
+		csv_contiguous_pernuma_area[node] = array;
+
+		for (i = 0; i < count; i++) {
+			csv_cma = &array->csv_cma[i];
+			csv_cma->fast = 1;
+			snprintf(name, sizeof(name), "csv-n%dc%d", node, i);
+			ret = cma_declare_contiguous_nid(0, CSV_CMA_SIZE, 0,
+					1 << CSV_MR_ALIGN_BITS, PMD_SHIFT - PAGE_SHIFT,
+					false, name, &(csv_cma->cma), node);
+			if (ret) {
+				pr_warn("CSV-CMA: Fail to reserve memory size 0x%x node %d\n",
+					1 << CSV_CMA_SHIFT, node);
+				break;
+			}
+			cma_enable_concurrency(csv_cma->cma);
+
+			if (start > cma_get_base(csv_cma->cma) || !start)
+				start = cma_get_base(csv_cma->cma);
+
+			if (end < cma_get_base(csv_cma->cma) + cma_get_size(csv_cma->cma))
+				end = cma_get_base(csv_cma->cma) + cma_get_size(csv_cma->cma);
+		}
+
+		if (!i)
+			continue;
+
+		array->count = i;
+		spanned_size = end - start;
+		if (spanned_size > max_spanned_size)
+			max_spanned_size = spanned_size;
+
+		csv_smr[idx].start = start;
+		csv_smr[idx].size  = end - start;
+		idx++;
+
+		pr_info("CSV-CMA: Node %d - reserve size 0x%016lx, (expected size 0x%016lx)\n",
+			node, (unsigned long)i * CSV_CMA_SIZE, size);
+	}
+
+	csv_smr_num = idx;
+	WARN_ON((max_spanned_size / NUM_SMR_ENTRIES) < 1);
+	if (likely((max_spanned_size / NUM_SMR_ENTRIES) >= 1))
+		csv_set_smr_entry_shift(ilog2(max_spanned_size / NUM_SMR_ENTRIES - 1) + 1);
+}
+
 #define CSV_CMA_AREAS		2458
 
 void __init early_csv_reserve_mem(void)
@@ -283,7 +337,7 @@ void __init early_csv_reserve_mem(void)
 	}
 
 	if (!csv_mem_percentage) {
-		pr_warn("Don't reserve any memory\n");
+		pr_warn("CSV-CMA: Don't reserve any memory\n");
 		return;
 	}
 
@@ -302,7 +356,7 @@ phys_addr_t csv_alloc_from_contiguous(size_t size, nodemask_t *nodes_allowed,
 	int fast = 1;
 
 	if (!nodes_allowed || size > CSV_CMA_SIZE) {
-		pr_err("Invalid params, size = 0x%lx, nodes_allowed = %p\n",
+		pr_err("CSV-CMA: Invalid params, size = 0x%lx, nodes_allowed = %p\n",
 			size, nodes_allowed);
 		return 0;
 	}
@@ -353,7 +407,7 @@ retry:
 		fast = 0;
 		goto retry;
 	} else {
-		pr_err("Fail to alloc secure memory(size = 0x%lx)\n", size);
+		pr_err("CSV-CMA: Fail to alloc secure memory(size = 0x%lx)\n", size);
 		return 0;
 	}
 
