@@ -2054,7 +2054,9 @@ config EFI_RUNTIME_MAP
 config HYGON_CSV
 	bool "Hygon secure virtualization CSV support"
 	default y
-	depends on CPU_SUP_HYGON && AMD_MEM_ENCRYPT && CMA
+	depends on CPU_SUP_HYGON && AMD_MEM_ENCRYPT
+	select MMU
+	select CMA
 	help
 	  Hygon CSV integrates secure processor, memory encryption and
 	  memory isolation to provide the ability to protect guest's private
