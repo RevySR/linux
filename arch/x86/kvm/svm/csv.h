@@ -10,6 +10,8 @@
 #ifndef __SVM_CSV_H
 #define __SVM_CSV_H
 
+#include <asm/processor-hygon.h>
+
 #ifdef CONFIG_HYGON_CSV
 
 void __init csv_init(struct kvm_x86_ops *ops);
@@ -20,4 +22,4 @@ static inline void __init csv_init(struct kvm_x86_ops *ops) { }
 
 #endif	/* CONFIG_HYGON_CSV */
 
-#endif
+#endif	/* __SVM_CSV_H */

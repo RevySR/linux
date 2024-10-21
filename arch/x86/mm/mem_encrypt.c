@@ -14,6 +14,8 @@
 #include <linux/mem_encrypt.h>
 #include <asm/csv.h>
 
+#include <asm/processor-hygon.h>
+
 /* Override for DMA direct allocation check - ARCH_HAS_FORCE_DMA_UNENCRYPTED */
 bool force_dma_unencrypted(struct device *dev)
 {
@@ -73,7 +75,7 @@ static void print_mem_encrypt_feature_info(void)
 		return;
 	}
 
-	if (boot_cpu_data.x86_vendor == X86_VENDOR_HYGON) {
+	if (is_x86_vendor_hygon()) {
 		print_hygon_cc_feature_info();
 		return;
 	}

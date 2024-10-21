@@ -42,6 +42,7 @@
 #include <asm/traps.h>
 #include <asm/reboot.h>
 #include <asm/fpu/api.h>
+#include <asm/processor-hygon.h>
 
 #include <trace/events/ipi.h>
 
@@ -549,7 +550,7 @@ static bool __kvm_is_svm_supported(void)
 	}
 
 	if (cc_platform_has(CC_ATTR_GUEST_MEM_ENCRYPT)) {
-		if (boot_cpu_data.x86_vendor == X86_VENDOR_HYGON)
+		if (is_x86_vendor_hygon())
 			pr_info("KVM is unsupported when running as an CSV guest\n");
 		else
 			pr_info("KVM is unsupported when running as an SEV guest\n");
@@ -2972,7 +2973,7 @@ static int svm_get_msr(struct kvm_vcpu *vcpu, struct msr_data *msr_info)
 		msr_info->data = svm->msr_decfg;
 		break;
 	case MSR_AMD64_SEV_ES_GHCB:
-		if (boot_cpu_data.x86_vendor == X86_VENDOR_HYGON) {
+		if (is_x86_vendor_hygon()) {
 			/*
 			 * Only support userspace get/set from/to
 			 * vmcb.control.ghcb_gpa
@@ -3264,7 +3265,7 @@ static int svm_set_msr(struct kvm_vcpu *vcpu, struct msr_data *msr)
 		break;
 	}
 	case MSR_AMD64_SEV_ES_GHCB:
-		if (boot_cpu_data.x86_vendor == X86_VENDOR_HYGON) {
+		if (is_x86_vendor_hygon()) {
 			/*
 			 * Only support userspace get/set from/to
 			 * vmcb.control.ghcb_gpa
@@ -4282,7 +4283,7 @@ static __no_kcsan fastpath_t svm_vcpu_run(struct kvm_vcpu *vcpu)
 	 * the necessary GHCB page. When handling the exit code
 	 * afterwards, it can exit to userspace and stop the guest.
 	 */
-	if (boot_cpu_data.x86_vendor == X86_VENDOR_HYGON &&
+	if (is_x86_vendor_hygon() &&
 	    sev_es_guest(vcpu->kvm) &&
 	    svm->sev_es.receiver_ghcb_map_fail) {
 		svm->vmcb->control.exit_code = SVM_EXIT_ERR;
@@ -4468,8 +4469,7 @@ static bool svm_has_emulated_msr(struct kvm *kvm, u32 index)
 		 * Only CSV2 guests support to export this MSR, this should
 		 * be determined after KVM_CREATE_VM.
 		 */
-		if (boot_cpu_data.x86_vendor != X86_VENDOR_HYGON ||
-		    (kvm && !sev_es_guest(kvm)))
+		if (!is_x86_vendor_hygon() || (kvm && !sev_es_guest(kvm)))
 			return false;
 		break;
 	default:
@@ -5543,7 +5543,7 @@ static int __init svm_init(void)
 	if (!kvm_is_svm_supported())
 		return -EOPNOTSUPP;
 
-	if (boot_cpu_data.x86_vendor == X86_VENDOR_HYGON)
+	if (is_x86_vendor_hygon())
 		csv_init(&svm_x86_ops);
 
 	r = kvm_x86_vendor_init(&svm_init_ops);

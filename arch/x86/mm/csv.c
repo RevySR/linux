@@ -17,6 +17,7 @@
 #include <asm/cacheflush.h>
 #include <asm/set_memory.h>
 #include <asm/csv.h>
+#include <asm/processor-hygon.h>
 
 #undef  pr_fmt
 #define pr_fmt(fmt) "CSV-CMA: " fmt
@@ -210,7 +211,7 @@ static bool __init csv3_check_cpu_support(void)
 	u64 msr;
 	bool csv3_enabled;
 
-	if (boot_cpu_data.x86_vendor != X86_VENDOR_HYGON)
+	if (!is_x86_vendor_hygon())
 		return false;
 
 	if (sev_status)

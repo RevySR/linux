@@ -86,6 +86,8 @@
 #include <asm/sgx.h>
 #include <clocksource/hyperv_timer.h>
 
+#include <asm/processor-hygon.h>
+
 #define CREATE_TRACE_POINTS
 #include "trace.h"
 
@@ -4640,7 +4642,7 @@ int kvm_vm_ioctl_check_extension(struct kvm *kvm, long ext)
 		 * but only CSV2 guest support export to emulate
 		 * MSR_AMD64_SEV_ES_GHCB.
 		 */
-		if (boot_cpu_data.x86_vendor == X86_VENDOR_HYGON)
+		if (is_x86_vendor_hygon())
 			r = static_call(kvm_x86_has_emulated_msr)(kvm,
 							MSR_AMD64_SEV_ES_GHCB);
 		break;
@@ -7116,14 +7118,14 @@ set_pit2_out:
 		break;
 	}
 	case KVM_CONTROL_PRE_SYSTEM_RESET:
-		if (boot_cpu_data.x86_vendor == X86_VENDOR_HYGON &&
+		if (is_x86_vendor_hygon() &&
 		    kvm_x86_ops.control_pre_system_reset)
 			r = static_call(kvm_x86_control_pre_system_reset)(kvm);
 		else
 			r = -ENOTTY;
 		break;
 	case KVM_CONTROL_POST_SYSTEM_RESET:
-		if (boot_cpu_data.x86_vendor == X86_VENDOR_HYGON &&
+		if (is_x86_vendor_hygon() &&
 		    kvm_x86_ops.control_post_system_reset)
 			r = static_call(kvm_x86_control_post_system_reset)(kvm);
 		else
@@ -11577,8 +11579,7 @@ static int __set_sregs_common(struct kvm_vcpu *vcpu, struct kvm_sregs *sregs,
 	if (kvm_set_apic_base(vcpu, &apic_base_msr))
 		return -EINVAL;
 
-	if (vcpu->arch.guest_state_protected &&
-	    boot_cpu_data.x86_vendor != X86_VENDOR_HYGON)
+	if (vcpu->arch.guest_state_protected && !is_x86_vendor_hygon())
 		return 0;
 
 	if (!vcpu->arch.guest_state_protected) {

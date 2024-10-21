@@ -25,6 +25,7 @@
 #include <asm/trapnr.h>
 #include <asm/fpu/xcr.h>
 #include <asm/debugreg.h>
+#include <asm/processor-hygon.h>
 
 #include "mmu.h"
 #include "x86.h"
@@ -195,7 +196,7 @@ static int sev_asid_new(struct kvm_sev_info *sev)
 
 #ifdef CONFIG_KVM_SUPPORTS_CSV_REUSE_ASID
 	/* For Hygon CPU, check whether the userid exists */
-	if ((boot_cpu_data.x86_vendor == X86_VENDOR_HYGON) &&
+	if ((is_x86_vendor_hygon()) &&
 	    userid && userid_len) {
 		int i = !min_sev_asid ? 1 : min_sev_asid;
 
@@ -225,7 +226,7 @@ static int sev_asid_new(struct kvm_sev_info *sev)
 	 * No matter what the min_sev_asid is, all asids in range
 	 * [1, max_sev_asid] can be used for CSV2 guest on Hygon CPUs.
 	 */
-	if (boot_cpu_data.x86_vendor == X86_VENDOR_HYGON)
+	if (is_x86_vendor_hygon())
 		max_asid = max_sev_asid;
 again:
 	asid = find_next_zero_bit(sev_asid_bitmap, max_asid + 1, min_asid);
@@ -243,7 +244,7 @@ again:
 
 #ifdef CONFIG_KVM_SUPPORTS_CSV_REUSE_ASID
 	/* For Hygon CPU, initialize the new userid */
-	if ((boot_cpu_data.x86_vendor == X86_VENDOR_HYGON) &&
+	if ((is_x86_vendor_hygon()) &&
 	    userid && userid_len) {
 		memcpy(csv_asid_userid_array[asid].userid, userid, userid_len);
 		csv_asid_userid_array[asid].userid_len = userid_len;
@@ -277,7 +278,7 @@ static void sev_asid_free(struct kvm_sev_info *sev)
 
 #ifdef CONFIG_KVM_SUPPORTS_CSV_REUSE_ASID
 	/* For Hygon CPU, decrease the reference count if userid exist */
-	if ((boot_cpu_data.x86_vendor == X86_VENDOR_HYGON) &&
+	if ((is_x86_vendor_hygon()) &&
 	    csv_asid_userid_array[sev->asid].userid_len) {
 		/* If reach here, reference count should large than 0. */
 		WARN_ON(csv_asid_userid_array[sev->asid].refcnt <= 0);
@@ -356,7 +357,7 @@ static int sev_guest_init(struct kvm *kvm, struct kvm_sev_cmd *argp)
 	sev->es_active = argp->id == KVM_SEV_ES_INIT;
 
 #ifdef CONFIG_KVM_SUPPORTS_CSV_REUSE_ASID
-	if (boot_cpu_data.x86_vendor == X86_VENDOR_HYGON) {
+	if (is_x86_vendor_hygon()) {
 		memset(&params, 0, sizeof(params));
 
 		if (argp->data &&
@@ -833,7 +834,7 @@ static int __sev_launch_update_vmsa(struct kvm *kvm, struct kvm_vcpu *vcpu,
 	 * memory area pointed by svm->sev_es.vmsa so that we can read
 	 * fresh memory updated by PSP.
 	 */
-	if (boot_cpu_data.x86_vendor == X86_VENDOR_HYGON) {
+	if (is_x86_vendor_hygon()) {
 		clflush_cache_range(svm->sev_es.vmsa, PAGE_SIZE);
 		memcpy(svm->sev_es.reset_vmsa, svm->sev_es.vmsa, PAGE_SIZE);
 	}
@@ -2289,7 +2290,7 @@ int sev_mem_enc_ioctl(struct kvm *kvm, void __user *argp)
 		r = sev_send_update_data(kvm, &sev_cmd);
 		break;
 	case KVM_SEV_SEND_UPDATE_VMSA:
-		if (boot_cpu_data.x86_vendor == X86_VENDOR_HYGON)
+		if (is_x86_vendor_hygon())
 			r = sev_send_update_vmsa(kvm, &sev_cmd);
 		else
 			r = -EINVAL;
@@ -2307,7 +2308,7 @@ int sev_mem_enc_ioctl(struct kvm *kvm, void __user *argp)
 		r = sev_receive_update_data(kvm, &sev_cmd);
 		break;
 	case KVM_SEV_RECEIVE_UPDATE_VMSA:
-		if (boot_cpu_data.x86_vendor == X86_VENDOR_HYGON)
+		if (is_x86_vendor_hygon())
 			r = sev_receive_update_vmsa(kvm, &sev_cmd);
 		else
 			r = -EINVAL;
@@ -2316,7 +2317,7 @@ int sev_mem_enc_ioctl(struct kvm *kvm, void __user *argp)
 		r = sev_receive_finish(kvm, &sev_cmd);
 		break;
 	case KVM_CSV_COMMAND_BATCH:
-		if (boot_cpu_data.x86_vendor == X86_VENDOR_HYGON) {
+		if (is_x86_vendor_hygon()) {
 			mutex_lock(&csv_cmd_batch_mutex);
 			r = csv_command_batch(kvm, &sev_cmd);
 			mutex_unlock(&csv_cmd_batch_mutex);
@@ -2621,7 +2622,7 @@ void __init sev_hardware_setup(void)
 		goto out;
 	}
 
-	if (boot_cpu_data.x86_vendor == X86_VENDOR_HYGON) {
+	if (is_x86_vendor_hygon()) {
 #ifdef CONFIG_KVM_SUPPORTS_CSV_REUSE_ASID
 		/* Initialize CSV ASID reuse array */
 		csv_asid_userid_array = kcalloc(nr_asids,
@@ -2678,7 +2679,7 @@ void __init sev_hardware_setup(void)
 		goto out;
 	}
 
-	if (boot_cpu_data.x86_vendor == X86_VENDOR_HYGON) {
+	if (is_x86_vendor_hygon()) {
 		/*
 		 * Ths ASIDs from 1 to max_sev_asid are available for hygon
 		 * CSV2 guest.
@@ -2697,19 +2698,17 @@ void __init sev_hardware_setup(void)
 out:
 	if (boot_cpu_has(X86_FEATURE_SEV))
 		pr_info("%s %s (ASIDs %u - %u)\n",
-			boot_cpu_data.x86_vendor == X86_VENDOR_HYGON ? "CSV" : "SEV",
+			is_x86_vendor_hygon() ? "CSV" : "SEV",
 			sev_supported ? min_sev_asid <= max_sev_asid ? "enabled" :
 								       "unusable" :
 								       "disabled",
 			min_sev_asid, max_sev_asid);
 	if (boot_cpu_has(X86_FEATURE_SEV_ES))
 		pr_info("%s %s (ASIDs %u - %u)\n",
-			boot_cpu_data.x86_vendor == X86_VENDOR_HYGON ? "CSV2" : "SEV-ES",
+			is_x86_vendor_hygon() ? "CSV2" : "SEV-ES",
 			sev_es_supported ? "enabled" : "disabled",
-			boot_cpu_data.x86_vendor == X86_VENDOR_HYGON ?
-				1 : (min_sev_asid > 1 ? 1 : 0),
-			boot_cpu_data.x86_vendor == X86_VENDOR_HYGON ?
-				max_sev_asid : min_sev_asid - 1);
+			is_x86_vendor_hygon() ? 1 : (min_sev_asid > 1 ? 1 : 0),
+			is_x86_vendor_hygon() ? max_sev_asid : min_sev_asid - 1);
 
 	sev_enabled = sev_supported;
 	sev_es_enabled = sev_es_supported;
@@ -2727,7 +2726,7 @@ void sev_hardware_unsetup(void)
 	/* No need to take sev_bitmap_lock, all VMs have been destroyed. */
 	sev_flush_asids(1, max_sev_asid);
 
-	if (boot_cpu_data.x86_vendor == X86_VENDOR_HYGON) {
+	if (is_x86_vendor_hygon()) {
 		free_trans_mempool();
 #ifdef CONFIG_KVM_SUPPORTS_CSV_REUSE_ASID
 		kfree(csv_asid_userid_array);
@@ -3089,7 +3088,7 @@ void pre_sev_run(struct vcpu_svm *svm, int cpu)
 
 #ifdef CONFIG_KVM_SUPPORTS_CSV_REUSE_ASID
 	/* If ASID is shared with other guests, then flush TLB before VMRUN */
-	if ((boot_cpu_data.x86_vendor == X86_VENDOR_HYGON) &&
+	if ((is_x86_vendor_hygon()) &&
 	    csv_asid_userid_array[asid].userid_len)
 		svm->vmcb->control.tlb_ctl = TLB_CONTROL_FLUSH_ASID;
 #endif
@@ -3623,7 +3622,7 @@ int sev_vm_attestation(struct kvm *kvm, unsigned long gpa, unsigned long len)
 	unsigned long guest_uaddr, n;
 	int ret = 0, offset, error;
 
-	if (!sev_guest(kvm) || (boot_cpu_data.x86_vendor != X86_VENDOR_HYGON))
+	if (!sev_guest(kvm) || !is_x86_vendor_hygon())
 		return -ENOTTY;
 
 	/*
