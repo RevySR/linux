@@ -2294,6 +2294,91 @@ static int csv_mem_enc_ioctl(struct kvm *kvm, void __user *argp)
 	return r;
 }
 
+/* The caller must flush the stale caches about svm->sev_es.vmsa */
+void csv2_sync_reset_vmsa(struct vcpu_svm *svm)
+{
+	if (svm->sev_es.reset_vmsa)
+		memcpy(svm->sev_es.reset_vmsa, svm->sev_es.vmsa, PAGE_SIZE);
+}
+
+void csv2_free_reset_vmsa(struct vcpu_svm *svm)
+{
+	if (svm->sev_es.reset_vmsa) {
+		__free_page(virt_to_page(svm->sev_es.reset_vmsa));
+		svm->sev_es.reset_vmsa = NULL;
+	}
+}
+
+int csv2_setup_reset_vmsa(struct vcpu_svm *svm)
+{
+	struct page *reset_vmsa_page = NULL;
+
+	reset_vmsa_page = alloc_page(GFP_KERNEL_ACCOUNT | __GFP_ZERO);
+	if (!reset_vmsa_page)
+		return -ENOMEM;
+
+	svm->sev_es.reset_vmsa = page_address(reset_vmsa_page);
+	return 0;
+}
+
+static int csv_control_pre_system_reset(struct kvm *kvm)
+{
+	struct kvm_vcpu *vcpu;
+	unsigned long i;
+	int ret;
+
+	if (!sev_es_guest(kvm))
+		return 0;
+
+	kvm_for_each_vcpu(i, vcpu, kvm) {
+		ret = mutex_lock_killable(&vcpu->mutex);
+		if (ret)
+			return ret;
+
+		vcpu->arch.guest_state_protected = false;
+
+		mutex_unlock(&vcpu->mutex);
+	}
+
+	return 0;
+}
+
+static int csv_control_post_system_reset(struct kvm *kvm)
+{
+	struct kvm_vcpu *vcpu;
+	unsigned long i;
+	int ret;
+
+	if (!sev_guest(kvm))
+		return 0;
+
+	/* Flush both host and guest caches before next boot flow */
+	wbinvd_on_all_cpus();
+
+	if (!sev_es_guest(kvm))
+		return 0;
+
+	kvm_for_each_vcpu(i, vcpu, kvm) {
+		struct vcpu_svm *svm = to_svm(vcpu);
+
+		ret = mutex_lock_killable(&vcpu->mutex);
+		if (ret)
+			return ret;
+
+		memcpy(svm->sev_es.vmsa, svm->sev_es.reset_vmsa, PAGE_SIZE);
+
+		/* Flush encrypted vmsa to memory */
+		clflush_cache_range(svm->sev_es.vmsa, PAGE_SIZE);
+
+		svm->vcpu.arch.guest_state_protected = true;
+		svm->sev_es.received_first_sipi = false;
+
+		mutex_unlock(&vcpu->mutex);
+	}
+
+	return 0;
+}
+
 void csv_exit(void)
 {
 }
@@ -2311,6 +2396,8 @@ void __init csv_init(struct kvm_x86_ops *ops)
 
 	ops->mem_enc_ioctl = csv_mem_enc_ioctl;
 	ops->vm_attestation = csv_vm_attestation;
+	ops->control_pre_system_reset = csv_control_pre_system_reset;
+	ops->control_post_system_reset = csv_control_post_system_reset;
 
 	if (boot_cpu_has(X86_FEATURE_SEV_ES) && boot_cpu_has(X86_FEATURE_CSV3)) {
 		ops->vm_destroy = csv_vm_destroy;

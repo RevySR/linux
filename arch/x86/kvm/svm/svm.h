@@ -206,8 +206,10 @@ struct vcpu_sev_es_state {
 
 	/* CSV2 migrated ghcb mapping state support */
 	bool receiver_ghcb_map_fail;
+#ifdef CONFIG_HYGON_CSV
 	/* CSV2 reboot vmsa */
 	struct vmcb_save_area *reset_vmsa;
+#endif
 };
 
 struct vcpu_svm {
@@ -739,9 +741,6 @@ void sev_es_prepare_switch_to_guest(struct sev_es_save_area *hostsa);
 void sev_es_unmap_ghcb(struct vcpu_svm *svm);
 
 int sev_es_ghcb_map(struct vcpu_svm *svm, u64 ghcb_gpa);
-
-int csv_control_pre_system_reset(struct kvm *kvm);
-int csv_control_post_system_reset(struct kvm *kvm);
 
 /* vmenter.S */
 

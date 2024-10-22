@@ -809,7 +809,7 @@ static int __sev_launch_update_vmsa(struct kvm *kvm, struct kvm_vcpu *vcpu,
 	 */
 	if (is_x86_vendor_hygon()) {
 		clflush_cache_range(svm->sev_es.vmsa, PAGE_SIZE);
-		memcpy(svm->sev_es.reset_vmsa, svm->sev_es.vmsa, PAGE_SIZE);
+		csv2_sync_reset_vmsa(svm);
 	}
 
 	return 0;
@@ -2615,7 +2615,8 @@ void sev_free_vcpu(struct kvm_vcpu *vcpu)
 	if (svm->sev_es.ghcb_sa_free)
 		kvfree(svm->sev_es.ghcb_sa);
 
-	__free_page(virt_to_page(svm->sev_es.reset_vmsa));
+	if (is_x86_vendor_hygon())
+		csv2_free_reset_vmsa(svm);
 }
 
 static void dump_ghcb(struct vcpu_svm *svm)
@@ -3424,61 +3425,6 @@ int sev_es_ghcb_map(struct vcpu_svm *svm, u64 ghcb_gpa)
 	svm->sev_es.receiver_ghcb_map_fail = false;
 
 	pr_info("Mapping GHCB [%#llx] from guest at recipient\n", ghcb_gpa);
-
-	return 0;
-}
-
-int csv_control_pre_system_reset(struct kvm *kvm)
-{
-	struct kvm_vcpu *vcpu;
-	unsigned long i;
-	int ret;
-
-	if (!sev_es_guest(kvm))
-		return 0;
-
-	kvm_for_each_vcpu(i, vcpu, kvm) {
-		ret = mutex_lock_killable(&vcpu->mutex);
-		if (ret)
-			return ret;
-
-		vcpu->arch.guest_state_protected = false;
-
-		mutex_unlock(&vcpu->mutex);
-	}
-
-	return 0;
-}
-
-int csv_control_post_system_reset(struct kvm *kvm)
-{
-	struct kvm_vcpu *vcpu;
-	unsigned long i;
-	int ret;
-
-	/* Flush both host and guest caches before next boot flow */
-	wbinvd_on_all_cpus();
-
-	if (!sev_es_guest(kvm))
-		return 0;
-
-	kvm_for_each_vcpu(i, vcpu, kvm) {
-		struct vcpu_svm *svm = to_svm(vcpu);
-
-		ret = mutex_lock_killable(&vcpu->mutex);
-		if (ret)
-			return ret;
-
-		memcpy(svm->sev_es.vmsa, svm->sev_es.reset_vmsa, PAGE_SIZE);
-
-		/* Flush encrypted vmsa to memory */
-		clflush_cache_range(svm->sev_es.vmsa, PAGE_SIZE);
-
-		svm->vcpu.arch.guest_state_protected = true;
-		svm->sev_es.received_first_sipi = false;
-
-		mutex_unlock(&vcpu->mutex);
-	}
 
 	return 0;
 }

@@ -7118,15 +7118,13 @@ set_pit2_out:
 		break;
 	}
 	case KVM_CONTROL_PRE_SYSTEM_RESET:
-		if (is_x86_vendor_hygon() &&
-		    kvm_x86_ops.control_pre_system_reset)
+		if (kvm_x86_ops.control_pre_system_reset)
 			r = static_call(kvm_x86_control_pre_system_reset)(kvm);
 		else
 			r = -ENOTTY;
 		break;
 	case KVM_CONTROL_POST_SYSTEM_RESET:
-		if (is_x86_vendor_hygon() &&
-		    kvm_x86_ops.control_post_system_reset)
+		if (kvm_x86_ops.control_post_system_reset)
 			r = static_call(kvm_x86_control_post_system_reset)(kvm);
 		else
 			r = -ENOTTY;

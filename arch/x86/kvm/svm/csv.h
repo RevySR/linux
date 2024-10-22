@@ -59,12 +59,20 @@ void csv_exit(void);
 int csv_alloc_trans_mempool(void);
 void csv_free_trans_mempool(void);
 
+void csv2_sync_reset_vmsa(struct vcpu_svm *svm);
+void csv2_free_reset_vmsa(struct vcpu_svm *svm);
+int csv2_setup_reset_vmsa(struct vcpu_svm *svm);
+
 #else	/* !CONFIG_HYGON_CSV */
 
 static inline void __init csv_init(struct kvm_x86_ops *ops) { }
 static inline void csv_exit(void) { }
 static inline int csv_alloc_trans_mempool(void) { return -ENOMEM; }
 static inline void csv_free_trans_mempool(void) { }
+
+static inline void csv2_sync_reset_vmsa(struct vcpu_svm *svm) { }
+static inline void csv2_free_reset_vmsa(struct vcpu_svm *svm) { }
+static inline int csv2_setup_reset_vmsa(struct vcpu_svm *svm) { return 0; }
 
 #endif	/* CONFIG_HYGON_CSV */
 
