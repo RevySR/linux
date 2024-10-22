@@ -19,7 +19,6 @@
 #include <linux/misc_cgroup.h>
 #include <linux/processor.h>
 #include <linux/trace_events.h>
-#include <linux/psp-hygon.h>
 
 #include <asm/pkru.h>
 #include <asm/trapnr.h>

@@ -28,6 +28,9 @@
 /* Function and variable pointers for hooks */
 struct hygon_kvm_hooks_table hygon_kvm_hooks;
 
+/* enable/disable CSV3 support */
+static bool csv3_enabled = true;
+
 static struct kvm_x86_ops csv_x86_ops;
 static const char csv_vm_mnonce[] = "VM_ATTESTATION";
 static DEFINE_MUTEX(csv_cmd_batch_mutex);
@@ -901,48 +904,6 @@ static bool csv3_guest(struct kvm *kvm)
 	return sev_es_guest(kvm) && csv->csv3_active;
 }
 
-static int csv_sync_vmsa(struct vcpu_svm *svm)
-{
-	struct sev_es_save_area *save = svm->sev_es.vmsa;
-
-	/* Check some debug related fields before encrypting the VMSA */
-	if (svm->vcpu.guest_debug || (svm->vmcb->save.dr7 & ~DR7_FIXED_1))
-		return -EINVAL;
-
-	memcpy(save, &svm->vmcb->save, sizeof(svm->vmcb->save));
-
-	/* Sync registgers per spec. */
-	save->rax = svm->vcpu.arch.regs[VCPU_REGS_RAX];
-	save->rdx = svm->vcpu.arch.regs[VCPU_REGS_RDX];
-	save->rip = svm->vcpu.arch.regs[VCPU_REGS_RIP];
-	save->xcr0 = svm->vcpu.arch.xcr0;
-	save->xss  = svm->vcpu.arch.ia32_xss;
-
-	return 0;
-}
-
-static int __csv_issue_cmd(int fd, int id, void *data, int *error)
-{
-	struct fd f;
-	int ret;
-
-	f = fdget(fd);
-	if (!f.file)
-		return -EBADF;
-
-	ret = sev_issue_cmd_external_user(f.file, id, data, error);
-
-	fdput(f);
-	return ret;
-}
-
-static int csv_issue_cmd(struct kvm *kvm, int id, void *data, int *error)
-{
-	struct kvm_sev_info *sev = &to_kvm_svm(kvm)->sev_info;
-
-	return __csv_issue_cmd(sev->fd, id, data, error);
-}
-
 static inline void csv3_init_update_npt(struct csv3_data_update_npt *update_npt,
 					gpa_t gpa, u32 error, u32 handle)
 {
@@ -1094,8 +1055,9 @@ static int csv3_set_guest_private_memory(struct kvm *kvm)
 			set_guest_private_memory->regions_paddr = __sme_pa(regions);
 
 			/* set secury memory region for launch enrypt data */
-			ret = csv_issue_cmd(kvm, CSV3_CMD_SET_GUEST_PRIVATE_MEMORY,
-					set_guest_private_memory, &error);
+			ret = hygon_kvm_hooks.sev_issue_cmd(kvm,
+						CSV3_CMD_SET_GUEST_PRIVATE_MEMORY,
+						set_guest_private_memory, &error);
 			if (ret)
 				goto e_free_smr;
 
@@ -1216,8 +1178,8 @@ static int csv3_launch_encrypt_data(struct kvm *kvm, struct kvm_sev_cmd *argp)
 	}
 
 	clflush_cache_range(data, params.len);
-	ret = csv_issue_cmd(kvm, CSV3_CMD_LAUNCH_ENCRYPT_DATA,
-			    encrypt_data, &argp->error);
+	ret = hygon_kvm_hooks.sev_issue_cmd(kvm, CSV3_CMD_LAUNCH_ENCRYPT_DATA,
+					    encrypt_data, &argp->error);
 
 	kfree(encrypt_data);
 block_free:
@@ -1226,6 +1188,26 @@ data_free:
 	vfree(data);
 exit:
 	return ret;
+}
+
+static int csv3_sync_vmsa(struct vcpu_svm *svm)
+{
+	struct sev_es_save_area *save = svm->sev_es.vmsa;
+
+	/* Check some debug related fields before encrypting the VMSA */
+	if (svm->vcpu.guest_debug || (svm->vmcb->save.dr7 & ~DR7_FIXED_1))
+		return -EINVAL;
+
+	memcpy(save, &svm->vmcb->save, sizeof(svm->vmcb->save));
+
+	/* Sync registgers per spec. */
+	save->rax = svm->vcpu.arch.regs[VCPU_REGS_RAX];
+	save->rdx = svm->vcpu.arch.regs[VCPU_REGS_RDX];
+	save->rip = svm->vcpu.arch.regs[VCPU_REGS_RIP];
+	save->xcr0 = svm->vcpu.arch.xcr0;
+	save->xss  = svm->vcpu.arch.ia32_xss;
+
+	return 0;
 }
 
 static int csv3_launch_encrypt_vmcb(struct kvm *kvm, struct kvm_sev_cmd *argp)
@@ -1248,7 +1230,7 @@ static int csv3_launch_encrypt_vmcb(struct kvm *kvm, struct kvm_sev_cmd *argp)
 	kvm_for_each_vcpu(i, vcpu, kvm) {
 		struct vcpu_svm *svm = to_svm(vcpu);
 
-		ret = csv_sync_vmsa(svm);
+		ret = csv3_sync_vmsa(svm);
 		if (ret)
 			goto e_free;
 		clflush_cache_range(svm->sev_es.vmsa, PAGE_SIZE);
@@ -1259,8 +1241,9 @@ static int csv3_launch_encrypt_vmcb(struct kvm *kvm, struct kvm_sev_cmd *argp)
 		encrypt_vmcb->vmsa_len = PAGE_SIZE;
 		encrypt_vmcb->shadow_vmcb_addr = __sme_pa(svm->vmcb);
 		encrypt_vmcb->shadow_vmcb_len = PAGE_SIZE;
-		ret = csv_issue_cmd(kvm, CSV3_CMD_LAUNCH_ENCRYPT_VMCB,
-				    encrypt_vmcb, &argp->error);
+		ret = hygon_kvm_hooks.sev_issue_cmd(kvm,
+						CSV3_CMD_LAUNCH_ENCRYPT_VMCB,
+						encrypt_vmcb, &argp->error);
 		if (ret)
 			goto e_free;
 
@@ -1285,7 +1268,8 @@ csv3_send_encrypt_data_query_lengths(struct kvm *kvm, struct kvm_sev_cmd *argp,
 
 	memset(&data, 0, sizeof(data));
 	data.handle = sev->handle;
-	ret = csv_issue_cmd(kvm, CSV3_CMD_SEND_ENCRYPT_DATA, &data, &argp->error);
+	ret = hygon_kvm_hooks.sev_issue_cmd(kvm, CSV3_CMD_SEND_ENCRYPT_DATA,
+					    &data, &argp->error);
 
 	params->hdr_len = data.hdr_len;
 	params->trans_len = data.trans_len;
@@ -1389,14 +1373,16 @@ static int csv3_send_encrypt_data(struct kvm *kvm, struct kvm_sev_cmd *argp)
 	clflush_cache_range(guest_block, PAGE_SIZE);
 
 	data.flag = CSV3_SEND_ENCRYPT_DATA_SET_READONLY;
-	ret = csv_issue_cmd(kvm, CSV3_CMD_SEND_ENCRYPT_DATA, &data, &argp->error);
+	ret = hygon_kvm_hooks.sev_issue_cmd(kvm, CSV3_CMD_SEND_ENCRYPT_DATA,
+					    &data, &argp->error);
 	if (ret)
 		goto e_free_trans_data;
 
 	kvm_flush_remote_tlbs(kvm);
 
 	data.flag = CSV3_SEND_ENCRYPT_DATA_MIGRATE_PAGE;
-	ret = csv_issue_cmd(kvm, CSV3_CMD_SEND_ENCRYPT_DATA, &data, &argp->error);
+	ret = hygon_kvm_hooks.sev_issue_cmd(kvm, CSV3_CMD_SEND_ENCRYPT_DATA,
+					    &data, &argp->error);
 	if (ret)
 		goto e_free_trans_data;
 
@@ -1440,7 +1426,8 @@ csv3_send_encrypt_context_query_lengths(struct kvm *kvm, struct kvm_sev_cmd *arg
 
 	memset(&data, 0, sizeof(data));
 	data.handle = sev->handle;
-	ret = csv_issue_cmd(kvm, CSV3_CMD_SEND_ENCRYPT_CONTEXT, &data, &argp->error);
+	ret = hygon_kvm_hooks.sev_issue_cmd(kvm, CSV3_CMD_SEND_ENCRYPT_CONTEXT,
+					    &data, &argp->error);
 
 	params->hdr_len = data.hdr_len;
 	params->trans_len = data.trans_len;
@@ -1515,7 +1502,8 @@ static int csv3_send_encrypt_context(struct kvm *kvm, struct kvm_sev_cmd *argp)
 	/* flush hdr, trans data, trans block, secure VMSAs */
 	wbinvd_on_all_cpus();
 
-	ret = csv_issue_cmd(kvm, CSV3_CMD_SEND_ENCRYPT_CONTEXT, &data, &argp->error);
+	ret = hygon_kvm_hooks.sev_issue_cmd(kvm, CSV3_CMD_SEND_ENCRYPT_CONTEXT,
+					    &data, &argp->error);
 
 	if (ret)
 		goto e_free_trans_data;
@@ -1648,8 +1636,8 @@ static int csv3_receive_encrypt_data(struct kvm *kvm, struct kvm_sev_cmd *argp)
 	clflush_cache_range(trans_data, params.trans_len);
 	clflush_cache_range(trans_block, PAGE_SIZE);
 	clflush_cache_range(guest_block, PAGE_SIZE);
-	ret = csv_issue_cmd(kvm, CSV3_CMD_RECEIVE_ENCRYPT_DATA, &data,
-			    &argp->error);
+	ret = hygon_kvm_hooks.sev_issue_cmd(kvm, CSV3_CMD_RECEIVE_ENCRYPT_DATA,
+					    &data, &argp->error);
 
 e_free_trans_data:
 	vfree(trans_data);
@@ -1772,8 +1760,8 @@ static int csv3_receive_encrypt_context(struct kvm *kvm, struct kvm_sev_cmd *arg
 	clflush_cache_range(shadow_vmcb_block, PAGE_SIZE);
 	clflush_cache_range(secure_vmcb_block, PAGE_SIZE);
 
-	ret = csv_issue_cmd(kvm, CSV3_CMD_RECEIVE_ENCRYPT_CONTEXT, &data,
-			    &argp->error);
+	ret = hygon_kvm_hooks.sev_issue_cmd(kvm, CSV3_CMD_RECEIVE_ENCRYPT_CONTEXT,
+					    &data, &argp->error);
 	if (ret)
 		goto e_free_shadow_vmcb_block;
 
@@ -1834,6 +1822,9 @@ static int csv3_mmio_page_fault(struct kvm_vcpu *vcpu, gva_t gpa, u32 error_code
 	struct csv3_data_update_npt *update_npt;
 	int psp_ret;
 
+	if (!hygon_kvm_hooks.sev_hooks_installed)
+		return -EFAULT;
+
 	update_npt = kzalloc(sizeof(*update_npt), GFP_KERNEL);
 	if (!update_npt) {
 		r = -ENOMEM;
@@ -1846,7 +1837,8 @@ static int csv3_mmio_page_fault(struct kvm_vcpu *vcpu, gva_t gpa, u32 error_code
 	update_npt->page_attr_mask = page_attr_mask.val;
 	update_npt->level = CSV3_PG_LEVEL_4K;
 
-	r = csv_issue_cmd(vcpu->kvm, CSV3_CMD_UPDATE_NPT, update_npt, &psp_ret);
+	r = hygon_kvm_hooks.sev_issue_cmd(vcpu->kvm, CSV3_CMD_UPDATE_NPT,
+					  update_npt, &psp_ret);
 
 	if (psp_ret != SEV_RET_SUCCESS)
 		r = -EFAULT;
@@ -1865,6 +1857,9 @@ static int __csv3_page_fault(struct kvm_vcpu *vcpu, gva_t gpa,
 	struct kvm_svm *kvm_svm = to_kvm_svm(vcpu->kvm);
 	int psp_ret = 0;
 
+	if (!hygon_kvm_hooks.sev_hooks_installed)
+		return -EFAULT;
+
 	update_npt = kzalloc(sizeof(*update_npt), GFP_KERNEL);
 	if (!update_npt) {
 		r = -ENOMEM;
@@ -1880,7 +1875,8 @@ static int __csv3_page_fault(struct kvm_vcpu *vcpu, gva_t gpa,
 	if (!csv3_is_mmio_pfn(pfn))
 		update_npt->spa |= sme_me_mask;
 
-	r = csv_issue_cmd(vcpu->kvm, CSV3_CMD_UPDATE_NPT, update_npt, &psp_ret);
+	r = hygon_kvm_hooks.sev_issue_cmd(vcpu->kvm, CSV3_CMD_UPDATE_NPT,
+					  update_npt, &psp_ret);
 
 	kvm_make_request(KVM_REQ_TLB_FLUSH, vcpu);
 	kvm_flush_remote_tlbs(vcpu->kvm);
@@ -2255,6 +2251,10 @@ static int csv_mem_enc_ioctl(struct kvm *kvm, void __user *argp)
 		r = csv_receive_update_vmsa(kvm, &sev_cmd);
 		break;
 	case KVM_CSV3_INIT:
+		if (!csv3_enabled) {
+			r = -ENOTTY;
+			goto out;
+		}
 		r = csv3_guest_init(kvm, &sev_cmd);
 		break;
 	case KVM_CSV3_LAUNCH_ENCRYPT_DATA:
@@ -2290,6 +2290,7 @@ static int csv_mem_enc_ioctl(struct kvm *kvm, void __user *argp)
 	if (copy_to_user(argp, &sev_cmd, sizeof(struct kvm_sev_cmd)))
 		r = -EFAULT;
 
+out:
 	mutex_unlock(&kvm->lock);
 	return r;
 }
@@ -2561,6 +2562,15 @@ void __init csv_hardware_setup(unsigned int max_csv_asid)
 	 * will not work if the allocation fails.
 	 */
 	csv_alloc_asid_userid_array(nr_asids);
+
+	/* CSV3 depends on X86_FEATURE_CSV3 */
+	if (boot_cpu_has(X86_FEATURE_SEV_ES) && boot_cpu_has(X86_FEATURE_CSV3))
+		csv3_enabled = true;
+	else
+		csv3_enabled = false;
+
+	pr_info("CSV3 %s (ASIDs 1 - %u)\n",
+		csv3_enabled ? "enabled" : "disabled", max_csv_asid);
 }
 
 void csv_hardware_unsetup(void)
