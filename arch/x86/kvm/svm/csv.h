@@ -14,6 +14,14 @@
 
 #ifdef CONFIG_HYGON_CSV
 
+/*
+ * Hooks table: a table of function and variable pointers filled in
+ * when module init.
+ */
+extern struct hygon_kvm_hooks_table {
+	bool sev_hooks_installed;
+} hygon_kvm_hooks;
+
 void __init csv_init(struct kvm_x86_ops *ops);
 void csv_exit(void);
 

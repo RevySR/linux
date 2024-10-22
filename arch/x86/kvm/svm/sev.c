@@ -34,6 +34,8 @@
 #include "cpuid.h"
 #include "trace.h"
 
+#include "csv.h"
+
 #ifndef CONFIG_KVM_AMD_SEV
 /*
  * When this config is not defined, SEV feature is not supported and APIs in
@@ -2571,6 +2573,14 @@ void __init sev_set_cpu_caps(void)
 		kvm_cpu_cap_clear(X86_FEATURE_SEV_ES);
 }
 
+#ifdef CONFIG_HYGON_CSV
+/* Code to set all of the function and vaiable pointers */
+static void sev_install_hooks(void)
+{
+	hygon_kvm_hooks.sev_hooks_installed = true;
+}
+#endif
+
 void __init sev_hardware_setup(void)
 {
 #ifdef CONFIG_KVM_AMD_SEV
@@ -2715,6 +2725,18 @@ out:
 	if (!sev_es_enabled || !cpu_feature_enabled(X86_FEATURE_DEBUG_SWAP) ||
 	    !cpu_feature_enabled(X86_FEATURE_NO_NESTED_DATA_BP))
 		sev_es_debug_swap_enabled = false;
+
+#ifdef CONFIG_HYGON_CSV
+	/* Setup resources which are necessary for HYGON CSV */
+	if (is_x86_vendor_hygon()) {
+		/*
+		 * Install sev related function and variable pointers hooks
+		 * no matter @sev_enabled is false.
+		 */
+		sev_install_hooks();
+	}
+#endif
+
 #endif
 }
 

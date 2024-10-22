@@ -25,6 +25,9 @@
 #undef  pr_fmt
 #define pr_fmt(fmt) "CSV: " fmt
 
+/* Function and variable pointers for hooks */
+struct hygon_kvm_hooks_table hygon_kvm_hooks;
+
 struct encrypt_data_block {
 	struct {
 		u64 npages:	12;
