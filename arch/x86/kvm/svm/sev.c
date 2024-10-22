@@ -79,11 +79,6 @@ static unsigned int nr_asids;
 static unsigned long *sev_asid_bitmap;
 static unsigned long *sev_reclaim_asid_bitmap;
 
-static DEFINE_MUTEX(csv_cmd_batch_mutex);
-
-static int alloc_trans_mempool(void);
-static void free_trans_mempool(void);
-
 struct enc_region {
 	struct list_head list;
 	unsigned long npages;
@@ -453,28 +448,6 @@ static int sev_issue_cmd(struct kvm *kvm, int id, void *data, int *error)
 	struct kvm_sev_info *sev = &to_kvm_svm(kvm)->sev_info;
 
 	return __sev_issue_cmd(sev->fd, id, data, error);
-}
-
-static int __csv_issue_ringbuf_cmds(int fd, int *psp_ret)
-{
-	struct fd f;
-	int ret;
-
-	f = fdget(fd);
-	if (!f.file)
-		return -EBADF;
-
-	ret = csv_issue_ringbuf_cmds_external_user(f.file, psp_ret);
-
-	fdput(f);
-	return ret;
-}
-
-static int csv_issue_ringbuf_cmds(struct kvm *kvm, int *psp_ret)
-{
-	struct kvm_sev_info *sev = &to_kvm_svm(kvm)->sev_info;
-
-	return __csv_issue_ringbuf_cmds(sev->fd, psp_ret);
 }
 
 static int sev_launch_start(struct kvm *kvm, struct kvm_sev_cmd *argp)
@@ -2218,8 +2191,6 @@ out_fput:
 	return ret;
 }
 
-static int csv_command_batch(struct kvm *kvm, struct kvm_sev_cmd *argp);
-
 int sev_mem_enc_ioctl(struct kvm *kvm, void __user *argp)
 {
 	struct kvm_sev_cmd sev_cmd;
@@ -2316,14 +2287,6 @@ int sev_mem_enc_ioctl(struct kvm *kvm, void __user *argp)
 	case KVM_SEV_RECEIVE_FINISH:
 		r = sev_receive_finish(kvm, &sev_cmd);
 		break;
-	case KVM_CSV_COMMAND_BATCH:
-		if (is_x86_vendor_hygon()) {
-			mutex_lock(&csv_cmd_batch_mutex);
-			r = csv_command_batch(kvm, &sev_cmd);
-			mutex_unlock(&csv_cmd_batch_mutex);
-			break;
-		}
-		fallthrough;
 	default:
 		r = -EINVAL;
 		goto out;
@@ -2575,10 +2538,13 @@ void __init sev_set_cpu_caps(void)
 /* Code to set all of the function and vaiable pointers */
 static void sev_install_hooks(void)
 {
+	hygon_kvm_hooks.sev_enabled = &sev_enabled;
+	hygon_kvm_hooks.sev_me_mask = &sev_me_mask;
 	hygon_kvm_hooks.sev_issue_cmd = sev_issue_cmd;
 	hygon_kvm_hooks.get_num_contig_pages = get_num_contig_pages;
 	hygon_kvm_hooks.sev_pin_memory = sev_pin_memory;
 	hygon_kvm_hooks.sev_unpin_memory = sev_unpin_memory;
+	hygon_kvm_hooks.sev_clflush_pages = sev_clflush_pages;
 
 	hygon_kvm_hooks.sev_hooks_installed = true;
 }
@@ -2650,7 +2616,7 @@ void __init sev_hardware_setup(void)
 #endif
 
 		/* Initialize buffer to accelerate migration of CSV/CSV2 guest */
-		if (alloc_trans_mempool()) {
+		if (csv_alloc_trans_mempool()) {
 #ifdef CONFIG_KVM_SUPPORTS_CSV_REUSE_ASID
 			kfree(csv_asid_userid_array);
 			csv_asid_userid_array = NULL;
@@ -2752,7 +2718,7 @@ void sev_hardware_unsetup(void)
 	sev_flush_asids(1, max_sev_asid);
 
 	if (is_x86_vendor_hygon()) {
-		free_trans_mempool();
+		csv_free_trans_mempool();
 #ifdef CONFIG_KVM_SUPPORTS_CSV_REUSE_ASID
 		kfree(csv_asid_userid_array);
 #endif
@@ -3637,498 +3603,6 @@ void sev_vcpu_deliver_sipi_vector(struct kvm_vcpu *vcpu, u8 vector)
 		return;
 
 	ghcb_set_sw_exit_info_2(svm->sev_es.ghcb, 1);
-}
-
-/*--1024--1023--1024--1023--*/
-#define TRANS_MEMPOOL_1ST_BLOCK_OFFSET		0
-#define TRANS_MEMPOOL_2ND_BLOCK_OFFSET		(1024 << PAGE_SHIFT)
-#define TRANS_MEMPOOL_3RD_BLOCK_OFFSET		(2047 << PAGE_SHIFT)
-#define TRANS_MEMPOOL_4TH_BLOCK_OFFSET		(3071 << PAGE_SHIFT)
-#define TRANS_MEMPOOL_BLOCKS_MAX_OFFSET		(4094 << PAGE_SHIFT)
-#define TRANS_MEMPOOL_BLOCK_NUM			4
-#define TRANS_MEMPOOL_BLOCK_SIZE		(1024 * PAGE_SIZE)
-
-static size_t g_mempool_offset;
-void *g_trans_mempool[TRANS_MEMPOOL_BLOCK_NUM] = { 0, };
-
-static void reset_mempool_offset(void)
-{
-	g_mempool_offset = 0;
-}
-
-static int alloc_trans_mempool(void)
-{
-	int i;
-
-	for (i = 0; i < TRANS_MEMPOOL_BLOCK_NUM; i++) {
-		WARN_ONCE(g_trans_mempool[i],
-			  "CSV: g_trans_mempool[%d] was tainted\n", i);
-
-		g_trans_mempool[i] = kzalloc(TRANS_MEMPOOL_BLOCK_SIZE, GFP_KERNEL);
-		if (!g_trans_mempool[i])
-			goto free_trans_mempool;
-	}
-
-	g_mempool_offset = 0;
-	return 0;
-
-free_trans_mempool:
-	for (i = 0; i < TRANS_MEMPOOL_BLOCK_NUM; i++) {
-		kfree(g_trans_mempool[i]);
-		g_trans_mempool[i] = NULL;
-	}
-
-	return -ENOMEM;
-}
-
-static void free_trans_mempool(void)
-{
-	int i;
-
-	for (i = 0; i < TRANS_MEMPOOL_BLOCK_NUM; i++) {
-		kfree(g_trans_mempool[i]);
-		g_trans_mempool[i] = NULL;
-	}
-
-	g_mempool_offset = 0;
-}
-
-static void __maybe_unused *get_trans_data_from_mempool(size_t size)
-{
-	void *trans = NULL;
-	char *trans_data = NULL;
-	int i;
-	size_t offset;
-
-	if (g_mempool_offset < TRANS_MEMPOOL_2ND_BLOCK_OFFSET) {
-		i = 0;
-		offset = g_mempool_offset - TRANS_MEMPOOL_1ST_BLOCK_OFFSET;
-	} else if (g_mempool_offset < TRANS_MEMPOOL_3RD_BLOCK_OFFSET) {
-		i = 1;
-		offset = g_mempool_offset - TRANS_MEMPOOL_2ND_BLOCK_OFFSET;
-	} else if (g_mempool_offset < TRANS_MEMPOOL_4TH_BLOCK_OFFSET) {
-		i = 2;
-		offset = g_mempool_offset - TRANS_MEMPOOL_3RD_BLOCK_OFFSET;
-	} else if (g_mempool_offset < TRANS_MEMPOOL_BLOCKS_MAX_OFFSET) {
-		i = 3;
-		offset = g_mempool_offset - TRANS_MEMPOOL_4TH_BLOCK_OFFSET;
-	} else {
-		pr_err("CSV: mempool is full (offset: %lu)\n", g_mempool_offset);
-		return NULL;
-	}
-
-	trans_data = (char *)g_trans_mempool[i];
-	trans = &trans_data[offset];
-	g_mempool_offset += size;
-
-	return trans;
-}
-
-static int csv_ringbuf_infos_free(struct kvm *kvm,
-				  struct csv_ringbuf_infos *ringbuf_infos)
-{
-	int i;
-
-	for (i = 0; i < ringbuf_infos->num; i++) {
-		struct csv_ringbuf_info_item *item = ringbuf_infos->item[i];
-
-		if (item) {
-			if (item->data_vaddr)
-				kfree((void *)item->data_vaddr);
-
-			if (item->hdr_vaddr)
-				kfree((void *)item->hdr_vaddr);
-
-			if (item->pages)
-				sev_unpin_memory(kvm, item->pages, item->n);
-
-			kfree(item);
-
-			ringbuf_infos->item[i] = NULL;
-		}
-	}
-
-	return 0;
-}
-
-static int
-sev_send_update_data_to_ringbuf(struct kvm *kvm,
-				int prio,
-				uintptr_t data_ptr,
-				struct csv_ringbuf_infos *ringbuf_infos)
-{
-	struct kvm_sev_info *sev = &to_kvm_svm(kvm)->sev_info;
-	struct sev_data_send_update_data *data;
-	struct kvm_sev_send_update_data params;
-	struct csv_ringbuf_info_item *item;
-	void *hdr, *trans_data;
-	struct page **guest_page;
-	unsigned long n;
-	int ret, offset;
-
-	if (!sev_guest(kvm))
-		return -ENOTTY;
-
-	if (copy_from_user(&params, (void __user *)data_ptr,
-			sizeof(struct kvm_sev_send_update_data)))
-		return -EFAULT;
-
-	/*
-	 * userspace shouldn't query either header or trans length in ringbuf
-	 * mode.
-	 */
-	if (!params.trans_len || !params.hdr_len)
-		return -EINVAL;
-
-	if (!params.trans_uaddr || !params.guest_uaddr ||
-	    !params.guest_len || !params.hdr_uaddr)
-		return -EINVAL;
-
-	/* Check if we are crossing the page boundary */
-	offset = params.guest_uaddr & (PAGE_SIZE - 1);
-	if (params.guest_len > PAGE_SIZE || (params.guest_len + offset) > PAGE_SIZE)
-		return -EINVAL;
-
-	/* Pin guest memory */
-	guest_page = sev_pin_memory(kvm, params.guest_uaddr & PAGE_MASK,
-				    PAGE_SIZE, &n, 0);
-	if (IS_ERR(guest_page))
-		return PTR_ERR(guest_page);
-
-	/* Allocate memory for header and transport buffer */
-	ret = -ENOMEM;
-	hdr = kmalloc(params.hdr_len, GFP_KERNEL);
-	if (!hdr)
-		goto e_unpin;
-
-	trans_data = get_trans_data_from_mempool(params.trans_len);
-	if (!trans_data)
-		goto e_free_hdr;
-
-	data = kzalloc(sizeof(*data), GFP_KERNEL);
-	if (!data)
-		goto e_free_hdr;
-
-	data->hdr_address = __psp_pa(hdr);
-	data->hdr_len = params.hdr_len;
-	data->trans_address = __psp_pa(trans_data);
-	data->trans_len = params.trans_len;
-
-	/* The SEND_UPDATE_DATA command requires C-bit to be always set. */
-	data->guest_address = (page_to_pfn(guest_page[0]) << PAGE_SHIFT) +
-				offset;
-	data->guest_address |= sev_me_mask;
-	data->guest_len = params.guest_len;
-	data->handle = sev->handle;
-
-	ret = csv_fill_cmd_queue(prio, SEV_CMD_SEND_UPDATE_DATA, data, 0);
-	if (ret)
-		goto e_free;
-
-	/*
-	 * Create item to save page info and pointer, which will be freed
-	 * in function csv_command_batch because it will be used after PSP
-	 * return for copy_to_user.
-	 */
-	item = kzalloc(sizeof(*item), GFP_KERNEL);
-	if (!item) {
-		ret = -ENOMEM;
-		goto e_free;
-	}
-
-	item->pages = guest_page;
-	item->n = n;
-	item->hdr_vaddr = (uintptr_t)hdr;
-	item->trans_vaddr = (uintptr_t)trans_data;
-	item->data_vaddr = (uintptr_t)data;
-	item->hdr_uaddr = params.hdr_uaddr;
-	item->trans_uaddr = params.trans_uaddr;
-	item->hdr_len = params.hdr_len;
-	item->trans_len = params.trans_len;
-
-	ringbuf_infos->item[ringbuf_infos->num] = item;
-	ringbuf_infos->num++;
-
-	/* copy to ring buffer success, data freed after commands completed */
-	goto finish;
-
-e_free:
-	kfree(data);
-e_free_hdr:
-	kfree(hdr);
-e_unpin:
-	sev_unpin_memory(kvm, guest_page, n);
-
-finish:
-	return ret;
-}
-
-static int
-sev_send_update_data_copy_to_user(struct kvm *kvm,
-				  struct csv_ringbuf_infos *ringbuf_infos)
-{
-	int i, ret = 0;
-
-	for (i = 0; i < ringbuf_infos->num; i++) {
-		struct csv_ringbuf_info_item *item = ringbuf_infos->item[i];
-
-		/* copy transport buffer to user space */
-		if (copy_to_user((void __user *)item->trans_uaddr,
-				 (void *)item->trans_vaddr, item->trans_len)) {
-			ret = -EFAULT;
-			break;
-		}
-
-		/* Copy packet header to userspace. */
-		if (copy_to_user((void __user *)item->hdr_uaddr,
-				 (void *)item->hdr_vaddr, item->hdr_len)) {
-			ret = -EFAULT;
-			break;
-		}
-	}
-
-	return ret;
-}
-
-static int
-sev_receive_update_data_to_ringbuf(struct kvm *kvm,
-				   int prio,
-				   uintptr_t data_ptr,
-				   struct csv_ringbuf_infos *ringbuf_infos)
-{
-	struct kvm_sev_info *sev = &to_kvm_svm(kvm)->sev_info;
-	struct kvm_sev_receive_update_data params;
-	struct sev_data_receive_update_data *data;
-	struct csv_ringbuf_info_item *item;
-	void *hdr = NULL, *trans = NULL;
-	struct page **guest_page;
-	unsigned long n;
-	int ret, offset;
-
-	if (!sev_guest(kvm))
-		return -EINVAL;
-
-	if (copy_from_user(&params, (void __user *)data_ptr,
-			sizeof(struct kvm_sev_receive_update_data)))
-		return -EFAULT;
-
-	if (!params.hdr_uaddr || !params.hdr_len ||
-	    !params.guest_uaddr || !params.guest_len ||
-	    !params.trans_uaddr || !params.trans_len)
-		return -EINVAL;
-
-	/* Check if we are crossing the page boundary */
-	offset = params.guest_uaddr & (PAGE_SIZE - 1);
-	if (params.guest_len > PAGE_SIZE || (params.guest_len + offset) > PAGE_SIZE)
-		return -EINVAL;
-
-	hdr = psp_copy_user_blob(params.hdr_uaddr, params.hdr_len);
-	if (IS_ERR(hdr))
-		return PTR_ERR(hdr);
-
-	ret = -ENOMEM;
-	trans = get_trans_data_from_mempool(params.trans_len);
-	if (!trans)
-		goto e_free_hdr;
-
-	if (copy_from_user(trans, (void __user *)params.trans_uaddr,
-			params.trans_len)) {
-		ret = -EFAULT;
-		goto e_free_hdr;
-	}
-
-	data = kzalloc(sizeof(*data), GFP_KERNEL);
-	if (!data)
-		goto e_free_hdr;
-
-	data->hdr_address = __psp_pa(hdr);
-	data->hdr_len = params.hdr_len;
-	data->trans_address = __psp_pa(trans);
-	data->trans_len = params.trans_len;
-
-	/* Pin guest memory */
-	guest_page = sev_pin_memory(kvm, params.guest_uaddr & PAGE_MASK,
-				    PAGE_SIZE, &n, 1);
-	if (IS_ERR(guest_page)) {
-		ret = PTR_ERR(guest_page);
-		goto e_free;
-	}
-
-	/*
-	 * Flush (on non-coherent CPUs) before RECEIVE_UPDATE_DATA, the PSP
-	 * encrypts the written data with the guest's key, and the cache may
-	 * contain dirty, unencrypted data.
-	 */
-	sev_clflush_pages(guest_page, n);
-
-	/* The RECEIVE_UPDATE_DATA command requires C-bit to be always set. */
-	data->guest_address = (page_to_pfn(guest_page[0]) << PAGE_SHIFT) +
-				offset;
-	data->guest_address |= sev_me_mask;
-	data->guest_len = params.guest_len;
-	data->handle = sev->handle;
-
-	ret = csv_fill_cmd_queue(prio, SEV_CMD_RECEIVE_UPDATE_DATA, data, 0);
-
-	if (ret)
-		goto e_unpin;
-
-	/*
-	 * Create item to save page info and pointer, whitch will be freed
-	 * in function csv_command_batch because it will be used after PSP
-	 * return for copy_to_user.
-	 */
-	item = kzalloc(sizeof(*item), GFP_KERNEL);
-	if (!item) {
-		ret = -ENOMEM;
-		goto e_unpin;
-	}
-
-	item->pages = guest_page;
-	item->n = n;
-	item->hdr_vaddr = (uintptr_t)hdr;
-	item->trans_vaddr = (uintptr_t)trans;
-	item->data_vaddr = (uintptr_t)data;
-
-	ringbuf_infos->item[ringbuf_infos->num] = item;
-	ringbuf_infos->num++;
-
-	/* copy to ring buffer success, data freed after commands completed */
-	goto finish;
-
-e_unpin:
-	sev_unpin_memory(kvm, guest_page, n);
-e_free:
-	kfree(data);
-e_free_hdr:
-	kfree(hdr);
-
-finish:
-	return ret;
-}
-
-typedef int (*csv_ringbuf_input_fn)(struct kvm *kvm, int prio,
-				    uintptr_t data_ptr,
-				    struct csv_ringbuf_infos *ringbuf_infos);
-typedef int (*csv_ringbuf_output_fn)(struct kvm *kvm,
-				     struct csv_ringbuf_infos *ringbuf_infos);
-
-static int get_cmd_helpers(__u32 cmd,
-			   csv_ringbuf_input_fn *to_ringbuf_fn,
-			   csv_ringbuf_output_fn *to_user_fn)
-{
-	int ret = 0;
-
-	/* copy commands to ring buffer*/
-	switch (cmd) {
-	case KVM_SEV_SEND_UPDATE_DATA:
-		*to_ringbuf_fn = sev_send_update_data_to_ringbuf;
-		*to_user_fn = sev_send_update_data_copy_to_user;
-		break;
-	case KVM_SEV_RECEIVE_UPDATE_DATA:
-		*to_ringbuf_fn = sev_receive_update_data_to_ringbuf;
-		*to_user_fn = NULL;
-		break;
-	default:
-		ret = -EINVAL;
-		break;
-	}
-
-	return ret;
-}
-
-static int csv_command_batch(struct kvm *kvm, struct kvm_sev_cmd *argp)
-{
-	int ret;
-	struct kvm_csv_command_batch params;
-	uintptr_t node_addr;
-	struct csv_ringbuf_infos *ringbuf_infos;
-	csv_ringbuf_input_fn csv_cmd_to_ringbuf_fn = NULL;
-	csv_ringbuf_output_fn csv_copy_to_user_fn = NULL;
-	int prio = CSV_COMMAND_PRIORITY_HIGH;
-
-	if (!sev_guest(kvm))
-		return -ENOTTY;
-
-	if (copy_from_user(&params, (void __user *)(uintptr_t)argp->data,
-			sizeof(struct kvm_csv_command_batch)))
-		return -EFAULT;
-
-	/* return directly if node list is NULL */
-	if (!params.csv_batch_list_uaddr)
-		return 0;
-
-	/* ring buffer init */
-	if (csv_ring_buffer_queue_init())
-		return -EINVAL;
-
-	if (get_cmd_helpers(params.command_id,
-			    &csv_cmd_to_ringbuf_fn, &csv_copy_to_user_fn)) {
-		ret = -EINVAL;
-		goto err_free_ring_buffer;
-	}
-
-	ringbuf_infos = kzalloc(sizeof(*ringbuf_infos), GFP_KERNEL);
-	if (!ringbuf_infos) {
-		ret = -ENOMEM;
-		goto err_free_ring_buffer;
-	}
-
-	node_addr = (uintptr_t)params.csv_batch_list_uaddr;
-	while (node_addr) {
-		struct kvm_csv_batch_list_node node;
-
-		if (copy_from_user(&node, (void __user *)node_addr,
-				sizeof(struct kvm_csv_batch_list_node))) {
-			ret = -EFAULT;
-			goto err_free_ring_buffer_infos_items;
-		}
-
-		if (ringbuf_infos->num > SVM_RING_BUFFER_MAX) {
-			pr_err("%s: ring num is too large:%d, cmd:0x%x\n",
-				__func__, ringbuf_infos->num, params.command_id);
-
-			ret = -EINVAL;
-			goto err_free_ring_buffer_infos_items;
-		}
-
-		if (csv_cmd_to_ringbuf_fn(kvm, prio,
-					  (uintptr_t)node.cmd_data_addr,
-					  ringbuf_infos)) {
-			ret = -EFAULT;
-			goto err_free_ring_buffer_infos_items;
-		}
-
-		/* 1st half set to HIGH queue, 2nd half set to LOW queue */
-		if (ringbuf_infos->num == SVM_RING_BUFFER_MAX / 2)
-			prio = CSV_COMMAND_PRIORITY_LOW;
-
-		node_addr = node.next_cmd_addr;
-	}
-
-	/* ring buffer process */
-	ret = csv_issue_ringbuf_cmds(kvm, &argp->error);
-	if (ret)
-		goto err_free_ring_buffer_infos_items;
-
-	ret = csv_check_stat_queue_status(&argp->error);
-	if (ret)
-		goto err_free_ring_buffer_infos_items;
-
-	if (csv_copy_to_user_fn && csv_copy_to_user_fn(kvm, ringbuf_infos)) {
-		ret = -EFAULT;
-		goto err_free_ring_buffer_infos_items;
-	}
-
-err_free_ring_buffer_infos_items:
-	csv_ringbuf_infos_free(kvm, ringbuf_infos);
-	kfree(ringbuf_infos);
-	reset_mempool_offset();
-
-err_free_ring_buffer:
-	csv_ring_buffer_queue_free();
-
-	return ret;
 }
 
 int sev_es_ghcb_map(struct vcpu_svm *svm, u64 ghcb_gpa)
