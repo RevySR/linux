@@ -1442,7 +1442,7 @@ static void csv_guest_memory_reclaimed(struct kvm *kvm)
 	}
 }
 
-static int csv_mem_enc_op(struct kvm *kvm, void __user *argp)
+static int csv_mem_enc_ioctl(struct kvm *kvm, void __user *argp)
 {
 	struct kvm_sev_cmd sev_cmd;
 	int r = -EINVAL;
@@ -1493,12 +1493,24 @@ out:
 	return r;
 }
 
+void csv_exit(void)
+{
+}
+
 void __init csv_init(struct kvm_x86_ops *ops)
 {
-	if (boot_cpu_has(X86_FEATURE_CSV3)) {
-		memcpy(&csv_x86_ops, ops, sizeof(struct kvm_x86_ops));
+	/*
+	 * Hygon CSV is indicated by X86_FEATURE_SEV, return directly if CSV
+	 * is unsupported.
+	 */
+	if (!boot_cpu_has(X86_FEATURE_SEV))
+		return;
 
-		ops->mem_enc_ioctl = csv_mem_enc_op;
+	memcpy(&csv_x86_ops, ops, sizeof(struct kvm_x86_ops));
+
+	ops->mem_enc_ioctl = csv_mem_enc_ioctl;
+
+	if (boot_cpu_has(X86_FEATURE_SEV_ES) && boot_cpu_has(X86_FEATURE_CSV3)) {
 		ops->vm_destroy = csv_vm_destroy;
 		ops->vm_size = sizeof(struct kvm_svm_csv);
 		ops->handle_exit = csv_handle_exit;
