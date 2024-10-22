@@ -9899,7 +9899,7 @@ int kvm_emulate_hypercall(struct kvm_vcpu *vcpu)
 	}
 
 	if (static_call(kvm_x86_get_cpl)(vcpu) != 0 &&
-	    !(nr == KVM_HC_VM_ATTESTATION || nr == KVM_HC_PSP_OP)) {
+	    !(is_x86_vendor_hygon() && (nr == KVM_HC_VM_ATTESTATION || nr == KVM_HC_PSP_OP))) {
 		ret = -KVM_EPERM;
 		goto out;
 	}
@@ -9964,7 +9964,7 @@ int kvm_emulate_hypercall(struct kvm_vcpu *vcpu)
 	}
 	case KVM_HC_VM_ATTESTATION:
 		ret = -KVM_ENOSYS;
-		if (kvm_x86_ops.vm_attestation)
+		if (is_x86_vendor_hygon() && kvm_x86_ops.vm_attestation)
 			ret = static_call(kvm_x86_vm_attestation)(vcpu->kvm, a0, a1);
 		break;
 	case KVM_HC_PSP_OP:

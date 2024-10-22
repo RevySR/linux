@@ -5228,7 +5228,6 @@ static struct kvm_x86_ops svm_x86_ops __initdata = {
 	.vcpu_deliver_sipi_vector = svm_vcpu_deliver_sipi_vector,
 	.vcpu_get_apicv_inhibit_reasons = avic_vcpu_get_apicv_inhibit_reasons,
 
-	.vm_attestation = sev_vm_attestation,
 	.control_pre_system_reset = csv_control_pre_system_reset,
 	.control_post_system_reset = csv_control_post_system_reset,
 	.arch_hypercall = kvm_hygon_arch_hypercall,

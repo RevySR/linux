@@ -81,8 +81,6 @@ static unsigned long *sev_reclaim_asid_bitmap;
 
 static DEFINE_MUTEX(csv_cmd_batch_mutex);
 
-static const char sev_vm_mnonce[] = "VM_ATTESTATION";
-
 static int alloc_trans_mempool(void);
 static void free_trans_mempool(void);
 
@@ -2577,6 +2575,11 @@ void __init sev_set_cpu_caps(void)
 /* Code to set all of the function and vaiable pointers */
 static void sev_install_hooks(void)
 {
+	hygon_kvm_hooks.sev_issue_cmd = sev_issue_cmd;
+	hygon_kvm_hooks.get_num_contig_pages = get_num_contig_pages;
+	hygon_kvm_hooks.sev_pin_memory = sev_pin_memory;
+	hygon_kvm_hooks.sev_unpin_memory = sev_unpin_memory;
+
 	hygon_kvm_hooks.sev_hooks_installed = true;
 }
 #endif
@@ -3634,71 +3637,6 @@ void sev_vcpu_deliver_sipi_vector(struct kvm_vcpu *vcpu, u8 vector)
 		return;
 
 	ghcb_set_sw_exit_info_2(svm->sev_es.ghcb, 1);
-}
-
-int sev_vm_attestation(struct kvm *kvm, unsigned long gpa, unsigned long len)
-{
-	struct kvm_sev_info *sev = &to_kvm_svm(kvm)->sev_info;
-	struct sev_data_attestation_report *data = NULL;
-	struct page **pages;
-	unsigned long guest_uaddr, n;
-	int ret = 0, offset, error;
-
-	if (!sev_guest(kvm) || !is_x86_vendor_hygon())
-		return -ENOTTY;
-
-	/*
-	 * The physical address of guest must valid and page aligned, and
-	 * the length of guest memory region must be page size aligned.
-	 */
-	if (!gpa || (gpa & ~PAGE_MASK) || (len & ~PAGE_MASK)) {
-		pr_err("invalid guest address or length\n");
-		return -EFAULT;
-	}
-
-	guest_uaddr = gfn_to_hva(kvm, gpa_to_gfn(gpa));
-	pages = sev_pin_memory(kvm, guest_uaddr, len, &n, 1);
-	if (IS_ERR(pages))
-		return PTR_ERR(pages);
-
-	/*
-	 * The attestation report must be copied into contiguous memory region,
-	 * lets verify that userspace memory pages are contiguous before we
-	 * issue commmand.
-	 */
-	if (get_num_contig_pages(0, pages, n) != n) {
-		ret = -EINVAL;
-		goto e_unpin_memory;
-	}
-
-	ret = -ENOMEM;
-	data = kzalloc(sizeof(*data), GFP_KERNEL);
-	if (!data)
-		goto e_unpin_memory;
-
-	/* sev_vm_mnonce indicates attestation request from guest */
-	if (sizeof(sev_vm_mnonce) >= sizeof(data->mnonce)) {
-		ret = -EINVAL;
-		goto e_free;
-	}
-
-	memcpy(data->mnonce, sev_vm_mnonce, sizeof(sev_vm_mnonce));
-
-	offset = guest_uaddr & (PAGE_SIZE - 1);
-	data->address = __sme_page_pa(pages[0]) + offset;
-	data->len = len;
-
-	data->handle = sev->handle;
-	ret = sev_issue_cmd(kvm, SEV_CMD_ATTESTATION_REPORT, data, &error);
-
-	if (ret)
-		pr_err("vm attestation ret %#x, error %#x\n", ret, error);
-
-e_free:
-	kfree(data);
-e_unpin_memory:
-	sev_unpin_memory(kvm, pages, n);
-	return ret;
 }
 
 /*--1024--1023--1024--1023--*/
