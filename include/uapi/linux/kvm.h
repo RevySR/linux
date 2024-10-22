@@ -2038,11 +2038,6 @@ struct kvm_sev_receive_update_data {
 	__u32 trans_len;
 };
 
-struct kvm_csv_init {
-	__u64 userid_addr;
-	__u32 len;
-};
-
 #define KVM_DEV_ASSIGN_ENABLE_IOMMU	(1 << 0)
 #define KVM_DEV_ASSIGN_PCI_2_3		(1 << 1)
 #define KVM_DEV_ASSIGN_MASK_INTX	(1 << 2)
@@ -2317,6 +2312,11 @@ struct kvm_csv_receive_update_vmsa {
 	__u32 hdr_len;
 	__u64 trans_uaddr;
 	__u32 trans_len;
+};
+
+struct kvm_csv_init {
+	__u64 userid_addr;
+	__u32 len;
 };
 
 /* ioctls for control vm during system reset, currently only for CSV */

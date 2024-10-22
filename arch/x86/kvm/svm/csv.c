@@ -137,7 +137,7 @@ static void csv_reset_mempool_offset(void)
 	g_mempool_offset = 0;
 }
 
-void csv_free_trans_mempool(void)
+static void csv_free_trans_mempool(void)
 {
 	int i;
 
@@ -149,7 +149,7 @@ void csv_free_trans_mempool(void)
 	csv_reset_mempool_offset();
 }
 
-int csv_alloc_trans_mempool(void)
+static int csv_alloc_trans_mempool(void)
 {
 	int i;
 
@@ -2505,6 +2505,69 @@ static int csv_control_post_system_reset(struct kvm *kvm)
 	}
 
 	return 0;
+}
+
+#ifdef CONFIG_KVM_SUPPORTS_CSV_REUSE_ASID
+
+struct csv_asid_userid *csv_asid_userid_array;
+
+static int csv_alloc_asid_userid_array(unsigned int nr_asids)
+{
+	int ret = 0;
+
+	csv_asid_userid_array = kcalloc(nr_asids, sizeof(struct csv_asid_userid),
+					GFP_KERNEL_ACCOUNT);
+	if (!csv_asid_userid_array)
+		ret = -ENOMEM;
+
+	if (ret)
+		pr_warn("Fail to allocate array, reuse ASID is unavailable\n");
+
+	return ret;
+}
+
+static void csv_free_asid_userid_array(void)
+{
+	kfree(csv_asid_userid_array);
+	csv_asid_userid_array = NULL;
+}
+
+#else	/* !CONFIG_KVM_SUPPORTS_CSV_REUSE_ASID */
+
+static int csv_alloc_asid_userid_array(unsigned int nr_asids)
+{
+	pr_warn("reuse ASID is unavailable\n");
+	return -EFAULT;
+}
+
+static void csv_free_asid_userid_array(void)
+{
+}
+
+#endif	/* CONFIG_KVM_SUPPORTS_CSV_REUSE_ASID */
+
+void __init csv_hardware_setup(unsigned int max_csv_asid)
+{
+	unsigned int nr_asids = max_csv_asid + 1;
+
+	/*
+	 * Allocate a memory pool to speed up live migration of
+	 * the CSV/CSV2 guests. If the allocation fails, no
+	 * acceleration is performed at live migration.
+	 */
+	csv_alloc_trans_mempool();
+	/*
+	 * Allocate a buffer to support reuse ASID, reuse ASID
+	 * will not work if the allocation fails.
+	 */
+	csv_alloc_asid_userid_array(nr_asids);
+}
+
+void csv_hardware_unsetup(void)
+{
+	/* Free the memory that allocated in csv_hardware_setup(). */
+	csv_free_trans_mempool();
+	csv_free_asid_userid_array();
 }
 
 void csv_exit(void)

@@ -157,7 +157,7 @@ config KVM_EXTERNAL_WRITE_TRACKING
 config KVM_SUPPORTS_CSV_REUSE_ASID
 	def_bool y
 	bool "Reuse the same ASID for different HYGON CSV guests"
-	depends on KVM_AMD_SEV && CPU_SUP_HYGON
+	depends on KVM_AMD_SEV && CPU_SUP_HYGON && HYGON_CSV
 	depends on !CGROUP_MISC
 	help
 	  Provide support for reuse the same ASID for difference HYGON
