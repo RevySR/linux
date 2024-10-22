@@ -64,19 +64,6 @@ static long csv_guest_ioctl(struct file *file, unsigned int cmd, unsigned long a
 	}
 }
 
-static void mem_test_init(void)
-{
-	char head_str[] = "test mem encrypt";
-	u64 *va_addr = __va(0x0);
-
-	if (va_addr) {
-		memset(va_addr, 0x66, PAGE_SIZE);
-		memcpy(va_addr, head_str, sizeof(head_str));
-		clflush_cache_range(va_addr, PAGE_SIZE);
-	} else
-		pr_err("Initialize 1 page for csv memory test failed!\n");
-}
-
 static const struct file_operations csv_guest_fops = {
 	.owner = THIS_MODULE,
 	.unlocked_ioctl = csv_guest_ioctl,
@@ -95,9 +82,6 @@ static int __init csv_guest_init(void)
 	// This module only working on CSV guest vm.
 	if (!cc_platform_has(CC_ATTR_GUEST_MEM_ENCRYPT))
 		return -ENODEV;
-
-	// Initialize 1 page for csv memory test
-	mem_test_init();
 
 	return misc_register(&csv_guest_dev);
 }

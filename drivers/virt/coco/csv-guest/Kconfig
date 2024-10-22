@@ -1,7 +1,7 @@
 config CSV_GUEST
 	tristate "HYGON CSV Guest driver"
 	default m
-	depends on AMD_MEM_ENCRYPT
+	depends on HYGON_CSV
 	help
 	  CSV firmware provides the guest a mechanism to communicate with
 	  the PSP without risk from a malicious hypervisor who wishes to read,
