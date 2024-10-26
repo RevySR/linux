@@ -910,7 +910,7 @@ int kvm_arch_vcpu_ioctl_run(struct kvm_vcpu *vcpu)
 
 	vcpu_load(vcpu);
 
-	if (!vcpu->wants_to_run) {
+	if (run->immediate_exit) {
 		ret = -EINTR;
 		goto out;
 	}
