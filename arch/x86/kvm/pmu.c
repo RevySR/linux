@@ -468,9 +468,9 @@ void kvm_pmu_handle_event(struct kvm_vcpu *vcpu)
 	}
 
 	/*
-	 * Release unused perf_events if the corresponding guest MSRs weren't
-	 * accessed during the last vCPU time slice (need_cleanup is set when
-	 * the vCPU is scheduled back in).
+	 * Unused perf_events are only released if the corresponding MSRs
+	 * weren't accessed during the last vCPU time slice. kvm_arch_sched_in
+	 * triggers KVM_REQ_PMU if cleanup is needed.
 	 */
 	if (unlikely(pmu->need_cleanup))
 		kvm_pmu_cleanup(vcpu);
