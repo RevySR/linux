@@ -1205,6 +1205,7 @@ int __ref online_pages(unsigned long pfn, unsigned long nr_pages,
 
 	/* reinitialise watermarks and update pcp limits */
 	init_per_zone_wmark_min();
+	init_min_cache_kbytes();
 
 	kswapd_run(nid);
 	kcompactd_run(nid);
@@ -2014,6 +2015,7 @@ int __ref offline_pages(unsigned long start_pfn, unsigned long nr_pages,
 
 	/* reinitialise watermarks and update pcp limits */
 	init_per_zone_wmark_min();
+	init_min_cache_kbytes();
 
 	if (!populated_zone(zone)) {
 		zone_pcp_reset(zone);

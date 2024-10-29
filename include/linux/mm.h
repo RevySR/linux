@@ -3202,6 +3202,7 @@ extern int __meminit early_pfn_to_nid(unsigned long pfn);
 #endif
 
 extern void set_dma_reserve(unsigned long new_dma_reserve);
+extern int __meminit init_min_cache_kbytes(void);
 extern void mem_init(void);
 extern void __init mmap_init(void);
 
