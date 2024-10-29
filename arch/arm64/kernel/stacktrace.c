@@ -6,7 +6,7 @@
  */
 #include <linux/kernel.h>
 #include <asm/unwind_hints.h>
-#include <asm-generic/orc_lookup.h>
+#include <asm/orc_lookup.h>
 #include <linux/efi.h>
 #include <linux/export.h>
 #include <linux/ftrace.h>

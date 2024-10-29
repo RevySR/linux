@@ -53,7 +53,7 @@
 #include <asm/efi.h>
 #include <asm/xen/hypervisor.h>
 #include <asm/mmu_context.h>
-#include <asm-generic/orc_lookup.h>
+#include <asm/orc_lookup.h>
 
 static int num_standard_resources;
 static struct resource *standard_resources;

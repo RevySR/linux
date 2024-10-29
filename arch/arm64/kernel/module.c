@@ -25,7 +25,7 @@
 #include <asm/insn.h>
 #include <asm/scs.h>
 #include <asm/sections.h>
-#include <asm-generic/orc_lookup.h>
+#include <asm/orc_lookup.h>
 
 static u64 module_direct_base __ro_after_init = 0;
 static u64 module_plt_base __ro_after_init = 0;

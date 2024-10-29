@@ -3,7 +3,7 @@
 #include <linux/module.h>
 #include <linux/sort.h>
 #include <asm/orc_types.h>
-#include <asm-generic/orc_lookup.h>
+#include <asm/orc_lookup.h>
 
 bool orc_init __ro_after_init;
 static unsigned int lookup_num_blocks __ro_after_init;
