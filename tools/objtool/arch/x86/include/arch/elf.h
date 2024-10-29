@@ -9,6 +9,5 @@
 #define R_DATA64	R_X86_64_PC32
 #define R_TEXT32	R_X86_64_PC32
 #define R_TEXT64	R_X86_64_PC32
-#define R_PCREL         R_X86_64_PC32
 
 #endif /* _OBJTOOL_ARCH_ELF */
