@@ -14,6 +14,10 @@
 #include <objtool/warn.h>
 #include <objtool/endianness.h>
 
+#ifdef __aarch64__
+#define bp_reg fp_reg
+#endif
+
 bool __weak orc_ignore_section(struct section *sec)
 {
 	return false;
@@ -59,7 +63,7 @@ int orc_create(struct objtool_file *file)
 	struct list_head orc_list;
 
 	struct orc_entry null = {
-		.fp_reg	= ORC_REG_UNDEFINED,
+		.bp_reg	= ORC_REG_UNDEFINED,
 		.type	= UNWIND_HINT_TYPE_CALL,
 	};
 
