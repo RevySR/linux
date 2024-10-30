@@ -14,7 +14,6 @@
 #include <stdint.h>
 
 #include <objtool/builtin.h>
-#include <objtool/check.h>
 #include <objtool/elf.h>
 #include <objtool/insn.h>
 #include <objtool/warn.h>

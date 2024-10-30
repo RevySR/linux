@@ -6,6 +6,8 @@
 #ifndef _INSN_H
 #define _INSN_H
 
+/* This is an arm64 specific version for check.h */
+#ifdef __aarch64__
 #include <objtool/objtool.h>
 #include <objtool/arch.h>
 
@@ -59,6 +61,23 @@ struct instruction {
 	struct symbol *sym;
 	struct stack_op *stack_ops;
 	struct cfi_state *cfi;
+};
+
+struct alt_group {
+	/*
+	 * Pointer from a replacement group to the original group.  NULL if it
+	 * *is* the original group.
+	 */
+	struct alt_group *orig_group;
+
+	/* First and last instructions in the group */
+	struct instruction *first_insn, *last_insn, *nop;
+
+	/*
+	 * Byte-offset-addressed len-sized array of pointers to CFI structs.
+	 * This is shared with the other alt_groups in the same alternative.
+	 */
+	struct cfi_state **cfi;
 };
 
 static inline struct symbol *insn_func(struct instruction *insn)
@@ -149,4 +168,6 @@ int decode_instructions(struct objtool_file *file);
 	for (insn = next_insn_same_sec(file, insn); insn;		\
 	     insn = next_insn_same_sec(file, insn))
 
+extern unsigned long nr_insns;
+#endif /* __aarch64__ */
 #endif /* _INSN_H */

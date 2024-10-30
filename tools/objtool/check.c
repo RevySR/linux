@@ -27,6 +27,103 @@ struct alternative {
 	bool skip_orig;
 };
 
+struct instruction *find_insn(struct objtool_file *file,
+			      struct section *sec, unsigned long offset)
+{
+	struct instruction *insn;
+
+	hash_for_each_possible(file->insn_hash, insn, hash, sec_offset_hash(sec, offset)) {
+		if (insn->sec == sec && insn->offset == offset)
+			return insn;
+	}
+
+	return NULL;
+}
+
+struct instruction *next_insn_same_sec(struct objtool_file *file,
+				       struct instruction *insn)
+{
+	if (insn->idx == INSN_CHUNK_MAX)
+		return find_insn(file, insn->sec, insn->offset + insn->len);
+
+	insn++;
+	if (!insn->len)
+		return NULL;
+
+	return insn;
+}
+
+static struct instruction *next_insn_same_func(struct objtool_file *file,
+					       struct instruction *insn)
+{
+	struct instruction *next = next_insn_same_sec(file, insn);
+	struct symbol *func = insn_func(insn);
+
+	if (!func)
+		return NULL;
+
+	if (next && insn_func(next) == func)
+		return next;
+
+	/* Check if we're already in the subfunction: */
+	if (func == func->cfunc)
+		return NULL;
+
+	/* Move to the subfunction: */
+	return find_insn(file, func->cfunc->sec, func->cfunc->offset);
+}
+
+static struct instruction *prev_insn_same_sec(struct objtool_file *file,
+					      struct instruction *insn)
+{
+	if (insn->idx == 0) {
+		if (insn->prev_len)
+			return find_insn(file, insn->sec, insn->offset - insn->prev_len);
+		return NULL;
+	}
+
+	return insn - 1;
+}
+
+static struct instruction *prev_insn_same_sym(struct objtool_file *file,
+					      struct instruction *insn)
+{
+	struct instruction *prev = prev_insn_same_sec(file, insn);
+
+	if (prev && insn_func(prev) == insn_func(insn))
+		return prev;
+
+	return NULL;
+}
+
+#define for_each_insn(file, insn)					\
+	for (struct section *__sec, *__fake = (struct section *)1;	\
+	     __fake; __fake = NULL)					\
+		for_each_sec(file, __sec)				\
+			sec_for_each_insn(file, __sec, insn)
+
+#define func_for_each_insn(file, func, insn)				\
+	for (insn = find_insn(file, func->sec, func->offset);		\
+	     insn;							\
+	     insn = next_insn_same_func(file, insn))
+
+#define sym_for_each_insn(file, sym, insn)				\
+	for (insn = find_insn(file, sym->sec, sym->offset);		\
+	     insn && insn->offset < sym->offset + sym->len;		\
+	     insn = next_insn_same_sec(file, insn))
+
+#define sym_for_each_insn_continue_reverse(file, sym, insn)		\
+	for (insn = prev_insn_same_sec(file, insn);			\
+	     insn && insn->offset >= sym->offset;			\
+	     insn = prev_insn_same_sec(file, insn))
+
+#define sec_for_each_insn_from(file, insn)				\
+	for (; insn; insn = next_insn_same_sec(file, insn))
+
+#define sec_for_each_insn_continue(file, insn)				\
+	for (insn = next_insn_same_sec(file, insn); insn;		\
+	     insn = next_insn_same_sec(file, insn))
+
 static inline struct symbol *insn_call_dest(struct instruction *insn)
 {
 	if (insn->type == INSN_JUMP_DYNAMIC ||
@@ -155,6 +252,21 @@ static bool __dead_end_function(struct objtool_file *file, struct symbol *func,
 static bool dead_end_function(struct objtool_file *file, struct symbol *func)
 {
 	return __dead_end_function(file, func, 0);
+}
+
+static void init_insn_state(struct objtool_file *file, struct insn_state *state,
+			    struct section *sec)
+{
+	memset(state, 0, sizeof(*state));
+	init_cfi_state(&state->cfi);
+
+	/*
+	 * We need the full vmlinux for noinstr validation, otherwise we can
+	 * not correctly determine insn_call_dest(insn)->sec (external symbols
+	 * do not have a section).
+	 */
+	if (opts.link && opts.noinstr && sec)
+		state->noinstr = sec->noinstr;
 }
 
 static unsigned long nr_insns;
@@ -360,6 +472,19 @@ static int init_pv_ops(struct objtool_file *file)
 		add_pv_ops(file, pv_ops);
 
 	return 0;
+}
+
+static struct instruction *find_last_insn(struct objtool_file *file,
+					  struct section *sec)
+{
+	struct instruction *insn = NULL;
+	unsigned int offset;
+	unsigned int end = (sec->sh.sh_size > 10) ? sec->sh.sh_size - 10 : 0;
+
+	for (offset = sec->sh.sh_size - 1; offset >= end && !insn; offset--)
+		insn = find_insn(file, sec, offset);
+
+	return insn;
 }
 
 /*
@@ -1101,6 +1226,26 @@ __weak bool arch_is_embedded_insn(struct symbol *sym)
 	return false;
 }
 
+static struct reloc *insn_reloc(struct objtool_file *file, struct instruction *insn)
+{
+	struct reloc *reloc;
+
+	if (insn->no_reloc)
+		return NULL;
+
+	if (!file)
+		return NULL;
+
+	reloc = find_reloc_by_dest_range(file->elf, insn->sec,
+					 insn->offset, insn->len);
+	if (!reloc) {
+		insn->no_reloc = 1;
+		return NULL;
+	}
+
+	return reloc;
+}
+
 static void remove_insn_ops(struct instruction *insn)
 {
 	struct stack_op *op, *next;
@@ -1258,6 +1403,24 @@ static void add_return_call(struct objtool_file *file, struct instruction *insn,
 
 	if (add)
 		list_add_tail(&insn->call_node, &file->return_thunk_list);
+}
+
+static bool is_first_func_insn(struct objtool_file *file,
+			       struct instruction *insn, struct symbol *sym)
+{
+	if (insn->offset == sym->offset)
+		return true;
+
+	/* Allow direct CALL/JMP past ENDBR */
+	if (opts.ibt) {
+		struct instruction *prev = prev_insn_same_sym(file, insn);
+
+		if (prev && prev->type == INSN_ENDBR &&
+		    insn->offset == sym->offset + prev->len)
+			return true;
+	}
+
+	return false;
 }
 
 /*
@@ -3040,6 +3203,53 @@ static int handle_insn_ops(struct instruction *insn,
 	return 0;
 }
 
+static bool insn_cfi_match(struct instruction *insn, struct cfi_state *cfi2)
+{
+	struct cfi_state *cfi1 = insn->cfi;
+	int i;
+
+	if (!cfi1) {
+		WARN("CFI missing");
+		return false;
+	}
+
+	if (memcmp(&cfi1->cfa, &cfi2->cfa, sizeof(cfi1->cfa))) {
+
+		WARN_INSN(insn, "stack state mismatch: cfa1=%d%+d cfa2=%d%+d",
+			  cfi1->cfa.base, cfi1->cfa.offset,
+			  cfi2->cfa.base, cfi2->cfa.offset);
+
+	} else if (memcmp(&cfi1->regs, &cfi2->regs, sizeof(cfi1->regs))) {
+		for (i = 0; i < CFI_NUM_REGS; i++) {
+			if (!memcmp(&cfi1->regs[i], &cfi2->regs[i],
+				    sizeof(struct cfi_reg)))
+				continue;
+
+			WARN_INSN(insn, "stack state mismatch: reg1[%d]=%d%+d reg2[%d]=%d%+d",
+				  i, cfi1->regs[i].base, cfi1->regs[i].offset,
+				  i, cfi2->regs[i].base, cfi2->regs[i].offset);
+			break;
+		}
+
+	} else if (cfi1->type != cfi2->type) {
+
+		WARN_INSN(insn, "stack state mismatch: type1=%d type2=%d",
+			  cfi1->type, cfi2->type);
+
+	} else if (cfi1->drap != cfi2->drap ||
+		   (cfi1->drap && cfi1->drap_reg != cfi2->drap_reg) ||
+		   (cfi1->drap && cfi1->drap_offset != cfi2->drap_offset)) {
+
+		WARN_INSN(insn, "stack state mismatch: drap1=%d(%d,%d) drap2=%d(%d,%d)",
+			  cfi1->drap, cfi1->drap_reg, cfi1->drap_offset,
+			  cfi2->drap, cfi2->drap_reg, cfi2->drap_offset);
+
+	} else
+		return true;
+
+	return false;
+}
+
 static inline bool func_uaccess_safe(struct symbol *func)
 {
 	if (func)
@@ -3273,7 +3483,7 @@ static int validate_branch(struct objtool_file *file, struct symbol *func,
 
 		visited = VISITED_BRANCH << state.uaccess;
 		if (insn->visited & VISITED_BRANCH_MASK) {
-			if (!insn->hint && !insn_cfi_match(insn, &state.cfi, true))
+			if (!insn->hint && !insn_cfi_match(insn, &state.cfi))
 				return 1;
 
 			if (insn->visited & visited)
