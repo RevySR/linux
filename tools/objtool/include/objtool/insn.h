@@ -110,10 +110,10 @@ bool insn_cfi_match(struct instruction *insn, struct cfi_state *cfi2,
 bool is_first_func_insn(struct objtool_file *file,
 			struct instruction *insn, struct symbol *sym);
 
-int decode_instructions(struct objtool_file *file);
 /* temporily add for revert */
 #ifdef __aarch64__
 int read_unwind_hints(struct objtool_file *file);
+int decode_instructions(struct objtool_file *file);
 #endif
 
 #define sec_for_each_insn(file, _sec, insn)				\
@@ -149,5 +149,4 @@ int read_unwind_hints(struct objtool_file *file);
 	for (insn = next_insn_same_sec(file, insn); insn;		\
 	     insn = next_insn_same_sec(file, insn))
 
-extern unsigned long nr_insns;
 #endif /* _INSN_H */
