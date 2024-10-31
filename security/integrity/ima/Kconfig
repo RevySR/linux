@@ -11,6 +11,7 @@ config IMA
 	select TCG_TPM if HAS_IOMEM
 	select TCG_TIS if TCG_TPM && X86
 	select TCG_CRB if TCG_TPM && ACPI
+	select TCG_HYGON if TCG_TPM && CPU_SUP_HYGON
 	select TCG_IBMVTPM if TCG_TPM && PPC_PSERIES
 	select INTEGRITY_AUDIT if AUDIT
 	help
