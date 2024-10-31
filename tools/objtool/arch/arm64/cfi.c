@@ -8,6 +8,7 @@
 
 #include <linux/objtool_types.h>
 #include <objtool/cfi.h>
+#include <arch/cfi.h>
 #include <objtool/builtin.h>
 #include <objtool/warn.h>
 

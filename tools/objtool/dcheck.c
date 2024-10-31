@@ -11,6 +11,7 @@
 #include <objtool/objtool.h>
 #include <objtool/builtin.h>
 #include <objtool/insn.h>
+#include <arch/cfi.h>
 
 /*
  * Find the destination instructions for all jumps.

@@ -8,6 +8,7 @@
 #include <objtool/endianness.h>
 #include <objtool/insn.h>
 #include <objtool/warn.h>
+#include <arch/cfi.h>
 
 int read_unwind_hints(struct objtool_file *file)
 {

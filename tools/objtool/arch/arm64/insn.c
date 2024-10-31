@@ -8,6 +8,7 @@
 #include <objtool/builtin.h>
 #include <objtool/insn.h>
 #include <objtool/warn.h>
+#include <arch/cfi.h>
 
 struct instruction *find_insn(struct objtool_file *file,
 			      struct section *sec, unsigned long offset)
