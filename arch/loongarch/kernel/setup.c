@@ -430,10 +430,10 @@ static void __init writecombine_detect(void)
 	}
 
 	cpuname = iocsr_read64(LOONGARCH_IOCSR_CPUNAME);
-
+	cpuname &= 0x0000ffffffffffff;
 	switch (cpuname) {
 	case 0x0000303030364333:
-		wc_enabled = true;
+		wc_enabled = false;
 		break;
 	default:
 		break;
