@@ -52,8 +52,10 @@ void pch_pic_set_irq(struct loongarch_pch_pic *s, int irq, int level)
 		 * The irr register variable is cleared when the cpu writes to the
 		 * PCH_PIC_CLEAR_START address area
 		 */
-		if (s->edge & mask)
+		if (s->edge & mask) {
+			spin_unlock(&s->lock);
 			return;
+		}
 		s->irr &= ~mask;
 	}
 	pch_pic_update_irq(s, irq, level);
