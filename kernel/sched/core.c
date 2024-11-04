@@ -11113,10 +11113,6 @@ static int tg_set_cfs_bandwidth(struct task_group *tg, u64 period, u64 quota,
 	if (quota != RUNTIME_INF && quota > max_cfs_runtime)
 		return -EINVAL;
 
-	if (quota != RUNTIME_INF && (burst > quota ||
-				     burst + quota > max_cfs_runtime))
-		return -EINVAL;
-
 	/*
 	 * Bound burst to defend burst against overflow during bandwidth shift.
 	 */
