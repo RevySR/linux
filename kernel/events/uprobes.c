@@ -199,7 +199,8 @@ static int __replace_page(struct vm_area_struct *vma, unsigned long addr,
 		dec_mm_counter(mm, MM_ANONPAGES);
 
 	if (!folio_test_anon(old_folio)) {
-		dec_mm_counter(mm, mm_counter_file(old_page));
+		if (!is_zero_page(old_page))
+			dec_mm_counter(mm, mm_counter_file(old_page));
 		inc_mm_counter(mm, MM_ANONPAGES);
 	}
 
@@ -209,11 +210,15 @@ static int __replace_page(struct vm_area_struct *vma, unsigned long addr,
 		set_pte_at_notify(mm, addr, pvmw.pte,
 				  mk_pte(new_page, vma->vm_page_prot));
 
-	folio_remove_rmap_pte(old_folio, old_page, vma);
-	if (!folio_mapped(old_folio))
-		folio_free_swap(old_folio);
+	/* zero page won't be added to rmap, skip, see do_anonymous_page() */
+	if (!is_zero_page(old_page)) {
+		folio_remove_rmap_pte(old_folio, old_page, vma);
+		if (!folio_mapped(old_folio))
+			folio_free_swap(old_folio);
+	}
 	page_vma_mapped_walk_done(&pvmw);
-	folio_put(old_folio);
+	if (!is_zero_page(old_page))
+		folio_put(old_folio);
 
 	err = 0;
  unlock:
