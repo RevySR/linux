@@ -1,3 +1,7 @@
+#
+# Automatically generated file; DO NOT EDIT.
+# Linux/loongarch 6.6.52 Kernel Configuration
+#
 # CONFIG_LOCALVERSION_AUTO is not set
 CONFIG_SYSVIPC=y
 CONFIG_POSIX_MQUEUE=y
