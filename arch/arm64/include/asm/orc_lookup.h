@@ -35,8 +35,6 @@ extern unsigned int orc_lookup_end[];
 
 #ifndef __ASSEMBLY__
 
-#include <linux/orc_entry.h>
-
 #ifdef CONFIG_UNWINDER_ORC
 void orc_lookup_init(void);
 void orc_lookup_module_init(struct module *mod,

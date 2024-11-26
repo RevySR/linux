@@ -31,7 +31,6 @@ if [ "$SRCARCH" = "arm64" ]; then
 FILES="$FILES
 arch/arm64/include/asm/unwind_hints.h
 arch/arm64/include/asm/orc_types.h
-include/linux/orc_entry.h
 "
 fi
 
