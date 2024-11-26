@@ -14,17 +14,13 @@
 #include <objtool/warn.h>
 #include <objtool/endianness.h>
 
-#ifdef __aarch64__
-#define bp_reg fp_reg
-#endif
-
-#ifdef __loongarch__
-#define bp_reg fp_reg
-#endif
-
 bool __weak orc_ignore_section(struct section *sec)
 {
 	return false;
+}
+
+void __weak arch_init_orc_entry(struct orc_entry *entry)
+{
 }
 
 struct orc_list_entry {
@@ -66,10 +62,10 @@ int orc_create(struct objtool_file *file)
 	struct orc_list_entry *entry;
 	struct list_head orc_list;
 
-	struct orc_entry null = {
-		.bp_reg	= ORC_REG_UNDEFINED,
-		.type	= UNWIND_HINT_TYPE_CALL,
-	};
+	struct orc_entry null = { .type = ORC_TYPE_UNDEFINED };
+
+	/* Override orc_entry initialization for arch specific definition*/
+	arch_init_orc_entry(&null);
 
 	/* Build a deduplicated list of ORC entries: */
 	INIT_LIST_HEAD(&orc_list);

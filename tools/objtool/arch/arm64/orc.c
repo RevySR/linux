@@ -9,8 +9,15 @@
 #include <linux/objtool_types.h>
 
 #include <objtool/insn.h>
-#include <arch/orc.h>
 #include <objtool/endianness.h>
+#include <arch/orc.h>
+#include <asm/orc_types.h>
+
+void arch_init_orc_entry(struct orc_entry *entry)
+{
+	entry->fp_reg = ORC_REG_UNDEFINED;
+	entry->type   = UNWIND_HINT_TYPE_CALL;
+}
 
 int init_orc_entry(struct orc_entry *orc, struct cfi_state *cfi,
 		   struct instruction *insn)

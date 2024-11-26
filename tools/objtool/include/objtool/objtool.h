@@ -12,6 +12,8 @@
 
 #include <objtool/elf.h>
 
+#include <asm/orc_types.h>
+
 #define __weak __attribute__((weak))
 
 struct pv_state {
@@ -47,5 +49,6 @@ int check(struct objtool_file *file);
 int orc_dump(const char *objname);
 int orc_create(struct objtool_file *file);
 bool orc_ignore_section(struct section *sec);
+void arch_init_orc_entry(struct orc_entry *entry);
 
 #endif /* _OBJTOOL_H */
