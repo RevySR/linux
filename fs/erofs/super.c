@@ -638,7 +638,7 @@ static int erofs_fc_fill_super(struct super_block *sb, struct fs_context *fc)
 	}
 
 	sb->s_time_gran = 1;
-	sb->s_xattr = erofs_xattr_handlers;
+	sb->s_xattr = (const struct xattr_handler **)erofs_xattr_handlers;
 	sb->s_export_op = &erofs_export_ops;
 
 	if (test_opt(&sbi->opt, POSIX_ACL))
