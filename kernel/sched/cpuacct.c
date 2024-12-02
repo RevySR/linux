@@ -516,7 +516,7 @@ static unsigned long ca_running(struct cpuacct *ca, int cpu)
 		goto out;
 
 	if (!tg_cfs_throttled(tg, cpu))
-		nr_running += tg->cfs_rq[cpu]->h_nr_queued;
+		nr_running += tg->cfs_rq[cpu]->h_nr_runnable;
 #ifdef CONFIG_RT_GROUP_SCHED
 	if (!tg_rt_throttled(tg, cpu))
 		nr_running += tg->rt_rq[cpu]->rt_nr_running;
