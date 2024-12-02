@@ -2142,11 +2142,13 @@ immap_locked:
 	else
 		__lruvec_stat_mod_folio(new_folio, NR_FILE_THPS, HPAGE_PMD_NR);
 
-	if (nr_none) {
-		__lruvec_stat_mod_folio(new_folio, NR_FILE_PAGES, nr_none);
-		/* nr_none is always 0 for non-shmem. */
-		__lruvec_stat_mod_folio(new_folio, NR_SHMEM, nr_none);
-	}
+	/*
+	 * Increase the lru_stat of new folio, then decrease corresponding stat
+	 * of old folios.
+	 */
+	__lruvec_stat_mod_folio(new_folio, NR_FILE_PAGES, HPAGE_PMD_NR);
+	if (is_shmem)
+		__lruvec_stat_mod_folio(new_folio, NR_SHMEM, HPAGE_PMD_NR);
 
 	/*
 	 * Mark new_folio as uptodate before inserting it into the
@@ -2179,6 +2181,10 @@ immap_locked:
 	 * The collapse has succeeded, so free the old folios.
 	 */
 	list_for_each_entry_safe(folio, tmp, &pagelist, lru) {
+
+		lruvec_stat_mod_folio(folio, NR_FILE_PAGES, -folio_nr_pages(folio));
+		if (is_shmem)
+			lruvec_stat_mod_folio(folio, NR_SHMEM, -folio_nr_pages(folio));
 		list_del(&folio->lru);
 		folio->mapping = NULL;
 		folio_clear_active(folio);
