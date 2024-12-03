@@ -1370,6 +1370,53 @@ DECLARE_PER_CPU_SHARED_ALIGNED(struct rq, runqueues);
 
 struct sched_group;
 #ifdef CONFIG_SCHED_CORE
+enum sched_cookie_flags {
+	SCHED_COOKIE_MATCH_UNSET = 1 << 0, /* can match unset cookie threads */
+	SCHED_COOKIE_NO_GATHER = 1 << 1, /* don't gather tasks in load balance */
+	SCHED_COOKIE_FLAGS_MASK = (1 << 2) - 1,
+};
+
+/*
+ * A simple wrapper around refcount. An allocated sched_core_cookie's
+ * address is used to compute the cookie of the task.
+ */
+struct sched_core_cookie {
+	refcount_t refcnt;
+	u32 flags;
+};
+
+static inline bool sched_cookie_match_unset(unsigned long cookie)
+{
+	struct sched_core_cookie *cookiep = (struct sched_core_cookie *)cookie;
+
+	if (!cookie)
+		return false;
+
+	return cookiep->flags & SCHED_COOKIE_MATCH_UNSET;
+}
+
+static inline bool sched_cookie_no_gather(unsigned long cookie)
+{
+	struct sched_core_cookie *cookiep = (struct sched_core_cookie *)cookie;
+
+	if (!cookie)
+		return false;
+
+	return cookiep->flags & SCHED_COOKIE_NO_GATHER;
+}
+
+static inline bool __cookie_match(unsigned long a, unsigned long b)
+{
+	if (a == b)
+		return true;
+
+	if (a && b)
+		return false;
+
+	/* One of the cookie is NULL. Use OR to speed up. */
+	return sched_cookie_match_unset(a | b);
+}
+
 static inline struct cpumask *sched_group_span(struct sched_group *sg);
 
 DECLARE_STATIC_KEY_FALSE(__sched_core_enabled);
@@ -1420,7 +1467,8 @@ static inline bool sched_cpu_cookie_match(struct rq *rq, struct task_struct *p)
 	if (!sched_core_enabled(rq))
 		return true;
 
-	return rq->core->core_cookie == p->core_cookie;
+	return __cookie_match(rq->core->core_cookie, p->core_cookie);
+
 }
 
 static inline bool sched_core_cookie_match(struct rq *rq, struct task_struct *p)
@@ -1443,7 +1491,7 @@ static inline bool sched_core_cookie_match(struct rq *rq, struct task_struct *p)
 	 * A CPU in an idle core is always the best choice for tasks with
 	 * cookies.
 	 */
-	return idle_core || rq->core->core_cookie == p->core_cookie;
+	return idle_core || __cookie_match(rq->core->core_cookie, p->core_cookie);
 }
 
 static inline bool sched_group_cookie_match(struct rq *rq,

@@ -6245,7 +6245,7 @@ static inline bool is_task_rq_idle(struct task_struct *t)
 
 static inline bool cookie_equals(struct task_struct *a, unsigned long cookie)
 {
-	return is_task_rq_idle(a) || (a->core_cookie == cookie);
+	return is_task_rq_idle(a) || __cookie_match(a->core_cookie, cookie);
 }
 
 static inline bool cookie_match(struct task_struct *a, struct task_struct *b)
@@ -6253,7 +6253,7 @@ static inline bool cookie_match(struct task_struct *a, struct task_struct *b)
 	if (is_task_rq_idle(a) || is_task_rq_idle(b))
 		return true;
 
-	return a->core_cookie == b->core_cookie;
+	return __cookie_match(a->core_cookie, b->core_cookie);
 }
 
 static inline struct task_struct *pick_task(struct rq *rq)
@@ -6279,7 +6279,7 @@ pick_next_task(struct rq *rq, struct task_struct *prev, struct rq_flags *rf)
 {
 	struct task_struct *next, *p, *max = NULL;
 	const struct cpumask *smt_mask;
-	bool fi_before = false;
+	bool fi_before = false, core_allow_unset;
 	bool core_clock_updated = (rq == rq->core);
 	unsigned long cookie;
 	int i, cpu, occ = 0;
@@ -6328,11 +6328,23 @@ pick_next_task(struct rq *rq, struct task_struct *prev, struct rq_flags *rf)
 
 	put_prev_task_balance(rq, prev, rf);
 
+	core_allow_unset = sched_cookie_match_unset(rq->core->core_cookie);
 	smt_mask = cpu_smt_mask(cpu);
-	need_sync = !!rq->core->core_cookie;
+	need_sync = !!rq->core->core_cookie || core_allow_unset;
 
 	/* reset state */
 	rq->core->core_cookie = 0UL;
+
+	/* Restore cookie if the other ht has cookie. (Must be allow_unset) */
+	if (core_allow_unset) {
+		for_each_cpu_wrap(i, smt_mask, cpu + 1) {
+			rq_i = cpu_rq(i);
+			/* Now rq cookie is either NULL or allow_unset */
+			rq->core->core_cookie = rq_i->curr->core_cookie;
+			/* Assume we have only 2 HT. */
+			break;
+		}
+	}
 	if (rq->core->core_sibidle_count) {
 		if (!core_clock_updated) {
 			update_rq_clock(rq->core);
@@ -6369,7 +6381,7 @@ pick_next_task(struct rq *rq, struct task_struct *prev, struct rq_flags *rf)
 	 */
 	if (!need_sync) {
 		next = pick_task(rq);
-		if (!next->core_cookie) {
+		if (!next->core_cookie || next->core_cookie == rq->core->core_cookie) {
 			rq->core_pick = NULL;
 			/*
 			 * For robustness, update the min_vruntime_fi for
@@ -6612,6 +6624,9 @@ static void queue_core_balance(struct rq *rq)
 		return;
 
 	if (!rq->nr_running) /* not forced idle */
+		return;
+
+	if (sched_cookie_no_gather(rq->core->core_cookie))
 		return;
 
 	queue_balance_callback(rq, &per_cpu(core_balance_head, rq->cpu), sched_core_balance);
