@@ -243,12 +243,35 @@ out:
 	return err;
 }
 
+static void brd_do_discard(struct brd_device *brd, sector_t sector, u32 size)
+{
+	sector_t aligned_sector = (sector + PAGE_SECTORS) & ~PAGE_SECTORS;
+	struct page *page;
+
+	size -= (aligned_sector - sector) * SECTOR_SIZE;
+	xa_lock(&brd->brd_pages);
+	while (size >= PAGE_SIZE && aligned_sector < rd_size * 2) {
+		page = __xa_erase(&brd->brd_pages, aligned_sector >> PAGE_SECTORS_SHIFT);
+		if (page)
+			__free_page(page);
+		aligned_sector += PAGE_SECTORS;
+		size -= PAGE_SIZE;
+	}
+	xa_unlock(&brd->brd_pages);
+}
+
 static void brd_submit_bio(struct bio *bio)
 {
 	struct brd_device *brd = bio->bi_bdev->bd_disk->private_data;
 	sector_t sector = bio->bi_iter.bi_sector;
 	struct bio_vec bvec;
 	struct bvec_iter iter;
+
+	if (unlikely(op_is_discard(bio->bi_opf))) {
+		brd_do_discard(brd, sector, bio->bi_iter.bi_size);
+		bio_endio(bio);
+		return;
+	}
 
 	bio_for_each_segment(bvec, bio, iter) {
 		unsigned int len = bvec.bv_len;
@@ -376,7 +399,7 @@ static int brd_alloc(int i)
 	disk->private_data	= brd;
 	strscpy(disk->disk_name, buf, DISK_NAME_LEN);
 	set_capacity(disk, rd_size * 2);
-	
+
 	/*
 	 * This is so fdisk will align partitions on 4k, because of
 	 * direct_access API needing 4k alignment, returning a PFN
@@ -385,6 +408,9 @@ static int brd_alloc(int i)
 	 *  is harmless)
 	 */
 	blk_queue_physical_block_size(disk->queue, PAGE_SIZE);
+	blk_queue_max_discard_sectors(disk->queue, UINT_MAX);
+	disk->queue->limits.discard_granularity = PAGE_SIZE;
+	blk_queue_max_discard_segments(disk->queue, 1);
 
 	/* Tell the block layer that this is not a rotational device */
 	blk_queue_flag_set(QUEUE_FLAG_NONROT, disk->queue);
