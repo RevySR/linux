@@ -1079,6 +1079,10 @@ static irqreturn_t nvme_irq(int irq, void *data)
 	struct nvme_queue *nvmeq = data;
 	DEFINE_IO_COMP_BATCH(iob);
 
+#ifdef CONFIG_LOONGARCH
+	/* Ensure that the data is completely in place */
+	mb();
+#endif
 	if (nvme_poll_cq(nvmeq, &iob)) {
 		if (!rq_list_empty(iob.req_list))
 			nvme_pci_complete_batch(&iob);
