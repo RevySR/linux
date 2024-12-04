@@ -1697,7 +1697,7 @@ static __always_inline void zap_present_folio_ptes(struct mmu_gather *tlb,
 		struct vm_area_struct *vma, struct folio *folio,
 		struct page *page, pte_t *pte, pte_t ptent, unsigned int nr,
 		unsigned long addr, struct zap_details *details, int *rss,
-		bool *force_flush, bool *force_break)
+		bool *force_flush, bool *force_break, bool *any_skipped)
 {
 	struct mm_struct *mm = tlb->mm;
 	bool delay_rmap = false;
@@ -1723,8 +1723,8 @@ static __always_inline void zap_present_folio_ptes(struct mmu_gather *tlb,
 	arch_check_zapped_pte(vma, ptent);
 	tlb_remove_tlb_entries(tlb, pte, nr, addr);
 	if (unlikely(userfaultfd_pte_wp(vma, ptent)))
-		zap_install_uffd_wp_if_needed(vma, addr, pte, nr, details,
-					      ptent);
+		*any_skipped = zap_install_uffd_wp_if_needed(vma, addr, pte,
+							     nr, details, ptent);
 
 	if (!delay_rmap) {
 		folio_remove_rmap_ptes(folio, page, nr, vma);
@@ -1749,7 +1749,7 @@ static inline int zap_present_ptes(struct mmu_gather *tlb,
 		struct vm_area_struct *vma, pte_t *pte, pte_t ptent,
 		unsigned int max_nr, unsigned long addr,
 		struct zap_details *details, int *rss, bool *force_flush,
-		bool *force_break)
+		bool *force_break, bool *any_skipped)
 {
 	const fpb_t fpb_flags = FPB_IGNORE_DIRTY | FPB_IGNORE_SOFT_DIRTY;
 	struct mm_struct *mm = tlb->mm;
@@ -1764,15 +1764,17 @@ static inline int zap_present_ptes(struct mmu_gather *tlb,
 		arch_check_zapped_pte(vma, ptent);
 		tlb_remove_tlb_entry(tlb, pte, addr);
 		if (userfaultfd_pte_wp(vma, ptent))
-			zap_install_uffd_wp_if_needed(vma, addr, pte, 1,
-						      details, ptent);
+			*any_skipped = zap_install_uffd_wp_if_needed(vma, addr,
+						pte, 1, details, ptent);
 		ksm_might_unmap_zero_page(mm, ptent);
 		return 1;
 	}
 
 	folio = page_folio(page);
-	if (unlikely(!should_zap_folio(details, folio)))
+	if (unlikely(!should_zap_folio(details, folio))) {
+		*any_skipped = true;
 		return 1;
+	}
 
 	/*
 	 * Make sure that the common "small folio" case is as fast as possible
@@ -1784,22 +1786,23 @@ static inline int zap_present_ptes(struct mmu_gather *tlb,
 
 		zap_present_folio_ptes(tlb, vma, folio, page, pte, ptent, nr,
 				       addr, details, rss, force_flush,
-				       force_break);
+				       force_break, any_skipped);
 		return nr;
 	}
 	zap_present_folio_ptes(tlb, vma, folio, page, pte, ptent, 1, addr,
-			       details, rss, force_flush, force_break);
+			       details, rss, force_flush, force_break, any_skipped);
 	return 1;
 }
 
 static inline int zap_nonpresent_ptes(struct mmu_gather *tlb,
 		struct vm_area_struct *vma, pte_t *pte, pte_t ptent,
 		unsigned int max_nr, unsigned long addr,
-		struct zap_details *details, int *rss)
+		struct zap_details *details, int *rss, bool *any_skipped)
 {
 	swp_entry_t entry;
 	int nr = 1;
 
+	*any_skipped = true;
 	entry = pte_to_swp_entry(ptent);
 	if (is_device_private_entry(entry) ||
 	    is_device_exclusive_entry(entry)) {
@@ -1851,7 +1854,7 @@ static inline int zap_nonpresent_ptes(struct mmu_gather *tlb,
 		WARN_ON_ONCE(1);
 	}
 	clear_not_present_full_ptes(vma->vm_mm, addr, pte, nr, tlb->fullmm);
-	zap_install_uffd_wp_if_needed(vma, addr, pte, nr, details, ptent);
+	*any_skipped = zap_install_uffd_wp_if_needed(vma, addr, pte, nr, details, ptent);
 
 	return nr;
 }
@@ -1860,7 +1863,8 @@ static inline int do_zap_pte_range(struct mmu_gather *tlb,
 				   struct vm_area_struct *vma, pte_t *pte,
 				   unsigned long addr, unsigned long end,
 				   struct zap_details *details, int *rss,
-				   bool *force_flush, bool *force_break)
+				   bool *force_flush, bool *force_break,
+				   bool *any_skipped)
 {
 	pte_t ptent = ptep_get(pte);
 	int max_nr = (end - addr) / PAGE_SIZE;
@@ -1882,10 +1886,11 @@ static inline int do_zap_pte_range(struct mmu_gather *tlb,
 
 	if (pte_present(ptent))
 		nr += zap_present_ptes(tlb, vma, pte, ptent, max_nr, addr,
-				       details, rss, force_flush, force_break);
+				       details, rss, force_flush, force_break,
+				       any_skipped);
 	else
 		nr += zap_nonpresent_ptes(tlb, vma, pte, ptent, max_nr, addr,
-					  details, rss);
+					  details, rss, any_skipped);
 
 	return nr;
 }
@@ -1896,6 +1901,7 @@ static unsigned long zap_pte_range(struct mmu_gather *tlb,
 				struct zap_details *details)
 {
 	bool force_flush = false, force_break = false;
+	bool any_skipped = false;
 	struct mm_struct *mm = tlb->mm;
 	int rss[NR_MM_COUNTERS];
 	spinlock_t *ptl;
@@ -1916,7 +1922,7 @@ static unsigned long zap_pte_range(struct mmu_gather *tlb,
 			break;
 
 		nr = do_zap_pte_range(tlb, vma, pte, addr, end, details, rss,
-				      &force_flush, &force_break);
+				      &force_flush, &force_break, &any_skipped);
 		if (unlikely(force_break)) {
 			addr += nr * PAGE_SIZE;
 			break;
