@@ -26,20 +26,17 @@ bool can_set_direct_map(void)
 	 * rodata_full and DEBUG_PAGEALLOC require linear map to be
 	 * mapped at page granularity, so that it is possible to
 	 * protect/unprotect single pages.
-	 *
-	 * KFENCE pool requires page-granular mapping if initialized late.
 	 */
-	return rodata_full || debug_pagealloc_enabled() ||
-	       arm64_kfence_can_set_direct_map();
+	return rodata_full || debug_pagealloc_enabled();
 }
 
 /*
- * If rodata_full is enabled, the mapping of linear mapping range can also be
- * block & cont mapping, here decouples the rodata_full and debug_pagealloc.
+ * If rodata_full is enabled, the mapping of linear mapping range can not be
+ * block & cont mapping, here combines the rodata_full and debug_pagealloc.
  */
 bool can_set_block_and_cont_map(void)
 {
-	return !debug_pagealloc_enabled();
+	return !rodata_full && !debug_pagealloc_enabled();
 }
 
 static int change_page_range(pte_t *ptep, unsigned long addr, void *data)
