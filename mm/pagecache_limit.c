@@ -37,7 +37,12 @@ static inline unsigned long memcg_get_pgcache_nr_pages(struct mem_cgroup *memcg)
 	/*
 	 * There use 'NR_INACTIVE_FILE' + 'NR_ACTIVE_FILE'
 	 * to represent pagecache.
+	 * Due to changes in the memcg state update strategy,
+	 * we need to proactively perform a refresh so that
+	 * we could read accurate per-memcg lruvec stats.
 	 */
+	cgroup_rstat_flush(memcg->css.cgroup);
+
 	return memcg_page_state(memcg, NR_INACTIVE_FILE) +
 	       memcg_page_state(memcg, NR_ACTIVE_FILE);
 }
