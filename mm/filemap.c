@@ -4152,7 +4152,7 @@ ssize_t generic_perform_write(struct kiocb *iocb, struct iov_iter *i)
 	ssize_t written = 0;
 
 	do {
-		struct page *page;
+		struct page *page = NULL;
 		struct folio *folio;
 		size_t offset;		/* Offset into folio */
 		size_t bytes;		/* Bytes to write to folio */
@@ -4180,6 +4180,16 @@ retry:
 			status = -EINTR;
 			break;
 		}
+
+		/*
+		 * If IOCB_DONTCACHE is set here, we now the file system
+		 * supports it. And hence it'll know to check foliop for being
+		 * set to this magic value. If so, it's a dropbehind write.
+		 * Whenever ->write_begin() changes prototypes again, this
+		 * can go away and just pass iocb or iocb flags.
+		 */
+		if (iocb->ki_flags & IOCB_DONTCACHE)
+			page = pagep_dropbehind;
 
 		status = a_ops->write_begin(file, mapping, pos, bytes,
 						&page, &fsdata);
