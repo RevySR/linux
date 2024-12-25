@@ -486,6 +486,34 @@ static inline int ra_alloc_folio(struct readahead_control *ractl, pgoff_t index,
 	return 0;
 }
 
+static int select_new_order(int old_order, int max_order, unsigned long orders)
+{
+	unsigned long hi_orders, lo_orders;
+
+	/*
+	 * Select the next order to use from the set in `orders`, while ensuring
+	 * we don't go above max_order. Prefer the next + 1 highest allowed
+	 * order after old_order, unless there isn't one, in which case return
+	 * the closest allowed order, which is either the next highest allowed
+	 * order or less than or equal to old_order. The "next + 1" skip
+	 * behaviour is intended to allow ramping up to large folios quickly.
+	 */
+
+	orders &= BIT(max_order + 1) - 1;
+	VM_WARN_ON(!orders);
+	hi_orders = orders & ~(BIT(old_order + 1) - 1);
+
+	if (hi_orders) {
+		old_order = lowest_order(hi_orders);
+		hi_orders &= ~BIT(old_order);
+		if (hi_orders)
+			return lowest_order(hi_orders);
+	}
+
+	lo_orders = orders & (BIT(old_order + 1) - 1);
+	return highest_order(lo_orders);
+}
+
 void page_cache_ra_order(struct readahead_control *ractl,
 		struct file_ra_state *ra, unsigned int new_order)
 {
@@ -496,17 +524,15 @@ void page_cache_ra_order(struct readahead_control *ractl,
 	unsigned int nofs;
 	int err = 0;
 	gfp_t gfp = readahead_gfp_mask(mapping);
+	unsigned long orders;
 
-	if (!mapping_large_folio_support(mapping) || ra->size < 4)
+	if (!mapping_large_folio_support(mapping))
 		goto fallback;
 
 	limit = min(limit, index + ra->size - 1);
 
-	if (new_order < MAX_PAGECACHE_ORDER)
-		new_order += 2;
-
-	new_order = min_t(unsigned int, MAX_PAGECACHE_ORDER, new_order);
-	new_order = min_t(unsigned int, new_order, ilog2(ra->size));
+	orders = file_orders_always() | BIT(0);
+	new_order = select_new_order(new_order, ilog2(ra->size), orders);
 
 	/* See comment in page_cache_ra_unbounded() */
 	nofs = memalloc_nofs_save();
@@ -516,9 +542,10 @@ void page_cache_ra_order(struct readahead_control *ractl,
 
 		/* Align with smaller pages if needed */
 		if (index & ((1UL << order) - 1))
-			order = __ffs(index);
+			order = select_new_order(order, __ffs(index), orders);
 		/* Don't allocate pages past EOF */
-		while (index + (1UL << order) - 1 > limit)
+		while (index + (1UL << order) - 1 > limit &&
+			(BIT(order) & orders) == 0)
 			order--;
 		err = ra_alloc_folio(ractl, index, mark, order, gfp);
 		if (err)
