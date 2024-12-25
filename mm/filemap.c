@@ -1003,9 +1003,15 @@ struct folio *filemap_alloc_folio(gfp_t gfp, unsigned int order)
 			folio = __folio_alloc_node(gfp, order, n);
 		} while (!folio && read_mems_allowed_retry(cpuset_mems_cookie));
 
+		if (folio)
+			count_mthp_stat(order, MTHP_STAT_FILE_ALLOC);
 		return folio;
 	}
-	return folio_alloc(gfp, order);
+
+	folio = folio_alloc(gfp, order);
+	if (folio)
+		count_mthp_stat(order, MTHP_STAT_FILE_ALLOC);
+	return folio;
 }
 EXPORT_SYMBOL(filemap_alloc_folio);
 #endif
