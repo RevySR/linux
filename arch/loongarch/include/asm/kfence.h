@@ -13,10 +13,14 @@
 #include <asm/pgtable.h>
 #include <asm/tlb.h>
 
-static inline bool arch_kfence_init_pool(void)
+#define KFENCE_POOL_SIZE ((CONFIG_KFENCE_NUM_OBJECTS + 1) * 2 * PAGE_SIZE)
+
+static inline bool arch_kfence_free_pool(unsigned long addr) { return false; }
+
+static inline bool arch_kfence_init_pool(struct kfence_pool_area *kpa)
 {
 	int err;
-	char *kfence_pool = __kfence_pool;
+	char *kfence_pool = kpa->addr;
 	struct vm_struct *area;
 
 	area = __get_vm_area_caller(KFENCE_POOL_SIZE, VM_IOREMAP,
@@ -25,13 +29,13 @@ static inline bool arch_kfence_init_pool(void)
 	if (!area)
 		return false;
 
-	__kfence_pool = (char *)area->addr;
-	err = ioremap_page_range((unsigned long)__kfence_pool,
-				 (unsigned long)__kfence_pool + KFENCE_POOL_SIZE,
+	kpa->addr = (char *)area->addr;
+	err = ioremap_page_range((unsigned long)kpa->addr,
+				 (unsigned long)kpa->addr + KFENCE_POOL_SIZE,
 				 virt_to_phys((void *)kfence_pool), PAGE_KERNEL);
 	if (err) {
 		free_vm_area(area);
-		__kfence_pool = kfence_pool;
+		kpa->addr = kfence_pool;
 		return false;
 	}
 
