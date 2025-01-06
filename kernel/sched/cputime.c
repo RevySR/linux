@@ -24,14 +24,28 @@ DEFINE_PER_CPU(struct irqtime, cpu_irqtime);
 
 static int sched_clock_irqtime;
 
+static int no_sched_clock_irqtime;
+
+static int __init irqtime_account_setup(char *str)
+{
+	if (!strcmp(str, "off")) {
+		no_sched_clock_irqtime = 1;
+		pr_info("The irqtime account is currently disabled!");
+	}
+	return 1;
+}
+__setup("irqtime_account=", irqtime_account_setup);
+
 void enable_sched_clock_irqtime(void)
 {
-	sched_clock_irqtime = 1;
+	if (!no_sched_clock_irqtime)
+		sched_clock_irqtime = 1;
 }
 
 void disable_sched_clock_irqtime(void)
 {
-	sched_clock_irqtime = 0;
+	if (!no_sched_clock_irqtime)
+		sched_clock_irqtime = 0;
 }
 
 static void irqtime_account_delta(struct irqtime *irqtime, u64 delta,
