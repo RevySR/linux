@@ -1,3 +1,3 @@
 systemd.unified_cgroup_hierarchy=0
 cgroup.memory=nokmem
-crashkernel=0M-2G:0M,2G-8G:192M,8G-:256M
+crashkernel=1024M
