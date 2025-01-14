@@ -62,7 +62,19 @@ static struct cxl_mem_command cxl_mem_commands[CXL_MEM_COMMAND_ID_MAX] = {
 	CXL_CMD(SET_ALERT_CONFIG, 0xc, 0, 0),
 	CXL_CMD(GET_SHUTDOWN_STATE, 0, 0x1, 0),
 	CXL_CMD(SET_SHUTDOWN_STATE, 0x1, 0, 0),
+	CXL_CMD(GET_POISON, 0x10, CXL_VARIABLE_PAYLOAD, 0),
+	CXL_CMD(INJECT_POISON, 0x8, 0, 0),
+	CXL_CMD(CLEAR_POISON, 0x48, 0, 0),
 	CXL_CMD(GET_SCAN_MEDIA_CAPS, 0x10, 0x4, 0),
+	CXL_CMD(SCAN_MEDIA, 0x11, 0, 0),
+	CXL_CMD(GET_SCAN_MEDIA, 0, CXL_VARIABLE_PAYLOAD, 0),
+	CXL_CMD(SANITIZE, 0, 0, 0),
+	CXL_CMD(SECURE_ERASE, 0, 0, 0),
+	CXL_CMD(GET_SECURITY_STATE, 0, 0x4, 0),
+	CXL_CMD(GET_EVT_INT_POLICY, 0, 0x4, 0),
+	CXL_CMD(SET_EVT_INT_POLICY, 0x4, 0, 0),
+	CXL_CMD(GET_TIMESTAMP, 0, 0x8, 0),
+	CXL_CMD(SET_TIMESTAMP, 0x8, 0, 0),
 };
 
 /*
@@ -1378,6 +1390,13 @@ static int cxl_poison_alloc_buf(struct cxl_memdev_state *mds)
 					mds->poison.list_out);
 }
 
+static void scan_media_teardown(void *data)
+{
+	struct cxl_memdev_state *mds = data;
+
+	cancel_delayed_work_sync(&mds->poison.poll_dwork);
+}
+
 int cxl_poison_state_init(struct cxl_memdev_state *mds)
 {
 	int rc;
@@ -1390,6 +1409,10 @@ int cxl_poison_state_init(struct cxl_memdev_state *mds)
 		clear_bit(CXL_POISON_ENABLED_LIST, mds->poison.enabled_cmds);
 		return rc;
 	}
+
+	rc = devm_add_action_or_reset(mds->cxlds.dev, scan_media_teardown, mds);
+	if (rc)
+		return rc;
 
 	mutex_init(&mds->poison.lock);
 	return 0;

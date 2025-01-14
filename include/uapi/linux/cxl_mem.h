@@ -40,12 +40,21 @@
 	___C(SET_ALERT_CONFIG, "Set Alert Configuration"),                \
 	___C(GET_SHUTDOWN_STATE, "Get Shutdown State"),                   \
 	___C(SET_SHUTDOWN_STATE, "Set Shutdown State"),                   \
-	___DEPRECATED(GET_POISON, "Get Poison List"),                     \
-	___DEPRECATED(INJECT_POISON, "Inject Poison"),                    \
-	___DEPRECATED(CLEAR_POISON, "Clear Poison"),                      \
+	___C(GET_POISON, "Get Poison List"),                              \
+	___C(INJECT_POISON, "Inject Poison"),                             \
+	___C(CLEAR_POISON, "Clear Poison"),                               \
 	___C(GET_SCAN_MEDIA_CAPS, "Get Scan Media Capabilities"),         \
-	___DEPRECATED(SCAN_MEDIA, "Scan Media"),                          \
-	___DEPRECATED(GET_SCAN_MEDIA, "Get Scan Media Results"),          \
+	___C(SCAN_MEDIA, "Scan Media"),                                   \
+	___C(GET_SCAN_MEDIA, "Get Scan Media Results"),                   \
+	___C(SANITIZE, "Sanitize the Ddevice"),                           \
+	___C(SECURE_ERASE, "Erase User Data"),                            \
+	___C(GET_SECURITY_STATE, "Get the Security State"),               \
+	___C(GET_EVT_INT_POLICY, "Get Event Interrupt Policy"),           \
+	___C(SET_EVT_INT_POLICY, "Set Event Interrupt Policy"),           \
+	___C(TRANSFER_FW, "Transfer FW Package"),                         \
+	___C(ACTIVATE_FW, "Activate FW"),                                 \
+	___C(GET_TIMESTAMP, "Get Device Timestamp"),                      \
+	___C(SET_TIMESTAMP, "Set Device Timestamp"),                      \
 	___C(MAX, "invalid / last command")
 
 #define ___C(a, b) CXL_MEM_COMMAND_ID_##a

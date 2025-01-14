@@ -277,6 +277,8 @@ enum security_cmd_enabled_bits {
 struct cxl_poison_state {
 	u32 max_errors;
 	DECLARE_BITMAP(enabled_cmds, CXL_POISON_ENABLED_MAX);
+	int poll_tmo_secs;
+	struct delayed_work poll_dwork; /* poll scan media */
 	struct cxl_mbox_poison_out *list_out;
 	struct mutex lock;  /* Protect reads of poison list */
 };
@@ -504,6 +506,7 @@ enum cxl_opcode {
 	CXL_MBOX_OP_GET_FW_INFO		= 0x0200,
 	CXL_MBOX_OP_TRANSFER_FW		= 0x0201,
 	CXL_MBOX_OP_ACTIVATE_FW		= 0x0202,
+	CXL_MBOX_OP_GET_TIMESTAMP	= 0x0300,
 	CXL_MBOX_OP_SET_TIMESTAMP	= 0x0301,
 	CXL_MBOX_OP_GET_SUPPORTED_LOGS	= 0x0400,
 	CXL_MBOX_OP_GET_LOG		= 0x0401,

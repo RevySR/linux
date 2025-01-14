@@ -133,6 +133,10 @@ static irqreturn_t cxl_pci_mbox_irq(int irq, void *id)
 		if (mds->security.sanitize_node)
 			mod_delayed_work(system_wq, &mds->security.poll_dwork, 0);
 		mutex_unlock(&mds->mbox_mutex);
+	} else if (opcode == CXL_MBOX_OP_SCAN_MEDIA) {
+		mutex_lock(&mds->mbox_mutex);
+		mod_delayed_work(system_wq, &mds->poison.poll_dwork, 0);
+		mutex_unlock(&mds->mbox_mutex);
 	} else {
 		/* short-circuit the wait in __cxl_pci_mbox_send_cmd() */
 		rcuwait_wake_up(&mds->mbox_wait);
@@ -163,6 +167,29 @@ static void cxl_mbox_sanitize_work(struct work_struct *work)
 
 		mds->security.poll_tmo_secs = min(15 * 60, timeout);
 		schedule_delayed_work(&mds->security.poll_dwork, timeout * HZ);
+	}
+	mutex_unlock(&mds->mbox_mutex);
+}
+
+/*
+ * Scan media operation polling mode.
+ */
+static void cxl_mbox_scan_media_work(struct work_struct *work)
+{
+	struct cxl_memdev_state *mds =
+		container_of(work, typeof(*mds), poison.poll_dwork.work);
+	struct cxl_dev_state *cxlds = &mds->cxlds;
+
+	mutex_lock(&mds->mbox_mutex);
+	if (cxl_mbox_background_complete(cxlds)) {
+		mds->poison.poll_tmo_secs = 0;
+
+		dev_dbg(cxlds->dev, "Scan media operation ended\n");
+	} else {
+		int timeout = mds->poison.poll_tmo_secs + 10;
+
+		mds->poison.poll_tmo_secs = min(15 * 60, timeout);
+		schedule_delayed_work(&mds->poison.poll_dwork, timeout * HZ);
 	}
 	mutex_unlock(&mds->mbox_mutex);
 }
@@ -307,6 +334,15 @@ static int __cxl_pci_mbox_send_cmd(struct cxl_memdev_state *mds,
 			goto success;
 		}
 
+		/* Scan Media in asynchronously way */
+		if (mbox_cmd->opcode == CXL_MBOX_OP_SCAN_MEDIA) {
+			timeout = 1;
+			mds->poison.poll_tmo_secs = timeout;
+			schedule_delayed_work(&mds->poison.poll_dwork, timeout * HZ);
+			dev_dbg(dev, "Scan media operation started\n");
+			goto success;
+		}
+
 		dev_dbg(dev, "Mailbox background operation (0x%04x) started\n",
 			mbox_cmd->opcode);
 
@@ -436,6 +472,7 @@ static int cxl_pci_setup_mailbox(struct cxl_memdev_state *mds)
 
 	rcuwait_init(&mds->mbox_wait);
 	INIT_DELAYED_WORK(&mds->security.poll_dwork, cxl_mbox_sanitize_work);
+	INIT_DELAYED_WORK(&mds->poison.poll_dwork, cxl_mbox_scan_media_work);
 
 	/* background command interrupts are optional */
 	if (!(cap & CXLDEV_MBOX_CAP_BG_CMD_IRQ))
