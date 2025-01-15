@@ -8,9 +8,6 @@
 # We have to override the new %%install behavior because, well... the kernel is special.
 %global __spec_install_pre %{___build_pre}
 
-# Sign modules on all arches
-%global signmodules 0
-
 # define buildid .local
 
 %global dist %%DIST%%
@@ -261,8 +258,6 @@ BuildRequires: asciidoc
 %endif
 
 Source0: linux-%{kernelversion}-%{pkg_release}.tar.xz
-
-%define modsign_cmd %{SOURCE18}
 
 Source20: kernel-%{version}-aarch64.config
 Source21: kernel-%{version}-aarch64-debug.config
@@ -759,11 +754,6 @@ BuildKernel() {
     %{make} -s %{?_smp_mflags} mrproper
     cp configs/$Config .config
 
-    %if %{signmodules}
-    cp %{SOURCE11} certs/.
-    cp %{SOURCE12} certs/.
-    %endif
-
     Arch=`head -1 .config | cut -b 3-`
     echo USING ARCH=$Arch
 
@@ -1020,14 +1010,6 @@ BuildKernel() {
     rm System.map
     popd
 
-%if %{signmodules}
-    if [ $DoModules -eq 1 ]; then
-	# Save the signing keys so we can sign the modules in __modsign_install_post
-	cp certs/signing_key.pem certs/signing_key.pem.sign${Flav}
-	cp certs/signing_key.x509 certs/signing_key.x509.sign${Flav}
-    fi
-%endif
-
     # Move the devel headers out of the root file system
     mkdir -p $RPM_BUILD_ROOT/usr/src/kernels
     mv $RPM_BUILD_ROOT/lib/modules/$KernelVer/build $RPM_BUILD_ROOT/$DevelDir
@@ -1146,28 +1128,6 @@ chmod -R a=rX Documentation
 find Documentation -type d | xargs chmod u+w
 %endif
 
-# In the modsign case, we do 3 things.  1) We check the "flavour" and hard
-# code the value in the following invocations.  This is somewhat sub-optimal
-# but we're doing this inside of an RPM macro and it isn't as easy as it
-# could be because of that.  2) We restore the .tmp_versions/ directory from
-# the one we saved off in BuildKernel above.  This is to make sure we're
-# signing the modules we actually built/installed in that flavour.  3) We
-# grab the arch and invoke mod-sign.sh command to actually sign the modules.
-#
-# We have to do all of those things _after_ find-debuginfo runs, otherwise
-# that will strip the signature off of the modules.
-
-%define __modsign_install_post \
-  if [ "%{signmodules}" -eq "1" ]; then \
-    if [ "%{with_debug}" -ne "0" ]; then \
-      %{modsign_cmd} certs/signing_key.pem.sign+debug certs/signing_key.x509.sign+debug $RPM_BUILD_ROOT/lib/modules/%{KVERREL}+debug/ \
-    fi \
-    if [ "%{with_up}" -ne "0" ]; then \
-      %{modsign_cmd} certs/signing_key.pem.sign certs/signing_key.x509.sign $RPM_BUILD_ROOT/lib/modules/%{KVERREL}/ \
-    fi \
-  fi \
-%{nil}
-
 ###
 ### Special hacks for debuginfo subpackages.
 ###
@@ -1193,8 +1153,7 @@ find Documentation -type d | xargs chmod u+w
 %define __spec_install_post \
   %{?__debug_package:%{__debug_install_post}}\
   %{__arch_install_post}\
-  %{__os_install_post}\
-  %{__modsign_install_post}
+  %{__os_install_post}
 
 ###
 ### install
