@@ -25,6 +25,7 @@ select:
       contains:
         enum:
           - syscon
+          - sophgo,sg2042-pcie-ctrl
 
   required:
     - compatible
@@ -68,6 +69,7 @@ properties:
               - rockchip,rk3568-qos
               - rockchip,rk3588-qos
               - rockchip,rv1126-qos
+              - sophgo,sg2042-pcie-ctrl
               - starfive,jh7100-sysmain
 
           - const: syscon
