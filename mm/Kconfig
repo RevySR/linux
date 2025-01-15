@@ -1303,6 +1303,18 @@ config ASYNC_FORK
 	  unserviceable duration.  Note that it won't speed up child's return
 	  from fork(2).
 
+config DUPTEXT
+	bool "Enable NUMA text replicas"
+	depends on NUMA
+	default n
+	help
+	  This creates page replicas for only .text on NUMA nodes, when
+	  remote access happens, instead of page migration. This supports
+	  normal page and file THP, and provides global and per-memcg switch
+	  for administrator to control.
+
+	  If unsure, say N.
+
 source "mm/damon/Kconfig"
 
 config TEXT_UNEVICTABLE

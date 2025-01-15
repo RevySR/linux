@@ -115,6 +115,12 @@
 #define IF_HAVE_PG_KFENCE(_name)
 #endif
 
+#ifdef CONFIG_DUPTEXT
+#define IF_HAVE_PG_DUP(_name) ,{1UL << PG_##_name, __stringify(_name)}
+#else
+#define IF_HAVE_PG_DUP(_name)
+#endif
+
 #define DEF_PAGEFLAG_NAME(_name) { 1UL <<  PG_##_name, __stringify(_name) }
 
 #define __def_pageflag_names						\
@@ -147,7 +153,8 @@ IF_HAVE_PG_IDLE(idle)							\
 IF_HAVE_PG_IDLE(young)							\
 IF_HAVE_PG_ARCH_X(arch_2)						\
 IF_HAVE_PG_ARCH_X(arch_3)						\
-IF_HAVE_PG_KFENCE(kfence)
+IF_HAVE_PG_KFENCE(kfence)						\
+IF_HAVE_PG_DUP(dup)
 
 #define show_page_flags(flags)						\
 	(flags) ? __print_flags(flags, "|",				\
