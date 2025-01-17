@@ -124,6 +124,9 @@ int __ref profile_init(void)
 		return 0;
 
 	free_cpumask_var(prof_cpu_mask);
+#ifdef CONFIG_CPUMASK_OFFSTACK
+	prof_cpu_mask = NULL;
+#endif
 	return -ENOMEM;
 }
 
