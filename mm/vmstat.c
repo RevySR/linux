@@ -1245,6 +1245,9 @@ const char * const vmstat_text[] = {
 	"pgpromote_success",
 	"pgpromote_candidate",
 #endif
+#ifdef CONFIG_DUPTEXT
+	"nr_duptext",
+#endif
 
 	/* enum writeback_stat_item counters */
 	"nr_dirty_threshold",

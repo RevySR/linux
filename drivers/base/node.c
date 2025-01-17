@@ -451,6 +451,9 @@ static ssize_t node_read_meminfo(struct device *dev,
 #ifdef CONFIG_UNACCEPTED_MEMORY
 			     "Node %d Unaccepted:     %8lu kB\n"
 #endif
+#ifdef CONFIG_DUPTEXT
+			     "Node %d DupText:        %8lu kB\n"
+#endif
 			     ,
 			     nid, K(node_page_state(pgdat, NR_FILE_DIRTY)),
 			     nid, K(node_page_state(pgdat, NR_WRITEBACK)),
@@ -483,6 +486,10 @@ static ssize_t node_read_meminfo(struct device *dev,
 #ifdef CONFIG_UNACCEPTED_MEMORY
 			     ,
 			     nid, K(sum_zone_node_page_state(nid, NR_UNACCEPTED))
+#endif
+#ifdef CONFIG_DUPTEXT
+			     ,
+			     nid, K(node_page_state(pgdat, NR_DUPTEXT))
 #endif
 			    );
 	len += hugetlb_report_node_meminfo(buf, len, nid);

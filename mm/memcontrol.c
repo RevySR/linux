@@ -6112,6 +6112,28 @@ static int memcg_pgtable_misplaced_write(struct cgroup_subsys_state *css,
 }
 #endif /* CONFIG_PGTABLE_BIND */
 
+#ifdef CONFIG_DUPTEXT
+static u64 mem_cgroup_allow_duptext_read(struct cgroup_subsys_state *css,
+		struct cftype *cft)
+{
+	struct mem_cgroup *memcg = mem_cgroup_from_css(css);
+
+	return memcg->allow_duptext;
+}
+
+static int mem_cgroup_allow_duptext_write(struct cgroup_subsys_state *css,
+		struct cftype *cft, u64 val)
+{
+	struct mem_cgroup *memcg = mem_cgroup_from_css(css);
+
+	if (val > 1)
+		return -EINVAL;
+	memcg->allow_duptext = val;
+
+	return 0;
+}
+#endif
+
 static struct cftype mem_cgroup_legacy_files[] = {
 	{
 		.name = "usage_in_bytes",
@@ -6380,6 +6402,13 @@ static struct cftype mem_cgroup_legacy_files[] = {
 		.write_u64 = mem_cgroup_unevictable_percent_write,
 	},
  #endif
+#ifdef CONFIG_DUPTEXT
+	{
+		.name = "allow_duptext",
+		.read_u64 = mem_cgroup_allow_duptext_read,
+		.write_u64 = mem_cgroup_allow_duptext_write,
+	},
+#endif
 	{ },	/* terminate */
 };
 
@@ -6668,6 +6697,9 @@ mem_cgroup_css_alloc(struct cgroup_subsys_state *parent_css)
 #endif
 #ifdef CONFIG_TEXT_UNEVICTABLE
 		memcg->allow_unevictable = parent->allow_unevictable;
+#endif
+#ifdef CONFIG_DUPTEXT
+		memcg->allow_duptext = parent->allow_duptext;
 #endif
 		page_counter_init(&memcg->memory, &parent->memory);
 		page_counter_init(&memcg->swap, &parent->swap);

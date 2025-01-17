@@ -20,6 +20,7 @@
 #include <linux/shmem_fs.h>
 #include <linux/uaccess.h>
 #include <linux/pkeys.h>
+#include <linux/page_dup.h>
 
 #include <asm/elf.h>
 #include <asm/tlb.h>
@@ -398,6 +399,9 @@ struct mem_size_stats {
 	unsigned long shared_hugetlb;
 	unsigned long private_hugetlb;
 	unsigned long ksm;
+#ifdef CONFIG_DUPTEXT
+	unsigned long duptext;
+#endif
 	u64 pss;
 	u64 pss_anon;
 	u64 pss_file;
@@ -453,6 +457,11 @@ static void smaps_account(struct mem_size_stats *mss, struct page *page,
 		if (!PageSwapBacked(page) && !dirty && !PageDirty(page))
 			mss->lazyfree += size;
 	}
+
+#ifdef CONFIG_DUPTEXT
+	if (page_dup_slave(page))
+		mss->duptext += size;
+#endif
 
 	if (PageKsm(page))
 		mss->ksm += size;
@@ -843,6 +852,9 @@ static void __show_smap(struct seq_file *m, const struct mem_size_stats *mss,
 					mss->swap_pss >> PSS_SHIFT);
 	SEQ_PUT_DEC(" kB\nLocked:         ",
 					mss->pss_locked >> PSS_SHIFT);
+#ifdef CONFIG_DUPTEXT
+	SEQ_PUT_DEC(" kB\nDupText:        ", mss->duptext);
+#endif
 	seq_puts(m, " kB\n");
 }
 

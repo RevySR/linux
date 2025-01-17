@@ -436,6 +436,9 @@ struct mem_cgroup {
 
 	unsigned long offline_jiffies;
 	unsigned long reap_background;
+#ifdef CONFIG_DUPTEXT
+	bool allow_duptext;
+#endif
 
 	CK_KABI_RESERVE(1)
 	CK_KABI_RESERVE(2)
