@@ -33,6 +33,7 @@ $(DIST_CONFIG_TARGETS):
 
 clean:
 	rm -rf $(DIST_OUTPUT)
+	rm -rf configs/configs.*.old/
 
 dist-version:
 	@echo $(DIST_ANOLIS_VERSION)
