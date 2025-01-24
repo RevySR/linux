@@ -25,37 +25,41 @@
  * compatibility because this enum is exported to user space.
  */
 #define CXL_CMDS                                                          \
-	___C(INVALID, "Invalid Command"),                                 \
-	___C(IDENTIFY, "Identify Command"),                               \
-	___C(RAW, "Raw device command"),                                  \
-	___C(GET_SUPPORTED_LOGS, "Get Supported Logs"),                   \
-	___C(GET_FW_INFO, "Get FW Info"),                                 \
-	___C(GET_PARTITION_INFO, "Get Partition Information"),            \
-	___C(GET_LSA, "Get Label Storage Area"),                          \
-	___C(GET_HEALTH_INFO, "Get Health Info"),                         \
-	___C(GET_LOG, "Get Log"),                                         \
-	___C(SET_PARTITION_INFO, "Set Partition Information"),            \
-	___C(SET_LSA, "Set Label Storage Area"),                          \
-	___C(GET_ALERT_CONFIG, "Get Alert Configuration"),                \
-	___C(SET_ALERT_CONFIG, "Set Alert Configuration"),                \
-	___C(GET_SHUTDOWN_STATE, "Get Shutdown State"),                   \
-	___C(SET_SHUTDOWN_STATE, "Set Shutdown State"),                   \
-	___C(GET_POISON, "Get Poison List"),                              \
-	___C(INJECT_POISON, "Inject Poison"),                             \
-	___C(CLEAR_POISON, "Clear Poison"),                               \
-	___C(GET_SCAN_MEDIA_CAPS, "Get Scan Media Capabilities"),         \
-	___C(SCAN_MEDIA, "Scan Media"),                                   \
-	___C(GET_SCAN_MEDIA, "Get Scan Media Results"),                   \
-	___C(SANITIZE, "Sanitize the Ddevice"),                           \
-	___C(SECURE_ERASE, "Erase User Data"),                            \
-	___C(GET_SECURITY_STATE, "Get the Security State"),               \
-	___C(GET_EVT_INT_POLICY, "Get Event Interrupt Policy"),           \
-	___C(SET_EVT_INT_POLICY, "Set Event Interrupt Policy"),           \
-	___C(TRANSFER_FW, "Transfer FW Package"),                         \
-	___C(ACTIVATE_FW, "Activate FW"),                                 \
-	___C(GET_TIMESTAMP, "Get Device Timestamp"),                      \
-	___C(SET_TIMESTAMP, "Set Device Timestamp"),                      \
-	___C(MAX, "invalid / last command")
+___C(INVALID, "Invalid Command"),                                 \
+___C(IDENTIFY, "Identify Command"),                               \
+___C(RAW, "Raw device command"),                                  \
+___C(GET_SUPPORTED_LOGS, "Get Supported Logs"),                   \
+___C(GET_FW_INFO, "Get FW Info"),                                 \
+___C(GET_PARTITION_INFO, "Get Partition Information"),            \
+___C(GET_LSA, "Get Label Storage Area"),                          \
+___C(GET_HEALTH_INFO, "Get Health Info"),                         \
+___C(GET_LOG, "Get Log"),                                         \
+___C(SET_PARTITION_INFO, "Set Partition Information"),            \
+___C(SET_LSA, "Set Label Storage Area"),                          \
+___C(GET_ALERT_CONFIG, "Get Alert Configuration"),                \
+___C(SET_ALERT_CONFIG, "Set Alert Configuration"),                \
+___C(GET_SHUTDOWN_STATE, "Get Shutdown State"),                   \
+___C(SET_SHUTDOWN_STATE, "Set Shutdown State"),                   \
+___C(GET_POISON, "Get Poison List"),                              \
+___C(INJECT_POISON, "Inject Poison"),                             \
+___C(CLEAR_POISON, "Clear Poison"),                               \
+___C(GET_SCAN_MEDIA_CAPS, "Get Scan Media Capabilities"),         \
+___C(SCAN_MEDIA, "Scan Media"),                                   \
+___C(GET_SCAN_MEDIA, "Get Scan Media Results"),                   \
+___C(SANITIZE, "Sanitize the Ddevice"),                           \
+___C(SECURE_ERASE, "Erase User Data"),                            \
+___C(GET_SECURITY_STATE, "Get the Security State"),               \
+___C(GET_EVT_INT_POLICY, "Get Event Interrupt Policy"),           \
+___C(SET_EVT_INT_POLICY, "Set Event Interrupt Policy"),           \
+___C(TRANSFER_FW, "Transfer FW Package"),                         \
+___C(ACTIVATE_FW, "Activate FW"),                                 \
+___C(GET_TIMESTAMP, "Get Device Timestamp"),                      \
+___C(SET_TIMESTAMP, "Set Device Timestamp"),                      \
+___C(GET_DUMP_INFO, "Get Device Dump Information for AliSCM"),    \
+___C(GET_DUMP, "Get Device Dump Message for AliSCM"),             \
+___C(ALISCM_VU_TEST, "VU Test for AliSCM"),                       \
+___C(DFX_CMD, "DFX Command Set for AliSCM"),                      \
+___C(MAX, "invalid / last command")
 
 #define ___C(a, b) CXL_MEM_COMMAND_ID_##a
 #define ___DEPRECATED(a, b) CXL_MEM_DEPRECATED_ID_##a

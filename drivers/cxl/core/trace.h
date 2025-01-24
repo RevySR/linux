@@ -643,6 +643,74 @@ TRACE_EVENT(cxl_memory_module,
 	)
 );
 
+/*
+ * AliSCM Specific Event Record - ASER
+ */
+TRACE_EVENT(cxl_aliscm_specific,
+	TP_PROTO(const struct cxl_memdev *cxlmd, enum cxl_event_log_type log,
+		 struct cxl_event_vendor *rec),
+
+	TP_ARGS(cxlmd, log, rec),
+
+	TP_STRUCT__entry(
+		CXL_EVT_TP_entry
+		/* AliSCM Specific Event */
+		__field(u8, event_type)
+		__field(u16, error_source)
+		__field(u16, error_detail)
+		__field(s16, temperature)
+		__field(u64, power)
+		__field(u8, life_used)
+		__field(u8, spare_remained)
+		__field(u8, capacitor_remained)
+		__field(u8, health_status)
+		__field(u32, addition_status)
+		__field(u32, vendor_status)
+		__field(u32, cor_vol_err_cnt)
+		__field(u32, cor_pmem_err_cnt)
+		__field(u32, sram_uce_cnt)
+		__field(u32, pcie_uce_fatal_cnt)
+		__field(u32, pcie_uce_no_fatal_cnt)
+	),
+
+	TP_fast_assign(
+		CXL_EVT_TP_fast_assign(cxlmd, log, rec->hdr);
+
+		/* AliSCM Specific Event */
+		__entry->event_type = rec->event_type;
+		__entry->error_source = le16_to_cpu(rec->info.err_src);
+		__entry->error_detail = le16_to_cpu(rec->info.err_detail);
+		__entry->temperature = (__s16)le16_to_cpu(rec->info.temperature);
+		__entry->power = le64_to_cpu(rec->info.power);
+		__entry->life_used = rec->info.life_used;
+		__entry->spare_remained = rec->info.spare_remained;
+		__entry->capacitor_remained = rec->info.capacitor_remained;
+		__entry->health_status = rec->info.health_status;
+		__entry->addition_status = le32_to_cpu(rec->info.add_status);
+		__entry->vendor_status = le32_to_cpu(rec->info.vendor_ext_status);
+		__entry->cor_vol_err_cnt = le32_to_cpu(rec->info.cor_vol_err_cnt);
+		__entry->cor_pmem_err_cnt = le32_to_cpu(rec->info.cor_per_err_cnt);
+		__entry->sram_uce_cnt = le32_to_cpu(rec->info.sram_uce_cnt);
+		__entry->pcie_uce_fatal_cnt = le32_to_cpu(rec->info.pcie_uce_fatal_cnt);
+		__entry->pcie_uce_no_fatal_cnt = le32_to_cpu(rec->info.pcie_uce_not_fatal_cnt);
+	),
+
+	CXL_EVT_TP_printk("event_type = %u error_source = %u error_detail = %u "
+		"temperature = %d power = %llu.%u life_used = %u "
+		"spare_remained = %u capacitor_remained = %u health_status = %u "
+		"addition_status = %u vendor_status = %u cor_vol_err_cnt = %u "
+		"cor_pemem_err_cnt = %u sram_uce_cnt = %u pcie_uce_fatal_cnt = %u "
+		"pcie_uce_no_fatal_cnt = %u",
+		__entry->event_type, __entry->error_source, __entry->error_detail,
+		__entry->temperature, (__entry->power >> 16) & GENMASK(47, 0),
+		(u16)(__entry->power & GENMASK(15, 0)), __entry->life_used,
+		__entry->spare_remained, __entry->capacitor_remained,
+		__entry->health_status, __entry->addition_status, __entry->vendor_status,
+		__entry->cor_vol_err_cnt, __entry->cor_pmem_err_cnt, __entry->sram_uce_cnt,
+		__entry->pcie_uce_fatal_cnt, __entry->pcie_uce_no_fatal_cnt
+	)
+)
+
 #define show_poison_trace_type(type)			\
 	__print_symbolic(type,				\
 	{ CXL_POISON_TRACE_LIST,	"List"   },	\

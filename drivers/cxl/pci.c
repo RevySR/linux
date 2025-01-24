@@ -346,6 +346,11 @@ static int __cxl_pci_mbox_send_cmd(struct cxl_memdev_state *mds,
 		dev_dbg(dev, "Mailbox background operation (0x%04x) started\n",
 			mbox_cmd->opcode);
 
+		if (mbox_cmd->opcode == CXL_MBOX_OP_DFX_CMD) {
+			mbox_cmd->poll_interval_ms = 1000;
+			mbox_cmd->poll_count = 180;
+		}
+
 		timeout = mbox_cmd->poll_interval_ms;
 		for (i = 0; i < mbox_cmd->poll_count; i++) {
 			if (rcuwait_wait_event_timeout(&mds->mbox_wait,

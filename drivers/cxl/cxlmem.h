@@ -534,6 +534,10 @@ enum cxl_opcode {
 	CXL_MBOX_OP_UNLOCK		= 0x4503,
 	CXL_MBOX_OP_FREEZE_SECURITY	= 0x4504,
 	CXL_MBOX_OP_PASSPHRASE_SECURE_ERASE	= 0x4505,
+	CXL_MBOX_OP_GET_DUMP_INFO	= 0xF000,
+	CXL_MBOX_OP_GET_DUMP		= 0xF001,
+	CXL_MBOX_OP_ALISCM_VU_TEST	= 0xF700,
+	CXL_MBOX_OP_DFX_CMD			= 0xF800,
 	CXL_MBOX_OP_MAX			= 0x10000
 };
 
@@ -606,6 +610,16 @@ struct cxl_mbox_identify {
 #define CXL_EVENT_MEM_MODULE_UUID                                           \
 	UUID_INIT(0xfe927475, 0xdd59, 0x4339, 0xa5, 0x86, 0x79, 0xba, 0xb1, \
 		  0x13, 0xb7, 0x74)
+
+/*
+ * AliSCM Define
+ * Vendor Specific Event Record
+ * CXL rev 3.0 section 8.2.9.2.1.4; Table 8-46
+ * uuid: 84549268-5a5a-a5a5-7979-26cdabc569ed
+ */
+#define CXL_EVENT_ALISCM_SPECIFIC_UUID                                                       \
+	UUID_INIT(0x84549268, 0x5a5a, 0xa5a5, 0x79, 0x79, 0x26, 0xcd, 0xab, \
+		  0xc5, 0x69, 0xed)
 
 /*
  * Get Event Records output payload

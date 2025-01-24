@@ -75,6 +75,10 @@ static struct cxl_mem_command cxl_mem_commands[CXL_MEM_COMMAND_ID_MAX] = {
 	CXL_CMD(SET_EVT_INT_POLICY, 0x4, 0, 0),
 	CXL_CMD(GET_TIMESTAMP, 0, 0x8, 0),
 	CXL_CMD(SET_TIMESTAMP, 0x8, 0, 0),
+	CXL_CMD(GET_DUMP_INFO, 0, 0x10, 0),
+	CXL_CMD(GET_DUMP, 0x10, CXL_VARIABLE_PAYLOAD, 0),
+	CXL_CMD(ALISCM_VU_TEST, 0x400, 0x400, 0),
+	CXL_CMD(DFX_CMD, CXL_VARIABLE_PAYLOAD, CXL_VARIABLE_PAYLOAD, 0),
 };
 
 /*
@@ -861,6 +865,10 @@ void cxl_event_trace_record(const struct cxl_memdev *cxlmd,
 		trace_cxl_generic_event(cxlmd, type, uuid, &evt->generic);
 		return;
 	}
+	if (event_type == CXL_CPER_EVENT_ALISCM_SPECIFIC) {
+		trace_cxl_aliscm_specific(cxlmd, type, &evt->aliscm_specific);
+		return;
+	}
 
 	if (trace_cxl_general_media_enabled() || trace_cxl_dram_enabled()) {
 		u64 dpa, hpa = ULLONG_MAX;
@@ -889,8 +897,8 @@ void cxl_event_trace_record(const struct cxl_memdev *cxlmd,
 EXPORT_SYMBOL_NS_GPL(cxl_event_trace_record, CXL);
 
 static void __cxl_event_trace_record(const struct cxl_memdev *cxlmd,
-				     enum cxl_event_log_type type,
-				     struct cxl_event_record_raw *record)
+				   enum cxl_event_log_type type,
+				   struct cxl_event_record_raw *record)
 {
 	enum cxl_event_type ev_type = CXL_CPER_EVENT_GENERIC;
 	const uuid_t *uuid = &record->id;
@@ -901,6 +909,8 @@ static void __cxl_event_trace_record(const struct cxl_memdev *cxlmd,
 		ev_type = CXL_CPER_EVENT_DRAM;
 	else if (uuid_equal(uuid, &CXL_EVENT_MEM_MODULE_UUID))
 		ev_type = CXL_CPER_EVENT_MEM_MODULE;
+	else if (uuid_equal(uuid, &CXL_EVENT_ALISCM_SPECIFIC_UUID))
+		ev_type = CXL_CPER_EVENT_ALISCM_SPECIFIC;
 
 	cxl_event_trace_record(cxlmd, type, ev_type, uuid, &record->event);
 }

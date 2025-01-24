@@ -94,6 +94,36 @@ struct cxl_event_mem_module {
 } __packed;
 
 /*
+ * AliSCM Specific Vendor Event Record
+ */
+struct aliscm_device_info {
+	__le16 err_src;
+	__le16 err_detail;
+	__le16 temperature;
+	__le16 reserved;
+	__le64 power;
+	u8 life_used;
+	u8 spare_remained;
+	u8 capacitor_remained;
+	u8 health_status;
+	__le32 add_status;
+	__le32 vendor_ext_status;
+	__le32 cor_vol_err_cnt;
+	__le32 cor_per_err_cnt;
+	__le32 sram_uce_cnt;
+	__le32 pcie_uce_fatal_cnt;
+	__le32 pcie_uce_not_fatal_cnt;
+} __packed;
+
+struct cxl_event_vendor {
+	struct cxl_event_record_hdr hdr;
+	u8 event_type;
+	u8 rsvd;
+	struct aliscm_device_info info;
+	u8 reserved[0x1e];
+} __packed;
+
+/*
  * General Media or DRAM Event Common Fields
  * - provides common access to phys_addr
  */
@@ -107,6 +137,7 @@ union cxl_event {
 	struct cxl_event_gen_media gen_media;
 	struct cxl_event_dram dram;
 	struct cxl_event_mem_module mem_module;
+	struct cxl_event_vendor aliscm_specific;
 	struct cxl_event_common common;
 } __packed;
 
@@ -124,6 +155,7 @@ enum cxl_event_type {
 	CXL_CPER_EVENT_GEN_MEDIA,
 	CXL_CPER_EVENT_DRAM,
 	CXL_CPER_EVENT_MEM_MODULE,
+	CXL_CPER_EVENT_ALISCM_SPECIFIC,
 };
 
 #define CPER_CXL_DEVICE_ID_VALID		BIT(0)
