@@ -275,6 +275,54 @@ do {									\
 })
 #endif
 
+#ifndef smp_cond_time_check_count
+/*
+ * Limit how often smp_cond_load_relaxed_timewait() evaluates time_expr_ns.
+ * This helps reduce the number of instructions executed while spin-waiting.
+ */
+#define smp_cond_time_check_count	200
+#endif
+
+/**
+ * smp_cond_load_relaxed_timewait() - (Spin) wait for cond with no ordering
+ * guarantees until a timeout expires.
+ * @ptr: pointer to the variable to wait on
+ * @cond: boolean expression to wait for
+ * @time_expr_ns: evaluates to the current time
+ * @time_limit_ns: compared against time_expr_ns
+ *
+ * Equivalent to using READ_ONCE() on the condition variable.
+ *
+ * Note that the time check in time_expr_ns can be synchronous or
+ * asynchronous.
+ * In the generic version the check is synchronous but kept coarse
+ * to minimize instructions executed while spin-waiting.
+ */
+#ifndef __smp_cond_load_relaxed_spinwait
+#define __smp_cond_load_relaxed_spinwait(ptr, cond_expr, time_expr_ns,	\
+					 time_limit_ns) ({		\
+	typeof(ptr) __PTR = (ptr);					\
+	__unqual_scalar_typeof(*ptr) VAL;				\
+	unsigned int __count = 0;					\
+	for (;;) {							\
+		VAL = READ_ONCE(*__PTR);				\
+		if (cond_expr)						\
+			break;						\
+		cpu_relax();						\
+		if (__count++ < smp_cond_time_check_count)		\
+			continue;					\
+		if ((time_expr_ns) >= (time_limit_ns))			\
+			break;						\
+		__count = 0;						\
+	}								\
+	(typeof(*ptr))VAL;						\
+})
+#endif
+
+#ifndef smp_cond_load_relaxed_timewait
+#define smp_cond_load_relaxed_timewait  __smp_cond_load_relaxed_spinwait
+#endif
+
 /*
  * pmem_wmb() ensures that all stores for which the modification
  * are written to persistent storage by preceding instructions have
