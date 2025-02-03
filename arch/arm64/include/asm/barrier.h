@@ -232,6 +232,22 @@ do {									\
 	(typeof(*ptr))VAL;						\
 })
 
+#define __smp_cond_load_acquire_timewait(ptr, cond_expr,		\
+					 time_expr_ns, time_limit_ns)	\
+({									\
+	typeof(ptr) __PTR = (ptr);					\
+	__unqual_scalar_typeof(*ptr) VAL;				\
+	for (;;) {							\
+		VAL = smp_load_acquire(__PTR);				\
+		if (cond_expr)						\
+			break;						\
+		__cmpwait_relaxed(__PTR, VAL);				\
+		if ((time_expr_ns) >= (time_limit_ns))			\
+			break;						\
+	}								\
+	(typeof(*ptr))VAL;						\
+})
+
 /*
  * For the unlikely case that the event-stream is unavailable,
  * ward off the possibility of waiting forever by falling back
@@ -253,6 +269,26 @@ do {									\
 							time_limit_ns);	\
 	(typeof(*ptr))_val;						\
 })
+
+#define smp_cond_load_acquire_timewait(ptr, cond_expr,			\
+				      time_expr_ns, time_limit_ns)	\
+({									\
+	__unqual_scalar_typeof(*ptr) _val;				\
+	int __wfe = arch_timer_evtstrm_available();			\
+									\
+	if (likely(__wfe)) {						\
+		_val = __smp_cond_load_acquire_timewait(ptr, cond_expr,	\
+							time_expr_ns,	\
+							time_limit_ns);	\
+	} else {							\
+		_val = __smp_cond_load_relaxed_spinwait(ptr, cond_expr,	\
+							time_expr_ns,	\
+							time_limit_ns);	\
+		smp_acquire__after_ctrl_dep();				\
+	}								\
+	(typeof(*ptr))_val;						\
+})
+
 
 #include <asm-generic/barrier.h>
 
