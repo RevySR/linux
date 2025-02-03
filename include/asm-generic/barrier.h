@@ -323,6 +323,29 @@ do {									\
 #define smp_cond_load_relaxed_timewait  __smp_cond_load_relaxed_spinwait
 #endif
 
+/**
+ * smp_cond_load_acquire_timewait() - (Spin) wait for cond with ACQUIRE ordering
+ * until a timeout expires.
+ * @ptr: pointer to the variable to wait on
+ * @cond: boolean expression to wait for
+ * @time_expr_ns: evaluates to the current time
+ * @time_limit_ns: compared against time_expr_ns
+ *
+ * Equivalent to using smp_cond_load_acquire() on the condition variable with
+ * a timeout.
+ */
+#ifndef smp_cond_load_acquire_timewait
+#define smp_cond_load_acquire_timewait(ptr, cond_expr, time_expr_ns,	\
+				       time_limit_ns) ({		\
+	__unqual_scalar_typeof(*ptr) _val;				\
+	_val = smp_cond_load_relaxed_timewait(ptr, cond_expr,		\
+					      time_expr_ns,		\
+					      time_limit_ns);		\
+	smp_acquire__after_ctrl_dep();					\
+	(typeof(*ptr))_val;						\
+})
+#endif
+
 /*
  * pmem_wmb() ensures that all stores for which the modification
  * are written to persistent storage by preceding instructions have
