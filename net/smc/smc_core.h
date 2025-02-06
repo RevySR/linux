@@ -188,7 +188,7 @@ struct smc_link {
 #define SMC_LINKS_ADD_LNK_MAX	2	/* max. # of links per link group, also is the
 					 * default value for smc-r v1.0 and v2.0
 					 */
-#define SMC_LINKS_PER_LGR_MAX_PREFER	2	/* Preferred max links per link group used for
+#define SMC_LINKS_PER_LGR_MAX_PREFER	1	/* Preferred max links per link group used for
 						 * SMC-R v2.1 and later negotiation, vendors or
 						 * distrubutions may modify it to a value between
 						 * 1-2 as needed.

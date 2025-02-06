@@ -64,7 +64,7 @@ smcr_max_links_per_lgr - INTEGER
 	of RDMA devices exist in the system. The acceptable value ranges from 1 to 2. Only
 	for SMC-R v2.1 and later.
 
-	Default: 2
+	Default: 1
 
 smcr_max_conns_per_lgr - INTEGER
 	Controls the max number of connections can be added to a SMC-R link group. The
