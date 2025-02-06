@@ -15,16 +15,16 @@ dist-check:
 	fi
 
 dist-genlog:
-	sh genlog.sh
+	bash genlog.sh
 
 dist-genspec: dist-check
-	sh genspec.sh
+	bash genspec.sh
 
 dist-genrpmtree: dist-check
-	sh genrpmtree.sh
+	bash genrpmtree.sh
 
 dist-rpms: dist-genrpmtree dist-check
-	sh buildpkg.sh
+	bash buildpkg.sh
 
 DIST_CONFIG_TARGETS := dist-defconfig dist-debug-defconfig dist-configs dist-configs-update dist-configs-move dist-configs-import dist-configs-export dist-configs-modify dist-configs-check dist-configs-help
 

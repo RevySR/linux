@@ -808,7 +808,7 @@ if __name__ == '__main__':
     generator = subparsers.add_parser("generate", description="generate configs")
     generator.add_argument("--top_dir", required=True, help="the top dir to store configs")
     generator.add_argument("--dist", help="the dist")
-    generator.add_argument("--archdir", help="the arch directory, be like \{arch\}-\{subarch\}")
+    generator.add_argument("--archdir", help="the arch directory, be like <arch>-<subarch>")
     generator.set_defaults(func=Generator.do_generate)
 
     merger = subparsers.add_parser("merge", description="merge with configs")

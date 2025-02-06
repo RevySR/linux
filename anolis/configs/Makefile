@@ -5,31 +5,31 @@ ifeq ($(MAKELEVEL),0)
 endif
 
 dist-defconfig:
-	@sh scripts/generate_configs.sh generic-${DIST_ARCH}
+	@bash scripts/generate_configs.sh generic-${DIST_ARCH}
 
 dist-debug-defconfig:
-	@sh scripts/generate_configs.sh debug-${DIST_ARCH}
+	@bash scripts/generate_configs.sh debug-${DIST_ARCH}
 
 dist-configs:
-	@sh scripts/generate_configs.sh
+	@bash scripts/generate_configs.sh
 
 dist-configs-update:
-	@sh scripts/update_configs.sh
+	@bash scripts/update_configs.sh
 
 dist-configs-move:
-	@sh scripts/move_configs.sh
+	@bash scripts/move_configs.sh
 
 dist-configs-import:
-	@DO_IMPORT_CONFIGS=Y sh scripts/update_configs.sh
+	@DO_IMPORT_CONFIGS=Y bash scripts/update_configs.sh
 
 dist-configs-export:
-	@sh scripts/export_configs.sh
+	@bash scripts/export_configs.sh
 
 dist-configs-check: dist-configs
-	@sh examination/configs-check.sh
+	@bash examination/configs-check.sh
 
 dist-configs-modify:
-	@sh scripts/modify_config.sh
+	@bash scripts/modify_config.sh
 
 dist-configs-help:
 	@echo ''
