@@ -6,10 +6,12 @@
 
 FILE ANCK x86   null %%DIST_OUTPUT%%/kernel-ANCK-generic-x86.config REFRESH
 FILE ANCK arm64 null %%DIST_OUTPUT%%/kernel-ANCK-generic-arm64.config REFRESH
+FILE ANCK loongarch null %%DIST_OUTPUT%%/kernel-ANCK-generic-loongarch.config REFRESH
 
 # for ANCK
 LEVELINFO ANCK null
 IMPORT ANCK-x86
 IMPORT ANCK-arm64
+IMPORT ANCK-loongarch
 
 COLLAPSE ANCK

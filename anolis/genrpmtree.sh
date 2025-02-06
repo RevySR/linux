@@ -35,12 +35,9 @@ function do_prep() {
     ${DIST_RPMBUILDDIR_OUTPUT}/SOURCES/kernel-${DIST_KERNELVERSION}-aarch64.config
     cp ${DIST_OUTPUT}/kernel-ANCK-debug-arm64.config \
     ${DIST_RPMBUILDDIR_OUTPUT}/SOURCES/kernel-${DIST_KERNELVERSION}-aarch64-debug.config
-
-    # the kconfigs of sw_64 and loongarch keep the legacy way,
-    # so still copy them from arch/${arch}/configs/ directory.
-    cp ${DIST_SRCROOT}/arch/loongarch/configs/anolis_defconfig \
+    cp ${DIST_OUTPUT}/kernel-ANCK-generic-loongarch.config \
     ${DIST_RPMBUILDDIR_OUTPUT}/SOURCES/kernel-${DIST_KERNELVERSION}-loongarch64.config
-    cp ${DIST_SRCROOT}/arch/loongarch/configs/anolis-debug_defconfig \
+    cp ${DIST_OUTPUT}/kernel-ANCK-debug-loongarch.config \
     ${DIST_RPMBUILDDIR_OUTPUT}/SOURCES/kernel-${DIST_KERNELVERSION}-loongarch64-debug.config
 }
 

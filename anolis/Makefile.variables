@@ -89,3 +89,6 @@ endif
 ifeq ($(DIST_ARCH),aarch64)
 	DIST_ARCH := arm64
 endif
+ifeq ($(DIST_ARCH),loongarch)
+	DIST_ARCH := loongarch
+endif
