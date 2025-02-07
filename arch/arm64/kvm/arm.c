@@ -2039,8 +2039,10 @@ static int __init init_subsystems(void)
 	kvm_register_perf_callbacks(NULL);
 
 out:
-	if (err)
+	if (err) {
+		kvm_vgic_hyp_uninit();
 		hyp_cpu_pm_exit();
+	}
 
 	if (err || !is_protected_kvm_enabled())
 		on_each_cpu(cpu_hyp_uninit, NULL, 1);
@@ -2051,6 +2053,7 @@ out:
 static void __init teardown_subsystems(void)
 {
 	kvm_unregister_perf_callbacks();
+	kvm_vgic_hyp_uninit();
 	hyp_cpu_pm_exit();
 }
 
