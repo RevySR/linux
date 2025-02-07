@@ -833,10 +833,10 @@ static int la_iommu_attach_dev(struct iommu_domain *domain, struct device *dev)
 	struct iommu_info *info;
 	unsigned short bdf;
 
+	la_iommu_detach_dev(dev);
+
 	if (domain != NULL && domain->type == IOMMU_DOMAIN_BLOCKED)
 		return 0;
-
-	la_iommu_detach_dev(dev);
 
 	if (domain == NULL)
 		return 0;
