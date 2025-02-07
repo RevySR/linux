@@ -45,8 +45,6 @@
 #include <kvm/arm_pmu.h>
 #include <kvm/arm_psci.h>
 
-static enum kvm_mode kvm_mode = KVM_MODE_DEFAULT;
-
 DECLARE_KVM_HYP_PER_CPU(unsigned long, kvm_hyp_vector);
 
 DEFINE_PER_CPU(unsigned long, kvm_arm_hyp_stack_page);
@@ -2474,49 +2472,6 @@ out_hyp:
 out_err:
 	kvm_arm_vmid_alloc_free();
 	return err;
-}
-
-static int __init early_kvm_mode_cfg(char *arg)
-{
-	if (!arg)
-		return -EINVAL;
-
-	if (strcmp(arg, "none") == 0) {
-		kvm_mode = KVM_MODE_NONE;
-		return 0;
-	}
-
-	if (!is_hyp_mode_available()) {
-		pr_warn_once("KVM is not available. Ignoring kvm-arm.mode\n");
-		return 0;
-	}
-
-	if (strcmp(arg, "protected") == 0) {
-		if (!is_kernel_in_hyp_mode())
-			kvm_mode = KVM_MODE_PROTECTED;
-		else
-			pr_warn_once("Protected KVM not available with VHE\n");
-
-		return 0;
-	}
-
-	if (strcmp(arg, "nvhe") == 0 && !WARN_ON(is_kernel_in_hyp_mode())) {
-		kvm_mode = KVM_MODE_DEFAULT;
-		return 0;
-	}
-
-	if (strcmp(arg, "nested") == 0 && !WARN_ON(!is_kernel_in_hyp_mode())) {
-		kvm_mode = KVM_MODE_NV;
-		return 0;
-	}
-
-	return -EINVAL;
-}
-early_param("kvm-arm.mode", early_kvm_mode_cfg);
-
-enum kvm_mode kvm_get_mode(void)
-{
-	return kvm_mode;
 }
 
 module_init(kvm_arm_init);
