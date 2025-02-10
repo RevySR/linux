@@ -20,11 +20,12 @@ function die() {
     echo $@
     echo "usage:"
     echo "    make dist-configs-modify" \
-         "C=<conf_name> L=<level> [x86=<value>] [arm64=<value>] [others=<value>] [all=<value>]"
+         "C=<conf_name> L=<level> [x86=<value>] [arm64=<value>] [loongarch=<value>] [others=<value>] [all=<value>]"
     echo "    C: the config name, must be specified"
     echo "    L: the level of config, must be specified"
     echo "    x86: the value of x86 architecture"
     echo "    arm64: the value of arm64 architecture"
+    echo "    loongarch: the value of loongarch architecture"
     echo "    others: the default value for the architectures that not be specified"
     echo "    all: the value for all architectures"
     echo ""
@@ -42,6 +43,7 @@ declare -A ARCH_VALUES
 function collect_ARCH_VALUES() {
     if [ -n "${x86}" ]; then ARCH_VALUES["x86"]=${x86}; fi
     if [ -n "${arm64}" ]; then ARCH_VALUES["arm64"]=${arm64}; fi
+    if [ -n "${loongarch}" ]; then ARCH_VALUES["loongarch"]=${loongarch}; fi
     if [ -n "${others}" ]; then ARCH_VALUES["default"]=${others}; fi
     if [ -n "${all}" ]; then ARCH_VALUES["default"]=${all}; fi
 
@@ -114,6 +116,7 @@ function check_config() {
     echo "The Final Configs After Refresh"
     check_config_for_one_arch "x86"
     check_config_for_one_arch "arm64"
+    check_config_for_one_arch "loongarch"
     check_config_for_one_arch "default"
     if [ "$CHECK_FOUND_FILE" == "0" ]; then
         echo "Not Found Any Valid config files, maybe some dependency not satisfied"
