@@ -45,6 +45,9 @@ static __always_inline bool kvm_arm_support_pmu_v3(void)
 	return static_branch_likely(&kvm_arm_pmu_available);
 }
 
+extern struct list_head arm_pmus;
+extern struct mutex arm_pmus_lock;
+
 #define kvm_arm_pmu_irq_initialized(v)	((v)->arch.pmu.irq_num >= VGIC_NR_SGIS)
 u64 kvm_pmu_get_counter_value(struct kvm_vcpu *vcpu, u64 select_idx);
 void kvm_pmu_set_counter_value(struct kvm_vcpu *vcpu, u64 select_idx, u64 val);
