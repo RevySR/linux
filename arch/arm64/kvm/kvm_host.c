@@ -105,3 +105,38 @@ u8 kvm_arm_pmu_get_pmuver_limit(void)
 					      ID_AA64DFR0_EL1_PMUVer_V3P5);
 	return FIELD_GET(ARM64_FEATURE_MASK(ID_AA64DFR0_EL1_PMUVer), tmp);
 }
+
+#ifdef CONFIG_KVM_ARM_HOST_VHE_ONLY
+/* PMU events callbacks, use RCU and static call similar to perf_guest_cbs. */
+struct kvm_pmu_ops __rcu *kvm_pmu_ops;
+
+DEFINE_STATIC_CALL_NULL(__kvm_set_pmu_events, *kvm_pmu_ops->set_pmu_events);
+DEFINE_STATIC_CALL_NULL(__kvm_clr_pmu_events, *kvm_pmu_ops->clr_pmu_events);
+DEFINE_STATIC_CALL_RET0(__kvm_set_pmuserenr, *kvm_pmu_ops->set_pmuserenr);
+DEFINE_STATIC_CALL_NULL(__kvm_vcpu_pmu_resync_el0, *kvm_pmu_ops->vcpu_pmu_resync_el0);
+
+void kvm_register_pmu_handlers(struct kvm_pmu_ops *ops)
+{
+	if (WARN_ON_ONCE(rcu_access_pointer(kvm_pmu_ops)))
+		return;
+
+	rcu_assign_pointer(kvm_pmu_ops, ops);
+	static_call_update(__kvm_set_pmu_events, ops->set_pmu_events);
+	static_call_update(__kvm_clr_pmu_events, ops->clr_pmu_events);
+	static_call_update(__kvm_set_pmuserenr, ops->set_pmuserenr);
+	static_call_update(__kvm_vcpu_pmu_resync_el0, ops->vcpu_pmu_resync_el0);
+}
+
+void kvm_unregister_pmu_handlers(struct kvm_pmu_ops *ops)
+{
+	if (WARN_ON_ONCE(rcu_access_pointer(kvm_pmu_ops) != ops))
+		return;
+
+	rcu_assign_pointer(kvm_pmu_ops, NULL);
+	static_call_update(__kvm_set_pmu_events, NULL);
+	static_call_update(__kvm_clr_pmu_events, NULL);
+	static_call_update(__kvm_set_pmuserenr, (void *)&__static_call_return0);
+	static_call_update(__kvm_vcpu_pmu_resync_el0, NULL);
+	synchronize_rcu();
+}
+#endif
