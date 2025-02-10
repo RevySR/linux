@@ -71,4 +71,8 @@ config PROTECTED_NVHE_STACKTRACE
 
 	  If unsure, or not using protected nVHE (pKVM), say N.
 
+config KVM_ARM_HOST_VHE_ONLY
+	def_bool y
+	depends on KVM=m
+
 endif # VIRTUALIZATION
