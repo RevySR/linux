@@ -4,6 +4,8 @@
  */
 #include <linux/kvm_host.h>
 
+#include "vgic/vgic.h"
+
 static enum kvm_mode kvm_mode = KVM_MODE_DEFAULT;
 
 static int __init early_kvm_mode_cfg(char *arg)
@@ -47,4 +49,14 @@ early_param("kvm-arm.mode", early_kvm_mode_cfg);
 enum kvm_mode kvm_get_mode(void)
 {
 	return kvm_mode;
+}
+
+struct gic_kvm_info *gic_kvm_info;
+
+void __init vgic_set_kvm_info(const struct gic_kvm_info *info)
+{
+	BUG_ON(gic_kvm_info != NULL);
+	gic_kvm_info = kmalloc(sizeof(*info), GFP_KERNEL);
+	if (gic_kvm_info)
+		*gic_kvm_info = *info;
 }

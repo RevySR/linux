@@ -373,4 +373,6 @@ static inline bool kvm_has_gicv3(struct kvm *kvm)
 		kvm->arch.vgic.vgic_model == KVM_DEV_TYPE_ARM_VGIC_V3);
 }
 
+extern struct gic_kvm_info *gic_kvm_info;
+
 #endif
