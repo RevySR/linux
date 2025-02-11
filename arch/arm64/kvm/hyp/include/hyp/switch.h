@@ -82,7 +82,7 @@ static inline void __activate_traps_fpsimd32(struct kvm_vcpu *vcpu)
 
 static inline void __activate_traps_hfgxtr(struct kvm_vcpu *vcpu)
 {
-	struct kvm_cpu_context *hctxt = &this_cpu_ptr(&kvm_host_data)->host_ctxt;
+	struct kvm_cpu_context *hctxt = &this_cpu_ptr_wrapper(kvm_host_data)->host_ctxt;
 	u64 r_clr = 0, w_clr = 0, r_set = 0, w_set = 0, tmp;
 	u64 r_val, w_val;
 
@@ -157,7 +157,7 @@ static inline void __activate_traps_hfgxtr(struct kvm_vcpu *vcpu)
 
 static inline void __deactivate_traps_hfgxtr(struct kvm_vcpu *vcpu)
 {
-	struct kvm_cpu_context *hctxt = &this_cpu_ptr(&kvm_host_data)->host_ctxt;
+	struct kvm_cpu_context *hctxt = &this_cpu_ptr_wrapper(kvm_host_data)->host_ctxt;
 
 	if (!cpus_have_final_cap(ARM64_HAS_FGT))
 		return;
@@ -218,7 +218,7 @@ static inline void __activate_traps_common(struct kvm_vcpu *vcpu)
 
 		write_sysreg(0, pmselr_el0);
 
-		hctxt = &this_cpu_ptr(&kvm_host_data)->host_ctxt;
+		hctxt = &this_cpu_ptr_wrapper(kvm_host_data)->host_ctxt;
 		ctxt_sys_reg(hctxt, PMUSERENR_EL0) = read_sysreg(pmuserenr_el0);
 		write_sysreg(ARMV8_PMU_USERENR_MASK, pmuserenr_el0);
 		vcpu_set_flag(vcpu, PMUSERENR_ON_CPU);
@@ -253,7 +253,7 @@ static inline void __deactivate_traps_common(struct kvm_vcpu *vcpu)
 	if (kvm_arm_support_pmu_v3()) {
 		struct kvm_cpu_context *hctxt;
 
-		hctxt = &this_cpu_ptr(&kvm_host_data)->host_ctxt;
+		hctxt = &this_cpu_ptr_wrapper(kvm_host_data)->host_ctxt;
 		write_sysreg(ctxt_sys_reg(hctxt, PMUSERENR_EL0), pmuserenr_el0);
 		vcpu_clear_flag(vcpu, PMUSERENR_ON_CPU);
 	}
@@ -506,7 +506,11 @@ static inline bool esr_is_ptrauth_trap(u64 esr)
 	ctxt_sys_reg(ctxt, key ## KEYHI_EL1) = __val;                   \
 } while(0)
 
+#ifdef MODULE
+extern struct kvm_cpu_context __percpu *kvm_hyp_ctxt;
+#else
 DECLARE_PER_CPU(struct kvm_cpu_context, kvm_hyp_ctxt);
+#endif
 
 static bool kvm_hyp_handle_ptrauth(struct kvm_vcpu *vcpu, u64 *exit_code)
 {
@@ -516,7 +520,7 @@ static bool kvm_hyp_handle_ptrauth(struct kvm_vcpu *vcpu, u64 *exit_code)
 	if (!vcpu_has_ptrauth(vcpu))
 		return false;
 
-	ctxt = this_cpu_ptr(&kvm_hyp_ctxt);
+	ctxt = this_cpu_ptr_wrapper(kvm_hyp_ctxt);
 	__ptrauth_save_key(ctxt, APIA);
 	__ptrauth_save_key(ctxt, APIB);
 	__ptrauth_save_key(ctxt, APDA);

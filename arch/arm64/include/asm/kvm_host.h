@@ -1037,7 +1037,11 @@ void kvm_set_sei_esr(struct kvm_vcpu *vcpu, u64 syndrome);
 
 struct kvm_vcpu *kvm_mpidr_to_vcpu(struct kvm *kvm, unsigned long mpidr);
 
+#ifdef CONFIG_KVM_ARM_HOST_VHE_ONLY
+extern struct kvm_host_data __percpu *kvm_host_data;
+#else
 DECLARE_KVM_HYP_PER_CPU(struct kvm_host_data, kvm_host_data);
+#endif
 
 static inline void kvm_init_host_cpu_context(struct kvm_cpu_context *cpu_ctxt)
 {

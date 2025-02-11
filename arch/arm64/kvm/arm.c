@@ -1686,12 +1686,45 @@ static void unregister_pmu_handlers(void)
 {
 	kvm_unregister_pmu_handlers(&__kvm_pmu_ops);
 }
+
+static int __init kvm_alloc_percpu(void)
+{
+	kvm_host_data = alloc_percpu(struct kvm_host_data);
+	if (!kvm_host_data) {
+		kvm_err("Failed to allocate percpu memory for kvm_host_data.\n");
+		return -ENOMEM;
+	}
+
+	kvm_hyp_ctxt = alloc_percpu(struct kvm_cpu_context);
+	if (!kvm_hyp_ctxt) {
+		free_percpu(kvm_host_data);
+		kvm_err("Failed to allocate percpu memory for kvm_hyp_ctxt.\n");
+		return -ENOMEM;
+	}
+
+	return 0;
+}
+
+static void kvm_free_percpu(void)
+{
+	free_percpu(kvm_host_data);
+	free_percpu(kvm_hyp_ctxt);
+}
 #else
 static inline void __init register_pmu_handlers(void)
 {
 }
 
 static inline void unregister_pmu_handlers(void)
+{
+}
+
+static inline int __init kvm_alloc_percpu(void)
+{
+	return 0;
+}
+
+static void kvm_free_percpu(void)
 {
 }
 #endif
@@ -2462,6 +2495,10 @@ static __init int kvm_arm_init(void)
 		return err;
 	}
 
+	err = kvm_alloc_percpu();
+	if (err)
+		goto out_err;
+
 	if (!in_hyp_mode) {
 		err = init_hyp_mode();
 		if (err)
@@ -2504,6 +2541,7 @@ out_hyp:
 	if (!in_hyp_mode)
 		teardown_hyp_mode();
 out_err:
+	kvm_free_percpu();
 	kvm_arm_vmid_alloc_free();
 	return err;
 }
