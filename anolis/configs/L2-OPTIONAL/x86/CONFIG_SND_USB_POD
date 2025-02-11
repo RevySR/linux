@@ -1,1 +1,1 @@
-# CONFIG_SND_USB_POD is not set
+CONFIG_SND_USB_POD=m

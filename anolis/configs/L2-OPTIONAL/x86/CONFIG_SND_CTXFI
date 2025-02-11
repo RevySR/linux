@@ -1,1 +1,1 @@
-# CONFIG_SND_CTXFI is not set
+CONFIG_SND_CTXFI=m

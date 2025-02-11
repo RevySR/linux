@@ -1,1 +1,1 @@
-# CONFIG_SND_INDIGO is not set
+CONFIG_SND_INDIGO=m

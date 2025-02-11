@@ -1,1 +1,1 @@
-# CONFIG_SND_GINA24 is not set
+CONFIG_SND_GINA24=m

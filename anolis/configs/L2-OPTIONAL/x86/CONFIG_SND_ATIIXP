@@ -1,1 +1,1 @@
-# CONFIG_SND_ATIIXP is not set
+CONFIG_SND_ATIIXP=m

@@ -1,1 +1,1 @@
-# CONFIG_SND_LOLA is not set
+CONFIG_SND_LOLA=m

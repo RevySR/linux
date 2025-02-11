@@ -1,1 +1,1 @@
-# CONFIG_SND_OXYGEN is not set
+CONFIG_SND_OXYGEN=m

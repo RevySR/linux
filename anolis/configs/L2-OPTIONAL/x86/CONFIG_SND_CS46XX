@@ -1,1 +1,1 @@
-# CONFIG_SND_CS46XX is not set
+CONFIG_SND_CS46XX=m

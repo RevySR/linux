@@ -1,1 +1,1 @@
-# CONFIG_SND_OXFW is not set
+CONFIG_SND_OXFW=m

@@ -1,1 +1,1 @@
-# CONFIG_SND_RME32 is not set
+CONFIG_SND_RME32=m

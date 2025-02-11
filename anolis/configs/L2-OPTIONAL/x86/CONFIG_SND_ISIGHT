@@ -1,1 +1,1 @@
-# CONFIG_SND_ISIGHT is not set
+CONFIG_SND_ISIGHT=m

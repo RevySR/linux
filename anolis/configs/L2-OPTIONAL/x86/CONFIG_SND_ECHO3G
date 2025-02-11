@@ -1,1 +1,1 @@
-# CONFIG_SND_ECHO3G is not set
+CONFIG_SND_ECHO3G=m
