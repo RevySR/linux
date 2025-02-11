@@ -1,1 +1,1 @@
-# CONFIG_BNA is not set
+CONFIG_BNA=m

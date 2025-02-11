@@ -1,1 +1,1 @@
-# CONFIG_TULIP is not set
+CONFIG_TULIP=m

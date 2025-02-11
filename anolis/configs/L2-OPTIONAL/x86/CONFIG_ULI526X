@@ -1,1 +1,1 @@
-# CONFIG_ULI526X is not set
+CONFIG_ULI526X=m
