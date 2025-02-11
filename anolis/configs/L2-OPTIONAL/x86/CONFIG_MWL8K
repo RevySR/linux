@@ -1,1 +1,1 @@
-# CONFIG_MWL8K is not set
+CONFIG_MWL8K=m

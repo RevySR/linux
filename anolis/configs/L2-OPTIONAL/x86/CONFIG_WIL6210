@@ -1,1 +1,1 @@
-# CONFIG_WIL6210 is not set
+CONFIG_WIL6210=m
