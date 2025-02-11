@@ -45,6 +45,10 @@
 #include <kvm/arm_pmu.h>
 #include <kvm/arm_psci.h>
 
+#ifdef MODULE
+MODULE_IMPORT_NS(KVM);
+#endif
+
 DECLARE_KVM_HYP_PER_CPU(unsigned long, kvm_hyp_vector);
 
 DEFINE_PER_CPU(unsigned long, kvm_arm_hyp_stack_page);
