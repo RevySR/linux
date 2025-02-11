@@ -16,9 +16,25 @@
 
 #define HYP_MEMBLOCK_REGIONS 128
 
+#ifdef CONFIG_KVM_ARM_HOST_VHE_ONLY
+static inline int pkvm_init_host_vm(struct kvm *kvm)
+{
+	return 0;
+}
+
+static inline int pkvm_create_hyp_vm(struct kvm *kvm)
+{
+	return 0;
+}
+
+static inline void pkvm_destroy_hyp_vm(struct kvm *kvm)
+{
+}
+#else
 int pkvm_init_host_vm(struct kvm *kvm);
 int pkvm_create_hyp_vm(struct kvm *kvm);
 void pkvm_destroy_hyp_vm(struct kvm *kvm);
+#endif
 
 extern struct memblock_region kvm_nvhe_sym(hyp_memory)[];
 extern unsigned int kvm_nvhe_sym(hyp_memblock_nr);
