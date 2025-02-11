@@ -9497,16 +9497,11 @@ void memcg_meminfo(struct mem_cgroup *memcg,
 		ext->lrupages[i] = memcg_page_state(memcg, NR_LRU_BASE + i);
 
 	/* Like what si_mem_available() does */
-
-	// TODO: memcg_wmark depends on background async page reclaim, waiting
-	// for it.
-
-	//memcg_wmark = memcg->memory.wmark_high;
-	//if (memcg->wmark_ratio && info->totalram > memcg_wmark)
-	//	memcg_wmark = info->totalram - memcg_wmark;
-	//else
-	//	memcg_wmark = 0;
-	memcg_wmark = 0;
+	memcg_wmark = memcg->memory.wmark_high;
+	if (memcg->wmark_ratio && info->totalram > memcg_wmark)
+		memcg_wmark = info->totalram - memcg_wmark;
+	else
+		memcg_wmark = 0;
 
 	pagecache = ext->lrupages[LRU_ACTIVE_FILE] +
 		ext->lrupages[LRU_INACTIVE_FILE];
