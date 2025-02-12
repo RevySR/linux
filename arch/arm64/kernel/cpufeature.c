@@ -115,6 +115,7 @@ bool arm64_use_ng_mappings = false;
 EXPORT_SYMBOL(arm64_use_ng_mappings);
 
 DEFINE_PER_CPU_READ_MOSTLY(const char *, this_cpu_vector) = vectors;
+EXPORT_SYMBOL_FOR_KVM(this_cpu_vector);
 
 /*
  * Permit PER_LINUX32 and execve() of 32-bit binaries even if not all CPUs
@@ -127,6 +128,7 @@ static bool __read_mostly allow_mismatched_32bit_el0;
  * seen at least one CPU capable of 32-bit EL0.
  */
 DEFINE_STATIC_KEY_FALSE(arm64_mismatched_32bit_el0);
+EXPORT_SYMBOL_FOR_KVM(arm64_mismatched_32bit_el0);
 
 /*
  * Mask of CPUs supporting 32-bit EL0.
@@ -799,6 +801,7 @@ struct arm64_ftr_reg *get_arm64_ftr_reg(u32 sys_id)
 	WARN_ON(!reg);
 	return reg;
 }
+EXPORT_SYMBOL_FOR_KVM(get_arm64_ftr_reg);
 
 static u64 arm64_ftr_set_value(const struct arm64_ftr_bits *ftrp, s64 reg,
 			       s64 ftr_val)
@@ -835,6 +838,7 @@ s64 arm64_ftr_safe_value(const struct arm64_ftr_bits *ftrp, s64 new,
 
 	return ret;
 }
+EXPORT_SYMBOL_FOR_KVM(arm64_ftr_safe_value);
 
 static void __init sort_ftr_regs(void)
 {
@@ -3219,6 +3223,11 @@ static void verify_sme_features(void)
 	/* Add checks on other SMCR bits here if necessary */
 }
 
+#ifdef CONFIG_KVM_ARM_HOST_VHE_ONLY
+static inline void verify_hyp_capabilities(void)
+{
+}
+#else
 static void verify_hyp_capabilities(void)
 {
 	u64 safe_mmfr1, mmfr0, mmfr1;
@@ -3249,6 +3258,7 @@ static void verify_hyp_capabilities(void)
 		cpu_die_early();
 	}
 }
+#endif
 
 /*
  * Run through the enabled system capabilities and enable() it on this CPU.
@@ -3560,6 +3570,7 @@ enum mitigation_state arm64_get_meltdown_state(void)
 
 	return SPECTRE_VULNERABLE;
 }
+EXPORT_SYMBOL_FOR_KVM(arm64_get_meltdown_state);
 
 ssize_t cpu_show_meltdown(struct device *dev, struct device_attribute *attr,
 			  char *buf)

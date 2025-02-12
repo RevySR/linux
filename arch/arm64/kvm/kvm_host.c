@@ -5,12 +5,14 @@
 #include <linux/kvm_host.h>
 #include <kvm/arm_pmu.h>
 #include <asm/arm_pmuv3.h>
+#include <asm/vectors.h>
 
 #include "vgic/vgic.h"
 
 static enum kvm_mode kvm_mode = KVM_MODE_DEFAULT;
 
 DEFINE_STATIC_KEY_FALSE(kvm_protected_mode_initialized);
+EXPORT_SYMBOL_FOR_KVM(kvm_protected_mode_initialized);
 
 static int __init early_kvm_mode_cfg(char *arg)
 {
@@ -54,8 +56,10 @@ enum kvm_mode kvm_get_mode(void)
 {
 	return kvm_mode;
 }
+EXPORT_SYMBOL_FOR_KVM(kvm_get_mode);
 
 struct gic_kvm_info *gic_kvm_info;
+EXPORT_SYMBOL_FOR_KVM(gic_kvm_info);
 
 void __init vgic_set_kvm_info(const struct gic_kvm_info *info)
 {
@@ -66,9 +70,12 @@ void __init vgic_set_kvm_info(const struct gic_kvm_info *info)
 }
 
 DEFINE_STATIC_KEY_FALSE(kvm_arm_pmu_available);
+EXPORT_SYMBOL_FOR_KVM(kvm_arm_pmu_available);
 
 LIST_HEAD(arm_pmus);
+EXPORT_SYMBOL_FOR_KVM(arm_pmus);
 DEFINE_MUTEX(arm_pmus_lock);
+EXPORT_SYMBOL_FOR_KVM(arm_pmus_lock);
 
 void kvm_host_pmu_init(struct arm_pmu *pmu)
 {
@@ -107,6 +114,7 @@ u8 kvm_arm_pmu_get_pmuver_limit(void)
 					      ID_AA64DFR0_EL1_PMUVer_V3P5);
 	return FIELD_GET(ARM64_FEATURE_MASK(ID_AA64DFR0_EL1_PMUVer), tmp);
 }
+EXPORT_SYMBOL_FOR_KVM(kvm_arm_pmu_get_pmuver_limit);
 
 #ifdef CONFIG_KVM_ARM_HOST_VHE_ONLY
 /* PMU events callbacks, use RCU and static call similar to perf_guest_cbs. */
@@ -128,6 +136,7 @@ void kvm_register_pmu_handlers(struct kvm_pmu_ops *ops)
 	static_call_update(__kvm_set_pmuserenr, ops->set_pmuserenr);
 	static_call_update(__kvm_vcpu_pmu_resync_el0, ops->vcpu_pmu_resync_el0);
 }
+EXPORT_SYMBOL_FOR_KVM(kvm_register_pmu_handlers);
 
 void kvm_unregister_pmu_handlers(struct kvm_pmu_ops *ops)
 {
@@ -141,4 +150,16 @@ void kvm_unregister_pmu_handlers(struct kvm_pmu_ops *ops)
 	static_call_update(__kvm_vcpu_pmu_resync_el0, NULL);
 	synchronize_rcu();
 }
+EXPORT_SYMBOL_FOR_KVM(kvm_unregister_pmu_handlers);
+
+void kvm_patch_vector_branch(struct alt_instr *alt,
+			     __le32 *origptr, __le32 *updptr, int nr_inst)
+{
+	if (!cpus_have_cap(ARM64_SPECTRE_V3A) ||
+	    WARN_ON_ONCE(cpus_have_cap(ARM64_HAS_VIRT_HOST_EXTN)))
+		return;
+}
+EXPORT_SYMBOL_FOR_KVM(kvm_patch_vector_branch);
+
+EXPORT_SYMBOL_FOR_KVM(vectors);
 #endif

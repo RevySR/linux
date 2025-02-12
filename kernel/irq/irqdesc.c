@@ -386,6 +386,7 @@ struct irq_desc *irq_to_desc(unsigned int irq)
 #ifdef CONFIG_KVM_BOOK3S_64_HV_MODULE
 EXPORT_SYMBOL_GPL(irq_to_desc);
 #endif
+EXPORT_SYMBOL_FOR_KVM(irq_to_desc);
 
 #ifdef CONFIG_SMP
 static void free_masks(struct irq_desc *desc)

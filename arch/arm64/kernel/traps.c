@@ -900,6 +900,7 @@ const char *esr_get_class_string(unsigned long esr)
 {
 	return esr_class_str[ESR_ELx_EC(esr)];
 }
+EXPORT_SYMBOL_FOR_KVM(esr_get_class_string);
 
 /*
  * bad_el0_sync handles unexpected, but potentially recoverable synchronous
@@ -996,6 +997,7 @@ bool arm64_is_fatal_ras_serror(struct pt_regs *regs, unsigned long esr)
 		arm64_serror_panic(regs, esr);
 	}
 }
+EXPORT_SYMBOL_FOR_KVM(arm64_is_fatal_ras_serror);
 
 void do_serror(struct pt_regs *regs, unsigned long esr)
 {

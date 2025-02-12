@@ -113,6 +113,7 @@ unsigned int arch_cpufreq_get_khz(int cpu)
 	 */
 	return new_cpufreq ? new_cpufreq : cpufreq_khz;
 }
+EXPORT_SYMBOL_FOR_KVM(arch_cpufreq_get_khz);
 
 #ifdef CONFIG_ARM64_AMU_EXTN
 #define read_corecnt()	read_sysreg_s(SYS_AMEVCNTR0_CORE_EL0)

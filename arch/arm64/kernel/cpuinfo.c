@@ -49,6 +49,7 @@ static inline const char *icache_policy_str(int l1ip)
 }
 
 unsigned long __icache_flags;
+EXPORT_SYMBOL_FOR_KVM(__icache_flags);
 
 static const char *const hwcap_str[] = {
 	[KERNEL_HWCAP_FP]		= "fp",

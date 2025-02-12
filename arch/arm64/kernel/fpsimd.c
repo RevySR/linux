@@ -138,6 +138,7 @@ __ro_after_init struct vl_info vl_info[ARM64_VEC_MAX] = {
 	},
 #endif
 };
+EXPORT_SYMBOL_FOR_KVM(vl_info);
 
 static unsigned int vec_vl_inherit_flag(enum vec_type type)
 {
@@ -1708,6 +1709,32 @@ void fpsimd_signal_preserve_current_state(void)
 }
 
 /*
+ * Called by KVM when entering the guest.
+ */
+void fpsimd_kvm_prepare(void)
+{
+	if (!system_supports_sve())
+		return;
+
+	/*
+	 * KVM does not save host SVE state since we can only enter
+	 * the guest from a syscall so the ABI means that only the
+	 * non-saved SVE state needs to be saved.  If we have left
+	 * SVE enabled for performance reasons then update the task
+	 * state to be FPSIMD only.
+	 */
+	get_cpu_fpsimd_context();
+
+	if (test_and_clear_thread_flag(TIF_SVE)) {
+		sve_to_fpsimd(current);
+		current->thread.fp_type = FP_STATE_FPSIMD;
+	}
+
+	put_cpu_fpsimd_context();
+}
+EXPORT_SYMBOL_FOR_KVM(fpsimd_kvm_prepare);
+
+/*
  * Associate current's FPSIMD context with this cpu
  * The caller must have ownership of the cpu FPSIMD context before calling
  * this function.
@@ -1755,6 +1782,7 @@ void fpsimd_bind_state_to_cpu(struct cpu_fp_state *state)
 
 	*last = *state;
 }
+EXPORT_SYMBOL_FOR_KVM(fpsimd_bind_state_to_cpu);
 
 /*
  * Load the userland FPSIMD state of 'current' from memory, but only if the
@@ -1876,6 +1904,7 @@ void fpsimd_save_and_flush_cpu_state(void)
 	fpsimd_flush_cpu_state();
 	__put_cpu_fpsimd_context();
 }
+EXPORT_SYMBOL_FOR_KVM(fpsimd_save_and_flush_cpu_state);
 
 #ifdef CONFIG_KERNEL_MODE_NEON
 
