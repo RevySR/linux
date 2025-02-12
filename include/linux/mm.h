@@ -552,6 +552,7 @@ struct vm_fault {
 	};
 
 	struct page *cow_page;		/* Page handler may use for COW fault */
+	struct page *dup_page;          /* Duplicated page for remote node */
 	struct page *page;		/* ->fault handlers should return a
 					 * page here, unless VM_FAULT_NOPAGE
 					 * is set (which is also implied by

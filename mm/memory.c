@@ -78,6 +78,7 @@
 #include <linux/vmalloc.h>
 #include <linux/zswap.h>
 #include <linux/sched/sysctl.h>
+#include <linux/page_dup.h>
 
 #include <trace/events/kmem.h>
 
@@ -5120,8 +5121,10 @@ vm_fault_t finish_fault(struct vm_fault *vmf)
 fallback:
 	addr = vmf->address;
 
-	/* Did we COW the page? */
-	if (is_cow)
+	if (IS_ENABLED(CONFIG_DUPTEXT) && !(vmf->flags & FAULT_FLAG_WRITE) && vmf->dup_page)
+		page = vmf->dup_page;
+	else if (is_cow)
+		/* Did we COW the page? */
 		page = vmf->cow_page;
 	else
 		page = vmf->page;
@@ -5340,11 +5343,23 @@ static vm_fault_t do_read_fault(struct vm_fault *vmf)
 	if (unlikely(ret & (VM_FAULT_ERROR | VM_FAULT_NOPAGE | VM_FAULT_RETRY)))
 		return ret;
 
+#ifdef CONFIG_DUPTEXT
+	vmf->dup_page = dup_page(vmf->page, vmf->vma);
+#endif
+
 	ret |= finish_fault(vmf);
 	folio = page_folio(vmf->page);
 	folio_unlock(folio);
-	if (unlikely(ret & (VM_FAULT_ERROR | VM_FAULT_NOPAGE | VM_FAULT_RETRY)))
+#ifdef CONFIG_DUPTEXT
+	if (vmf->dup_page)
 		folio_put(folio);
+#endif
+	if (unlikely(ret & (VM_FAULT_ERROR | VM_FAULT_NOPAGE | VM_FAULT_RETRY)))
+#ifdef CONFIG_DUPTEXT
+		folio_put(vmf->dup_page ? page_folio(vmf->dup_page) : folio);
+#else
+		folio_put(folio);
+#endif
 	return ret;
 }
 

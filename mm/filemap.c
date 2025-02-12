@@ -48,6 +48,7 @@
 #include <linux/sched/mm.h>
 #include <asm/pgalloc.h>
 #include <asm/tlbflush.h>
+#include <linux/page_dup.h>
 #ifdef CONFIG_PAGECACHE_LIMIT
 #include <linux/pagecache_limit.h>
 #endif
@@ -3800,6 +3801,7 @@ vm_fault_t filemap_map_pages(struct vm_fault *vmf,
 
 	folio_type = mm_counter_file(&folio->page);
 	do {
+		struct page *d_page;
 		unsigned long end;
 
 		addr += (xas.xa_index - last_pgoff) << PAGE_SHIFT;
@@ -3807,6 +3809,13 @@ vm_fault_t filemap_map_pages(struct vm_fault *vmf,
 		last_pgoff = xas.xa_index;
 		end = folio->index + folio_nr_pages(folio) - 1;
 		nr_pages = min(end, end_pgoff) - xas.xa_index + 1;
+
+		d_page = dup_page(folio_page(folio, 0), vma);
+		if (d_page) {
+			folio_unlock(folio);
+			folio_put(folio);
+			folio = page_folio(d_page);
+		}
 
 		if (!folio_test_large(folio))
 			ret |= filemap_map_order0_folio(vmf,
@@ -3816,8 +3825,10 @@ vm_fault_t filemap_map_pages(struct vm_fault *vmf,
 					xas.xa_index - folio->index, addr,
 					nr_pages, &rss, &mmap_miss);
 
-		folio_unlock(folio);
-		folio_put(folio);
+		if (!d_page) {
+			folio_unlock(folio);
+			folio_put(folio);
+		}
 	} while ((folio = next_uptodate_folio(&xas, mapping, end_pgoff)) != NULL);
 	add_mm_counter(vma->vm_mm, folio_type, rss);
 	pte_unmap_unlock(vmf->pte, vmf->ptl);
