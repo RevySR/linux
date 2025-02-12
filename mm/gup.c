@@ -2443,20 +2443,6 @@ static bool gup_fast_folio_allowed(struct folio *folio, unsigned int flags)
 
 	/* We hold a folio reference, so we can safely access folio fields. */
 
-	/* secretmem folios are always order-0 folios. */
-	if (IS_ENABLED(CONFIG_SECRETMEM) && !folio_test_large(folio))
-		check_secretmem = true;
-
-	if (!reject_file_backed && !check_secretmem)
-		return true;
-
-	if (WARN_ON_ONCE(folio_test_slab(folio)))
-		return false;
-
-	/* hugetlb neither requires dirty-tracking nor can be secretmem. */
-	if (folio_test_hugetlb(folio))
-		return true;
-
 	/*
 	 * GUP-fast disables IRQs. When IRQS are disabled, RCU grace periods
 	 * cannot proceed, which means no actions performed under RCU can
@@ -2473,6 +2459,20 @@ static bool gup_fast_folio_allowed(struct folio *folio, unsigned int flags)
 	 * we read it once and only once.
 	 */
 	mapping = READ_ONCE(folio->mapping);
+
+	/* secretmem folios are always order-0 folios. */
+	if (IS_ENABLED(CONFIG_SECRETMEM) && !folio_test_large(folio) && mapping)
+		check_secretmem = true;
+
+	if (!reject_file_backed && !check_secretmem)
+		return true;
+
+	if (WARN_ON_ONCE(folio_test_slab(folio)))
+		return false;
+
+	/* hugetlb neither requires dirty-tracking nor can be secretmem. */
+	if (folio_test_hugetlb(folio))
+		return true;
 
 	/*
 	 * The mapping may have been truncated, in any case we cannot determine
