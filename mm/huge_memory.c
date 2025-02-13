@@ -39,6 +39,7 @@
 #include <linux/sched/sysctl.h>
 #include <linux/memory-tiers.h>
 #include <linux/compat.h>
+#include <linux/page_dup.h>
 
 #include <asm/tlb.h>
 #include <asm/pgalloc.h>
@@ -3336,7 +3337,14 @@ int split_huge_page_to_list(struct page *page, struct list_head *list)
 		goto out_unlock;
 	}
 
+	if (page_dup_slave(folio_page(folio, 0))) {
+		ret = -EBUSY;
+		goto out_unlock;
+	}
+
 	unmap_folio(folio);
+
+	dedup_page(folio_page(folio, 0), true);
 
 	/* block interrupt reentry in xa_lock and spinlock */
 	local_irq_disable();
