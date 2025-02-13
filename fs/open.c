@@ -953,6 +953,10 @@ static int do_dentry_open(struct file *f,
 	/*
 	 * XXX: Huge page cache doesn't support writing yet. Drop all page
 	 * cache for this file before processing writes.
+	 *
+	 * XXX: Duptext doesn't support writing yet. Drop all page
+	 * cache for this file before processing writes. TODO: Only drop
+	 * duplicated pages.
 	 */
 	if (f->f_mode & FMODE_WRITE) {
 		/*
@@ -962,7 +966,8 @@ static int do_dentry_open(struct file *f,
 		 * of THPs into the page cache will fail.
 		 */
 		smp_mb();
-		if (filemap_nr_thps(inode->i_mapping)) {
+		if (filemap_nr_thps(inode->i_mapping) ||
+		    filemap_nr_duptext(inode->i_mapping)) {
 			struct address_space *mapping = inode->i_mapping;
 
 			filemap_invalidate_lock(inode->i_mapping);
