@@ -230,14 +230,14 @@ void __filemap_remove_folio(struct folio *folio, void *shadow)
 void filemap_free_folio(struct address_space *mapping, struct folio *folio)
 {
 	void (*free_folio)(struct folio *);
-	int refs = 1;
+	int refs = folio_nr_pages(folio);
 
 	free_folio = mapping->a_ops->free_folio;
 	if (free_folio)
 		free_folio(folio);
 
-	if (folio_test_large(folio))
-		refs = folio_nr_pages(folio);
+	dedup_page(folio_page(folio, 0), false);
+
 	folio_put_refs(folio, refs);
 }
 
@@ -881,6 +881,9 @@ void replace_page_cache_folio(struct folio *old, struct folio *new)
 	xas_unlock_irq(&xas);
 	if (free_folio)
 		free_folio(old);
+
+	dedup_page(folio_page(old, 0), false);
+
 	folio_put(old);
 }
 EXPORT_SYMBOL_GPL(replace_page_cache_folio);
