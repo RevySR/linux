@@ -21,6 +21,7 @@
 #include <linux/task_io_accounting_ops.h>
 #include <linux/shmem_fs.h>
 #include <linux/rmap.h>
+#include <linux/page_dup.h>
 #include "internal.h"
 
 /*
@@ -299,6 +300,10 @@ long invalidate_inode_page(struct page *page)
 	/* The page may have been truncated before it was locked */
 	if (!mapping)
 		return 0;
+
+	if (dup_page_mapped(page))
+		return 0;
+
 	return mapping_evict_folio(mapping, folio);
 }
 
