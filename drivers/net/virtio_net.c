@@ -32,6 +32,10 @@ module_param(csum, bool, 0444);
 module_param(gso, bool, 0444);
 module_param(napi_tx, bool, 0644);
 
+/* 7 days are long enough by default. */
+static unsigned int cvq_timeout = 7 * 24 * 3600 * 1000;
+module_param(cvq_timeout, uint, 0644);
+
 /* FIXME: MTU in config. */
 #define GOOD_PACKET_LEN (ETH_HLEN + VLAN_HLEN + ETH_DATA_LEN)
 #define GOOD_COPY_LEN	128
@@ -2496,6 +2500,7 @@ static int virtnet_tx_resize(struct virtnet_info *vi,
 static bool virtnet_send_command(struct virtnet_info *vi, u8 class, u8 cmd,
 				 struct scatterlist *out)
 {
+	unsigned long time_end = jiffies + msecs_to_jiffies(cvq_timeout);
 	struct scatterlist *sgs[4], hdr, stat;
 	unsigned out_num = 0, tmp;
 	int ret;
@@ -2533,6 +2538,14 @@ static bool virtnet_send_command(struct virtnet_info *vi, u8 class, u8 cmd,
 	 */
 	while (!virtqueue_get_buf(vi->cvq, &tmp) &&
 	       !virtqueue_is_broken(vi->cvq)) {
+		if (time_after_eq(jiffies, time_end)) {
+			netdev_warn(vi->dev,
+				    "Timeout occurs when waiting the CVQ "
+				    "request, break the virtio device.\n");
+			virtio_break_device(vi->vdev);
+			return false;
+		}
+
 		cond_resched();
 		cpu_relax();
 	}
