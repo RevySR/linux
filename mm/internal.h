@@ -14,6 +14,7 @@
 #include <linux/rmap.h>
 #include <linux/swap.h>
 #include <linux/swapops.h>
+#include <linux/page_dup.h>
 #include <linux/tracepoint-defs.h>
 
 struct folio_batch;
@@ -907,6 +908,10 @@ void mlock_folio(struct folio *folio);
 static inline void mlock_vma_folio(struct folio *folio,
 				struct vm_area_struct *vma)
 {
+	/* TODO Do not mlock slave duplicated page */
+	if (page_dup_slave(folio_page(folio, 0)))
+		return;
+
 	/*
 	 * The VM_SPECIAL check here serves two purposes.
 	 * 1) VM_IO check prevents migration from double-counting during mlock.
