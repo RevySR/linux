@@ -820,6 +820,35 @@ static int cxl_event_config(struct pci_host_bridge *host_bridge,
 	return 0;
 }
 
+static unsigned short aliscm_ready_timeout = 120;
+module_param(aliscm_ready_timeout, ushort, 0644);
+MODULE_PARM_DESC(aliscm_ready_timeout, "seconds to wait for AliSCM ready");
+
+static int cxl_wait_for_aliscm_ready(struct cxl_dev_state *cxlds)
+{
+	const unsigned long start = jiffies;
+	unsigned long end = start;
+
+	while (cxl_await_media_ready(cxlds) != 0) {
+		msleep_interruptible(1000);
+		end = jiffies;
+
+		if (time_after(end, start + aliscm_ready_timeout * HZ)) {
+			/* Check again in case preempted before timeout test */
+			if (cxl_await_media_ready(cxlds) == 0)
+				break;
+
+			dev_err(cxlds->dev, "timeout awaiting aliscm ready");
+			return -ETIMEDOUT;
+		}
+	}
+
+	dev_dbg(cxlds->dev, "AliSCM ready took %dms",
+		jiffies_to_msecs(end) - jiffies_to_msecs(start));
+
+	return 0;
+}
+
 static int cxl_pci_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 {
 	struct pci_host_bridge *host_bridge = pci_find_host_bridge(pdev->bus);
@@ -879,7 +908,10 @@ static int cxl_pci_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 	if (rc)
 		dev_dbg(&pdev->dev, "Failed to map RAS capability.\n");
 
-	rc = cxl_await_media_ready(cxlds);
+	if (pdev->vendor == PCI_VENDOR_ID_ALISCM && pdev->device == 0x0ddb)
+		rc = cxl_wait_for_aliscm_ready(cxlds);
+	else
+		rc = cxl_await_media_ready(cxlds);
 	if (rc == 0)
 		cxlds->media_ready = true;
 	else

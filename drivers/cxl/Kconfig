@@ -154,4 +154,12 @@ config CXL_PMU
 	  monitoring units and provide standard perf based interfaces.
 
 	  If unsure say 'm'.
+
+config CXL_ALISCM
+	tristate "CXL: Specific Support for AliSCM"
+	default CXL_BUS
+	help
+	  Say 'y/m' to enable support for DOE interfaces and custom features of AliSCM.
+
+	  If unsure say 'm'.
 endif
