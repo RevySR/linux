@@ -50,6 +50,7 @@
 #include <linux/random.h>
 #include <linux/sched/sysctl.h>
 #include <linux/memory-tiers.h>
+#include <linux/page_dup.h>
 
 #include <asm/tlbflush.h>
 
@@ -1223,6 +1224,15 @@ static int migrate_folio_unmap(new_folio_t get_new_folio,
 	locked = true;
 	if (folio_test_mlocked(src))
 		old_page_state |= PAGE_WAS_MLOCKED;
+
+	/*
+	 * Check PG_dup with page lock here. A page can become PG_dup after the
+	 * check of suitable_migration_source or vma_migratable.
+	 */
+	if (page_dup_any(folio_page(src, 0))) {
+		rc = -EBUSY;
+		goto out;
+	}
 
 	if (folio_test_writeback(src)) {
 		/*
