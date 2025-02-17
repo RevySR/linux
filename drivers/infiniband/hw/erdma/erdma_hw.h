@@ -11,6 +11,8 @@
 #include <linux/types.h>
 
 /* PCIe device related definition. */
+#define PCI_VENDOR_ID_ALIBABA 0x1ded
+
 #define ERDMA_PCI_WIDTH 64
 #define ERDMA_FUNC_BAR 0
 #define ERDMA_MISX_BAR 2
@@ -44,17 +46,6 @@
 #define ERDMA_CMDQ_CQ_DB_HOST_ADDR_REG 0x68
 #define ERDMA_CMDQ_EQ_DB_HOST_ADDR_REG 0x70
 #define ERDMA_AEQ_DB_HOST_ADDR_REG 0x78
-#define ERDMA_REGS_STATS_TSO_IN_PKTS_REG 0x80
-#define ERDMA_REGS_STATS_TSO_OUT_PKTS_REG 0x88
-#define ERDMA_REGS_STATS_TSO_OUT_BYTES_REG 0x90
-#define ERDMA_REGS_STATS_TX_DROP_PKTS_REG 0x98
-#define ERDMA_REGS_STATS_TX_BPS_METER_DROP_PKTS_REG 0xa0
-#define ERDMA_REGS_STATS_TX_PPS_METER_DROP_PKTS_REG 0xa8
-#define ERDMA_REGS_STATS_RX_PKTS_REG 0xc0
-#define ERDMA_REGS_STATS_RX_BYTES_REG 0xc8
-#define ERDMA_REGS_STATS_RX_DROP_PKTS_REG 0xd0
-#define ERDMA_REGS_STATS_RX_BPS_METER_DROP_PKTS_REG 0xd8
-#define ERDMA_REGS_STATS_RX_PPS_METER_DROP_PKTS_REG 0xe0
 #define ERDMA_REGS_CEQ_DB_BASE_REG 0x100
 #define ERDMA_CMDQ_SQDB_REG 0x200
 #define ERDMA_CMDQ_CQDB_REG 0x300
@@ -79,6 +70,19 @@
 
 #define ERDMA_BAR_CQDB_SPACE_OFFSET \
 	(ERDMA_BAR_RQDB_SPACE_OFFSET + ERDMA_BAR_RQDB_SPACE_SIZE)
+
+/* Doorbell page resources related. */
+/*
+ * Max # of parallelly issued directSQE is 3072 per device,
+ * hardware organizes this into 24 group, per group has 128 credits.
+ */
+#define ERDMA_DWQE_MAX_GRP_CNT 24
+#define ERDMA_DWQE_NUM_PER_GRP 128
+
+#define ERDMA_DWQE_TYPE0_CNT 64
+#define ERDMA_DWQE_TYPE1_CNT 496
+/* type1 DB contains 2 DBs, takes 256Byte. */
+#define ERDMA_DWQE_TYPE1_CNT_PER_PAGE 16
 
 #define ERDMA_SDB_SHARED_PAGE_INDEX 95
 
@@ -136,7 +140,9 @@ enum CMDQ_RDMA_OPCODE {
 	CMDQ_OPCODE_DESTROY_CQ = 5,
 	CMDQ_OPCODE_REFLUSH = 6,
 	CMDQ_OPCODE_REG_MR = 8,
-	CMDQ_OPCODE_DEREG_MR = 9
+	CMDQ_OPCODE_DEREG_MR = 9,
+	CMDQ_OPCODE_QUERY_QPC = 11,
+	CMDQ_OPCODE_QUERY_CQC = 12,
 };
 
 enum CMDQ_COMMON_OPCODE {
@@ -144,9 +150,16 @@ enum CMDQ_COMMON_OPCODE {
 	CMDQ_OPCODE_DESTROY_EQ = 1,
 	CMDQ_OPCODE_QUERY_FW_INFO = 2,
 	CMDQ_OPCODE_CONF_MTU = 3,
-	CMDQ_OPCODE_CONF_DEVICE = 5,
-	CMDQ_OPCODE_ALLOC_DB = 8,
-	CMDQ_OPCODE_FREE_DB = 9,
+	CMDQ_OPCODE_GET_STATS = 4,
+	CMDQ_OPCODE_QUERY_EQC = 6,
+	CMDQ_OPCODE_SET_RETRANS_NUM = 7,
+
+	CMDQ_OPCODE_SET_EXT_ATTR = 10,
+	CMDQ_OPCODE_GET_EXT_ATTR = 11,
+	CMDQ_OPCODE_SYNC_INFO = 12,
+	CMDQ_OPCODE_RESERVED_0 = 13,
+	CMDQ_OPCODE_QUERY_CC_PROFILER_LIST = 14,
+	CMDQ_OPCODE_QUERY_CC_PROFILER_NAME = 15,
 };
 
 /* cmdq-SQE HDR */
@@ -184,40 +197,41 @@ struct erdma_cmdq_destroy_eq_req {
 	u8 qtype;
 };
 
-/* config device cfg */
-#define ERDMA_CMD_CONFIG_DEVICE_PS_EN_MASK BIT(31)
-#define ERDMA_CMD_CONFIG_DEVICE_PGSHIFT_MASK GENMASK(4, 0)
-
-struct erdma_cmdq_config_device_req {
-	u64 hdr;
-	u32 cfg;
-	u32 rsvd[5];
-};
-
 struct erdma_cmdq_config_mtu_req {
 	u64 hdr;
 	u32 mtu;
 };
 
-/* ext db requests(alloc and free) cfg */
-#define ERDMA_CMD_EXT_DB_CQ_EN_MASK BIT(2)
-#define ERDMA_CMD_EXT_DB_RQ_EN_MASK BIT(1)
-#define ERDMA_CMD_EXT_DB_SQ_EN_MASK BIT(0)
-
-struct erdma_cmdq_ext_db_req {
+struct erdma_cmdq_set_retrans_num_req {
 	u64 hdr;
-	u32 cfg;
-	u16 rdb_off;
-	u16 sdb_off;
-	u16 rsvd0;
-	u16 cdb_off;
-	u32 rsvd1[3];
+	u32 retrans_num;
 };
 
-/* alloc db response qword 0 definition */
-#define ERDMA_CMD_ALLOC_DB_RESP_RDB_MASK GENMASK_ULL(63, 48)
-#define ERDMA_CMD_ALLOC_DB_RESP_CDB_MASK GENMASK_ULL(47, 32)
-#define ERDMA_CMD_ALLOC_DB_RESP_SDB_MASK GENMASK_ULL(15, 0)
+#define ERDMA_EXT_ATTR_DACK_COUNT_MASK BIT(0)
+#define ERDMA_EXT_ATTR_LEGACY_MODE_MASK BIT(2)
+#define ERDMA_EXT_ATTR_TLP_MASK BIT(4)
+#define ERDMA_EXT_ATTR_CC_PROFILER_MASK BIT(5)
+struct erdma_ext_attr {
+	u32 attr_mask;
+	u8 dack_count;
+	u8 enable;
+	u16 cc_profiler;
+};
+
+struct erdma_cmdq_set_ext_attr_req {
+	u64 hdr;
+	struct erdma_ext_attr attr;
+};
+
+#define ERDMA_SYNC_INFO_COMPAT_MODE BIT(24)
+#define ERDMA_SYNC_INFO_MAJOR_VER GENMASK(23, 16)
+#define ERDMA_SYNC_INFO_MEDIUM_VER GENMASK(15, 8)
+#define ERDMA_SYNC_INFO_MINOR_VER GENMASK(7, 0)
+struct erdma_cmdq_sync_info_req {
+	u64 hdr;
+	u32 version;
+	u32 rsvd[5];
+};
 
 /* create_cq cfg0 */
 #define ERDMA_CMD_CREATE_CQ_DEPTH_MASK GENMASK(31, 24)
@@ -226,12 +240,8 @@ struct erdma_cmdq_ext_db_req {
 
 /* create_cq cfg1 */
 #define ERDMA_CMD_CREATE_CQ_MTT_CNT_MASK GENMASK(31, 16)
-#define ERDMA_CMD_CREATE_CQ_MTT_LEVEL_MASK BIT(15)
-#define ERDMA_CMD_CREATE_CQ_MTT_DB_CFG_MASK BIT(11)
+#define ERDMA_CMD_CREATE_CQ_MTT_TYPE_MASK BIT(15)
 #define ERDMA_CMD_CREATE_CQ_EQN_MASK GENMASK(9, 0)
-
-/* create_cq cfg2 */
-#define ERDMA_CMD_CREATE_CQ_DB_CFG_MASK GENMASK(15, 0)
 
 struct erdma_cmdq_create_cq_req {
 	u64 hdr;
@@ -241,7 +251,6 @@ struct erdma_cmdq_create_cq_req {
 	u32 cfg1;
 	u64 cq_db_info_addr;
 	u32 first_page_offset;
-	u32 cfg2;
 };
 
 /* regmr/deregmr cfg0 */
@@ -257,8 +266,8 @@ struct erdma_cmdq_create_cq_req {
 
 /* regmr cfg2 */
 #define ERDMA_CMD_REGMR_PAGESIZE_MASK GENMASK(31, 27)
-#define ERDMA_CMD_REGMR_MTT_PAGESIZE_MASK GENMASK(26, 24)
-#define ERDMA_CMD_REGMR_MTT_LEVEL_MASK GENMASK(21, 20)
+#define ERDMA_CMD_REGMR_PBL_PAGESIZE_MASK GENMASK(26, 24)
+#define ERDMA_CMD_REGMR_MTT_TYPE_MASK GENMASK(21, 20)
 #define ERDMA_CMD_REGMR_MTT_CNT_MASK GENMASK(19, 0)
 
 struct erdma_cmdq_reg_mr_req {
@@ -288,6 +297,11 @@ struct erdma_cmdq_dereg_mr_req {
 #define ERDMA_CMD_MODIFY_QP_CC_MASK GENMASK(23, 20)
 #define ERDMA_CMD_MODIFY_QP_QPN_MASK GENMASK(19, 0)
 
+#define ERDMA_CMD_MODIFY_QP_IPV6_MASK BIT(31)
+#define ERDMA_CMD_MODIFY_QP_WWI_PERF_MASK BIT(30)
+#define ERDMA_CMD_MODIFY_QP_TLP_MASK BIT(29)
+#define ERDMA_CMD_MODIFY_QP_RQPN_MASK GENMASK(19, 0)
+
 struct erdma_cmdq_modify_qp_req {
 	u64 hdr;
 	u32 cfg;
@@ -298,6 +312,11 @@ struct erdma_cmdq_modify_qp_req {
 	__be16 dport;
 	u32 send_nxt;
 	u32 recv_nxt;
+	u32 rsvd0;
+	u32 rsvd1;
+	__be32 flow_label;
+	u8 ipv6_daddr[16];
+	u8 ipv6_saddr[16];
 };
 
 /* create qp cfg0 */
@@ -310,17 +329,12 @@ struct erdma_cmdq_modify_qp_req {
 
 /* create qp cqn_mtt_cfg */
 #define ERDMA_CMD_CREATE_QP_PAGE_SIZE_MASK GENMASK(31, 28)
-#define ERDMA_CMD_CREATE_QP_DB_CFG_MASK BIT(25)
 #define ERDMA_CMD_CREATE_QP_CQN_MASK GENMASK(23, 0)
 
 /* create qp mtt_cfg */
 #define ERDMA_CMD_CREATE_QP_PAGE_OFFSET_MASK GENMASK(31, 12)
 #define ERDMA_CMD_CREATE_QP_MTT_CNT_MASK GENMASK(11, 1)
-#define ERDMA_CMD_CREATE_QP_MTT_LEVEL_MASK BIT(0)
-
-/* create qp db cfg */
-#define ERDMA_CMD_CREATE_QP_SQDB_CFG_MASK GENMASK(31, 16)
-#define ERDMA_CMD_CREATE_QP_RQDB_CFG_MASK GENMASK(15, 0)
+#define ERDMA_CMD_CREATE_QP_MTT_TYPE_MASK BIT(0)
 
 #define ERDMA_CMDQ_CREATE_QP_RESP_COOKIE_MASK GENMASK_ULL(31, 0)
 
@@ -334,13 +348,11 @@ struct erdma_cmdq_create_qp_req {
 	u64 rq_buf_addr;
 	u32 sq_mtt_cfg;
 	u32 rq_mtt_cfg;
-	u64 sq_db_info_dma_addr;
-	u64 rq_db_info_dma_addr;
+	u64 sq_dbrec_dma;
+	u64 rq_dbrec_dma;
 
 	u64 sq_mtt_entry[3];
 	u64 rq_mtt_entry[3];
-
-	u32 db_cfg;
 };
 
 struct erdma_cmdq_destroy_qp_req {
@@ -371,8 +383,9 @@ struct erdma_cmdq_reflush_req {
 
 enum {
 	ERDMA_DEV_CAP_FLAGS_ATOMIC = 1 << 7,
+	ERDMA_DEV_CAP_FLAGS_QUERY_QC = 1 << 6,
 	ERDMA_DEV_CAP_FLAGS_MTT_VA = 1 << 5,
-	ERDMA_DEV_CAP_FLAGS_EXTEND_DB = 1 << 3,
+	ERDMA_DEV_CAP_FLAGS_IPV6 = 1 << 4,
 };
 
 #define ERDMA_CMD_INFO0_FW_VER_MASK GENMASK_ULL(31, 0)
@@ -430,9 +443,11 @@ struct erdma_rqe {
 #define ERDMA_SQE_HDR_WQEBB_INDEX_MASK GENMASK_ULL(15, 0)
 
 /* REG MR attrs */
+#define ERDMA_SQE_MR_PGSZ_AVAIL_MASK BIT_ULL(0)
 #define ERDMA_SQE_MR_ACCESS_MASK GENMASK(5, 1)
 #define ERDMA_SQE_MR_MTT_TYPE_MASK GENMASK(7, 6)
 #define ERDMA_SQE_MR_MTT_CNT_MASK GENMASK(31, 12)
+#define ERDMA_SQE_MR_PGSZ_MASK GENMASK(4, 0)
 
 struct erdma_write_sqe {
 	__le64 hdr;
@@ -484,8 +499,8 @@ struct erdma_reg_mr_sqe {
 	__le64 addr;
 	__le32 length;
 	__le32 stag;
-	__le32 attrs;
-	__le32 rsvd;
+	__le32 attr0;
+	__le32 attr1;
 };
 
 /* EQ related. */
@@ -580,6 +595,165 @@ enum erdma_vendor_err {
 	ERDMA_WC_VENDOR_SQE_ACCESS_ERR = 0x32,
 	ERDMA_WC_VENDOR_SQE_INVALID_PD = 0x33,
 	ERDMA_WC_VENDOR_SQE_WARP_ERR = 0x34
+};
+
+/* Response Definitions for Query Command Category */
+#define ERDMA_HW_RESP_SIZE 256
+
+struct erdma_cmdq_query_req {
+	u64 hdr;
+	u32 rsvd;
+	u32 index;
+
+	u64 target_addr;
+	u32 target_length;
+};
+
+struct erdma_cmdq_query_resp_hdr {
+	u16 magic;
+	u8 ver;
+	u8 length;
+
+	u32 index;
+	u32 rsvd[2];
+};
+
+#define ERDMA_HW_CC_PROFILER_NUM 1024
+#define ERDMA_HW_CC_PROFILER_NAME_LEN 124
+struct erdma_cmdq_query_cc_profiler_list_resp {
+	struct erdma_cmdq_query_resp_hdr hdr;
+	u32 idx_mask[32];
+};
+
+struct erdma_cmdq_query_cc_profiler_name_resp {
+	struct erdma_cmdq_query_resp_hdr hdr;
+	u32 valid;
+	char name[ERDMA_HW_CC_PROFILER_NAME_LEN];
+};
+
+struct erdma_cmdq_query_stats_resp {
+	struct erdma_cmdq_query_resp_hdr hdr;
+
+	u64 tx_req_cnt;
+	u64 tx_packets_cnt;
+	u64 tx_bytes_cnt;
+	u64 tx_drop_packets_cnt;
+	u64 tx_bps_meter_drop_packets_cnt;
+	u64 tx_pps_meter_drop_packets_cnt;
+	u64 rx_packets_cnt;
+	u64 rx_bytes_cnt;
+	u64 rx_drop_packets_cnt;
+	u64 rx_bps_meter_drop_packets_cnt;
+	u64 rx_pps_meter_drop_packets_cnt;
+};
+
+struct erdma_cmdq_query_qpc_resp {
+	struct erdma_cmdq_query_resp_hdr hdr;
+
+	struct {
+		u8 status; /* 0 - disabled, 1 - enabled. */
+		u8 qbuf_page_offset;
+		u8 qbuf_page_size;
+		u8 qbuf_depth;
+
+		u16 hw_pi;
+		u16 hw_ci;
+	} qpc[2];
+
+	/* hardware io stat */
+	u16 last_comp_sqe_idx;
+	u16 last_comp_rqe_idx;
+	u16 scqe_counter;
+	u16 rcqe_counter;
+
+	u16 tx_pkts_cnt;
+	u16 rx_pkts_cnt;
+	u16 rx_error_drop_cnt;
+	u16 rx_invalid_drop_cnt;
+
+	u32 rto_retrans_cnt;
+	//qp sw info
+	u32 rqpn;
+
+	u32 pd;
+	u16 fw_sq_pi;
+	u16 fw_sq_ci;
+
+	u16 fw_rq_ci;
+	u8 sq_in_flush;
+	u8 rq_in_flush;
+	u16 sq_flushed_pi;
+	u16 rq_flushed_pi;
+
+	u32 scqn;
+	u32 rcqn;
+
+	u64 sqbuf_addr;
+	u64 rqbuf_addr;
+	u64 sdbrec_addr;
+	u64 rdbrec_addr;
+
+	u64 sdbrec_cur;
+	u64 rdbrec_cur;
+
+	u32 ip_src;
+	u32 ip_dst;
+	u16 srcport;
+	u16 dstport;
+};
+
+struct erdma_cmdq_query_cqc_resp {
+	struct erdma_cmdq_query_resp_hdr hdr;
+
+	u32 pi;
+	u8 q_en;
+	u8 log_depth;
+	u8 cq_cur_ownership;
+	u8 last_errdb_type; /* 0,dup db;1,out-order db  */
+
+	u32 last_errdb_ci;
+	u8 out_order_db_cnt;
+	u8 dup_db_cnt;
+	u16 rsvd;
+
+	u64 cn_cq_db_addr;
+	u64 cq_db_record;
+};
+
+struct erdma_cmdq_query_eqc_resp {
+	struct erdma_cmdq_query_resp_hdr hdr;
+	u16 depth;
+	u16 vector;
+
+	u8 int_suppression;
+	u8 tail_owner;
+	u8 head_owner;
+	u8 overflow;
+
+	u32 head;
+	u32 tail;
+
+	u64 cn_addr;
+	u64 cn_db_addr;
+	u64 eq_db_record;
+};
+
+struct erdma_cmdq_query_ext_attr_resp {
+	struct erdma_cmdq_query_resp_hdr hdr;
+
+	u32 cap_mask;
+	u32 attr_mask;
+
+	u8 dack_count;
+	u8 rsvd;
+	u16 cc_profiler;
+};
+
+struct erdma_cmdq_dump_addr_req {
+	u64 hdr;
+	u64 dump_addr;
+	u64 target_addr;
+	u32 target_length;
 };
 
 #endif

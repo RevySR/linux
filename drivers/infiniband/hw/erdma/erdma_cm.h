@@ -138,6 +138,7 @@ struct erdma_cm_work {
 };
 
 #define to_sockaddr_in(a) (*(struct sockaddr_in *)(&(a)))
+#define to_sockaddr_in6(a) (*(struct sockaddr_in6 *)(&(a)))
 
 static inline int getname_peer(struct socket *s, struct sockaddr_storage *a)
 {

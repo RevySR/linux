@@ -6,6 +6,8 @@
 
 #include "erdma_verbs.h"
 
+extern bool compat_mode;
+
 static void *get_next_valid_cqe(struct erdma_cq *cq)
 {
 	__be32 *cqe = get_queue_entry(cq->kern_cq.qbuf, cq->kern_cq.ci,
@@ -26,25 +28,38 @@ static void notify_cq(struct erdma_cq *cq, u8 solcitied)
 		FIELD_PREP(ERDMA_CQDB_CMDSN_MASK, cq->kern_cq.cmdsn) |
 		FIELD_PREP(ERDMA_CQDB_CI_MASK, cq->kern_cq.ci);
 
-	*cq->kern_cq.db_record = db_data;
+	*cq->kern_cq.dbrec = db_data;
 	writeq(db_data, cq->kern_cq.db);
 }
 
 int erdma_req_notify_cq(struct ib_cq *ibcq, enum ib_cq_notify_flags flags)
 {
 	struct erdma_cq *cq = to_ecq(ibcq);
+	u16 dim_timeout = cq->dim.timeout;
 	unsigned long irq_flags;
 	int ret = 0;
 
+	if (compat_mode && unlikely(cq->is_soft))
+		return erdma_mad_req_notify_cq(ibcq, flags);
+
 	spin_lock_irqsave(&cq->kern_cq.lock, irq_flags);
 
-	notify_cq(cq, (flags & IB_CQ_SOLICITED_MASK) == IB_CQ_SOLICITED);
-
-	if ((flags & IB_CQ_REPORT_MISSED_EVENTS) && get_next_valid_cqe(cq))
+	if ((flags & IB_CQ_REPORT_MISSED_EVENTS) && get_next_valid_cqe(cq)) {
 		ret = 1;
+		goto unlock;
+	}
 
-	cq->kern_cq.notify_cnt++;
-
+	if (!dim_timeout) {
+		notify_cq(cq,
+			  (flags & IB_CQ_SOLICITED_MASK) == IB_CQ_SOLICITED);
+		cq->kern_cq.notify_cnt++;
+	} else {
+		cq->dim.flags |= flags;
+		hrtimer_start(&cq->dim.timer,
+			      ns_to_ktime(dim_timeout * NSEC_PER_USEC),
+			      HRTIMER_MODE_REL_PINNED);
+	}
+unlock:
 	spin_unlock_irqrestore(&cq->kern_cq.lock, irq_flags);
 
 	return ret;
@@ -64,8 +79,6 @@ static const enum ib_wc_opcode wc_mapping_table[ERDMA_NUM_OPCODES] = {
 	[ERDMA_OP_REG_MR] = IB_WC_REG_MR,
 	[ERDMA_OP_LOCAL_INV] = IB_WC_LOCAL_INV,
 	[ERDMA_OP_READ_WITH_INV] = IB_WC_RDMA_READ,
-	[ERDMA_OP_ATOMIC_CAS] = IB_WC_COMP_SWAP,
-	[ERDMA_OP_ATOMIC_FAA] = IB_WC_FETCH_ADD,
 };
 
 static const struct {
@@ -133,7 +146,7 @@ static int erdma_poll_one_cqe(struct erdma_cq *cq, struct ib_wc *wc)
 	cqe_hdr = be32_to_cpu(cqe->hdr);
 
 	qp = find_qp_by_qpn(dev, qpn);
-	if (!qp)
+	if (!qp || (qp->attrs.flags & ERDMA_QP_IN_DESTROY))
 		return ERDMA_POLLCQ_NO_QP;
 
 	kern_qp = &qp->kern_qp;
@@ -153,6 +166,11 @@ static int erdma_poll_one_cqe(struct erdma_cq *cq, struct ib_wc *wc)
 	} else {
 		id_table = kern_qp->rwr_tbl;
 		depth = qp->attrs.rq_size;
+		/* Prevent rqe out of range from HW */
+		if (kern_qp->rq_pi == wqe_idx ||
+		    (u16)(kern_qp->rq_pi - wqe_idx) > (u16)depth)
+			syndrome = ERDMA_WC_GENERAL_ERR;
+		kern_qp->rq_ci++;
 	}
 	wc->wr_id = id_table[wqe_idx & (depth - 1)];
 	wc->byte_len = be32_to_cpu(cqe->size);
@@ -184,6 +202,9 @@ int erdma_poll_cq(struct ib_cq *ibcq, int num_entries, struct ib_wc *wc)
 	unsigned long flags;
 	int npolled, ret;
 
+	if (compat_mode && unlikely(cq->is_soft))
+		return erdma_mad_poll_cq(ibcq, num_entries, wc);
+
 	spin_lock_irqsave(&cq->kern_cq.lock, flags);
 
 	for (npolled = 0; npolled < num_entries;) {
@@ -200,4 +221,26 @@ int erdma_poll_cq(struct ib_cq *ibcq, int num_entries, struct ib_wc *wc)
 	spin_unlock_irqrestore(&cq->kern_cq.lock, flags);
 
 	return npolled;
+}
+
+enum hrtimer_restart cq_timer_fn(struct hrtimer *t)
+{
+	struct erdma_cq *cq = container_of(t, struct erdma_cq, dim.timer);
+
+	notify_cq(cq,
+		  (cq->dim.flags & IB_CQ_SOLICITED_MASK) == IB_CQ_SOLICITED);
+	cq->kern_cq.notify_cnt++;
+	cq->dim.flags = 0;
+
+	return HRTIMER_NORESTART;
+}
+
+#define DIM_OFF_THRESHOLD 3
+int erdma_modify_cq(struct ib_cq *ibcq, u16 cq_count, u16 cq_period)
+{
+	struct erdma_cq *cq = to_ecq(ibcq);
+
+	cq->dim.timeout = cq_period >= DIM_OFF_THRESHOLD ? cq_period : 0;
+
+	return 0;
 }

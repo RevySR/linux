@@ -6,8 +6,16 @@
 /* Authors: Bernard Metzler <bmt@zurich.ibm.com> */
 /* Copyright (c) 2008-2019, IBM Corporation */
 
+#include "kcompat.h"
+
+#include <linux/module.h>
+
 #include "erdma_cm.h"
 #include "erdma_verbs.h"
+
+bool wwi_perf;
+module_param(wwi_perf, bool, 0644);
+MODULE_PARM_DESC(wwi_perf, "Write with Immediate optimize");
 
 void erdma_qp_llp_close(struct erdma_qp *qp)
 {
@@ -20,7 +28,7 @@ void erdma_qp_llp_close(struct erdma_qp *qp)
 	case ERDMA_QP_STATE_RTR:
 	case ERDMA_QP_STATE_IDLE:
 	case ERDMA_QP_STATE_TERMINATE:
-		qp_attrs.state = ERDMA_QP_STATE_CLOSING;
+		qp_attrs.state = ERDMA_QP_STATE_ERROR;
 		erdma_modify_qp_internal(qp, &qp_attrs, ERDMA_QP_ATTR_STATE);
 		break;
 	case ERDMA_QP_STATE_CLOSING:
@@ -59,6 +67,34 @@ static int erdma_modify_qp_state_to_rts(struct erdma_qp *qp,
 	struct erdma_cep *cep = qp->cep;
 	struct sockaddr_storage local_addr, remote_addr;
 
+	if (qp->attrs.connect_without_cm) {
+		req.cookie = FIELD_PREP(ERDMA_CMD_MODIFY_QP_WWI_PERF_MASK, 1) |
+			     FIELD_PREP(ERDMA_CMD_MODIFY_QP_RQPN_MASK,
+					qp->attrs.remote_qp_num);
+		if (((struct sockaddr_in *)&qp->attrs.raddr)->sin_family ==
+		    AF_INET) {
+			req.dip = qp->attrs.raddr.in.sin_addr.s_addr;
+			req.sip = qp->attrs.laddr.in.sin_addr.s_addr;
+		} else if (dev->attrs.cap_flags & ERDMA_DEV_CAP_FLAGS_IPV6) {
+			memcpy(req.ipv6_daddr,
+			       &qp->attrs.raddr.in6.sin6_addr.s6_addr,
+			       sizeof(struct in6_addr));
+			memcpy(req.ipv6_saddr,
+			       &qp->attrs.laddr.in6.sin6_addr.s6_addr,
+			       sizeof(struct in6_addr));
+			req.cookie |=
+				FIELD_PREP(ERDMA_CMD_MODIFY_QP_IPV6_MASK, 1);
+			req.flow_label = 0;
+		} else {
+			return -EAFNOSUPPORT;
+		}
+		req.dport = htons(qp->attrs.dport);
+		req.sport = htons(qp->attrs.sport);
+		req.send_nxt = 0;
+		req.recv_nxt = 0;
+
+		goto without_cep;
+	}
 	if (!(mask & ERDMA_QP_ATTR_LLP_HANDLE))
 		return -EINVAL;
 
@@ -73,9 +109,40 @@ static int erdma_modify_qp_state_to_rts(struct erdma_qp *qp,
 	if (ret < 0)
 		return ret;
 
-	qp->attrs.state = ERDMA_QP_STATE_RTS;
-
 	tp = tcp_sk(qp->cep->sock->sk);
+
+	qp->attrs.remote_cookie = be32_to_cpu(qp->cep->mpa.ext_data.cookie);
+
+	req.cookie = be32_to_cpu(qp->cep->mpa.ext_data.cookie);
+	if (qp->cep->sock->sk->sk_family == AF_INET) {
+		req.dip = to_sockaddr_in(remote_addr).sin_addr.s_addr;
+		req.sip = to_sockaddr_in(local_addr).sin_addr.s_addr;
+		req.dport = to_sockaddr_in(remote_addr).sin_port;
+		req.sport = to_sockaddr_in(local_addr).sin_port;
+	} else if (dev->attrs.cap_flags & ERDMA_DEV_CAP_FLAGS_IPV6) {
+		req.cookie =
+			FIELD_PREP(ERDMA_CMD_MODIFY_QP_IPV6_MASK, 1) |
+			FIELD_PREP(ERDMA_CMD_MODIFY_QP_RQPN_MASK, req.cookie);
+		memcpy(req.ipv6_daddr, &to_sockaddr_in6(remote_addr).sin6_addr,
+		       sizeof(struct in6_addr));
+		memcpy(req.ipv6_saddr, &to_sockaddr_in6(local_addr).sin6_addr,
+		       sizeof(struct in6_addr));
+		req.dport = to_sockaddr_in6(remote_addr).sin6_port;
+		req.sport = to_sockaddr_in6(local_addr).sin6_port;
+		req.flow_label = to_sockaddr_in6(remote_addr).sin6_flowinfo;
+	} else {
+		return -EAFNOSUPPORT;
+	}
+
+	req.send_nxt = tp->snd_nxt;
+	/* rsvd tcp seq for mpa-rsp in server. */
+	if (qp->attrs.qp_type == ERDMA_QP_PASSIVE)
+		req.send_nxt += MPA_DEFAULT_HDR_LEN + qp->attrs.pd_len;
+	req.recv_nxt = tp->rcv_nxt;
+
+without_cep:
+
+	qp->attrs.state = ERDMA_QP_STATE_RTS;
 
 	erdma_cmdq_build_reqhdr(&req.hdr, CMDQ_SUBMOD_RDMA,
 				CMDQ_OPCODE_MODIFY_QP);
@@ -83,18 +150,58 @@ static int erdma_modify_qp_state_to_rts(struct erdma_qp *qp,
 	req.cfg = FIELD_PREP(ERDMA_CMD_MODIFY_QP_STATE_MASK, qp->attrs.state) |
 		  FIELD_PREP(ERDMA_CMD_MODIFY_QP_CC_MASK, qp->attrs.cc) |
 		  FIELD_PREP(ERDMA_CMD_MODIFY_QP_QPN_MASK, QP_ID(qp));
+	req.cookie |= FIELD_PREP(ERDMA_CMD_MODIFY_QP_TLP_MASK, 1);
 
-	req.cookie = be32_to_cpu(qp->cep->mpa.ext_data.cookie);
-	req.dip = to_sockaddr_in(remote_addr).sin_addr.s_addr;
-	req.sip = to_sockaddr_in(local_addr).sin_addr.s_addr;
-	req.dport = to_sockaddr_in(remote_addr).sin_port;
-	req.sport = to_sockaddr_in(local_addr).sin_port;
+	if (wwi_perf || compat_mode)
+		req.cookie |= FIELD_PREP(ERDMA_CMD_MODIFY_QP_WWI_PERF_MASK, 1);
 
-	req.send_nxt = tp->snd_nxt;
-	/* rsvd tcp seq for mpa-rsp in server. */
-	if (qp->attrs.qp_type == ERDMA_QP_PASSIVE)
-		req.send_nxt += MPA_DEFAULT_HDR_LEN + qp->attrs.pd_len;
-	req.recv_nxt = tp->rcv_nxt;
+	return erdma_post_cmd_wait(&dev->cmdq, &req, sizeof(req), NULL, NULL);
+}
+
+static int erdma_modify_qp_state_to_rts_compat(struct erdma_qp *qp,
+					       struct erdma_qp_attrs *attrs,
+					       enum erdma_qp_attr_mask mask)
+{
+	struct erdma_dev *dev = qp->dev;
+	struct erdma_cmdq_modify_qp_req req;
+
+	qp->attrs.state = ERDMA_QP_STATE_RTS;
+
+	erdma_cmdq_build_reqhdr(&req.hdr, CMDQ_SUBMOD_RDMA,
+				CMDQ_OPCODE_MODIFY_QP);
+
+	req.cfg = FIELD_PREP(ERDMA_CMD_MODIFY_QP_STATE_MASK, qp->attrs.state) |
+		  FIELD_PREP(ERDMA_CMD_MODIFY_QP_CC_MASK, qp->attrs.cc) |
+		  FIELD_PREP(ERDMA_CMD_MODIFY_QP_QPN_MASK, QP_ID(qp));
+	req.cookie =
+		FIELD_PREP(ERDMA_CMD_MODIFY_QP_RQPN_MASK, qp->attrs.remote_qp_num) |
+		FIELD_PREP(ERDMA_CMD_MODIFY_QP_TLP_MASK, 1);
+
+	if (((struct sockaddr_in *)&qp->attrs.raddr)->sin_family == AF_INET) {
+		req.dip = qp->attrs.raddr.in.sin_addr.s_addr;
+		req.sip = qp->attrs.laddr.in.sin_addr.s_addr;
+	} else if (dev->attrs.cap_flags & ERDMA_DEV_CAP_FLAGS_IPV6) {
+		req.cookie |= FIELD_PREP(ERDMA_CMD_MODIFY_QP_IPV6_MASK, 1);
+		memcpy(req.ipv6_daddr, &qp->attrs.raddr.in6.sin6_addr.s6_addr,
+		       sizeof(struct in6_addr));
+		memcpy(req.ipv6_saddr, &qp->attrs.laddr.in6.sin6_addr.s6_addr,
+		       sizeof(struct in6_addr));
+		req.flow_label = 0;
+	} else {
+		return -EAFNOSUPPORT;
+	}
+
+	erdma_gen_port_from_qpn(req.sip, req.dip, QP_ID(qp),
+				qp->attrs.remote_qp_num, &req.sport,
+				&req.dport);
+	req.sport = htons(req.sport);
+	req.dport = htons(req.dport);
+
+	req.send_nxt = req.sport * 4;
+	req.recv_nxt = req.dport * 4;
+
+	if (wwi_perf || compat_mode)
+		req.cookie |= FIELD_PREP(ERDMA_CMD_MODIFY_QP_WWI_PERF_MASK, 1);
 
 	return erdma_post_cmd_wait(&dev->cmdq, &req, sizeof(req), NULL, NULL);
 }
@@ -120,8 +227,8 @@ static int erdma_modify_qp_state_to_stop(struct erdma_qp *qp,
 int erdma_modify_qp_internal(struct erdma_qp *qp, struct erdma_qp_attrs *attrs,
 			     enum erdma_qp_attr_mask mask)
 {
-	bool need_reflush = false;
 	int drop_conn, ret = 0;
+	bool need_reflush = false;
 
 	if (!mask)
 		return 0;
@@ -133,15 +240,23 @@ int erdma_modify_qp_internal(struct erdma_qp *qp, struct erdma_qp_attrs *attrs,
 	case ERDMA_QP_STATE_IDLE:
 	case ERDMA_QP_STATE_RTR:
 		if (attrs->state == ERDMA_QP_STATE_RTS) {
-			ret = erdma_modify_qp_state_to_rts(qp, attrs, mask);
+			if (compat_mode)
+				ret = erdma_modify_qp_state_to_rts_compat(
+					qp, attrs, mask);
+			else
+				ret = erdma_modify_qp_state_to_rts(qp, attrs,
+								   mask);
 		} else if (attrs->state == ERDMA_QP_STATE_ERROR) {
 			qp->attrs.state = ERDMA_QP_STATE_ERROR;
-			need_reflush = true;
 			if (qp->cep) {
 				erdma_cep_put(qp->cep);
 				qp->cep = NULL;
 			}
+
 			ret = erdma_modify_qp_state_to_stop(qp, attrs, mask);
+			/* We apply to kernel qp first. */
+			if (rdma_is_kernel_res(&qp->ibqp.res))
+				need_reflush = true;
 		}
 		break;
 	case ERDMA_QP_STATE_RTS:
@@ -150,9 +265,13 @@ int erdma_modify_qp_internal(struct erdma_qp *qp, struct erdma_qp_attrs *attrs,
 		if (attrs->state == ERDMA_QP_STATE_CLOSING ||
 		    attrs->state == ERDMA_QP_STATE_TERMINATE ||
 		    attrs->state == ERDMA_QP_STATE_ERROR) {
-			ret = erdma_modify_qp_state_to_stop(qp, attrs, mask);
 			drop_conn = 1;
-			need_reflush = true;
+			if (!(qp->attrs.flags & ERDMA_QP_IN_DESTROY))
+				ret = erdma_modify_qp_state_to_stop(qp, attrs,
+								    mask);
+			/* We apply to kernel qp first. */
+			if (rdma_is_kernel_res(&qp->ibqp.res))
+				need_reflush = true;
 		}
 
 		if (drop_conn)
@@ -177,7 +296,7 @@ int erdma_modify_qp_internal(struct erdma_qp *qp, struct erdma_qp_attrs *attrs,
 		break;
 	}
 
-	if (need_reflush && !ret && rdma_is_kernel_res(&qp->ibqp.res)) {
+	if (need_reflush && !ret) {
 		qp->flags |= ERDMA_QP_IN_FLUSHING;
 		mod_delayed_work(qp->dev->reflush_wq, &qp->reflush_dwork,
 				 usecs_to_jiffies(100));
@@ -398,10 +517,16 @@ static int erdma_push_one_sqe(struct erdma_qp *qp, u16 *pi,
 
 		mr->access = ERDMA_MR_ACC_LR |
 			     to_erdma_access_flags(reg_wr(send_wr)->access);
+		if (compat_mode)
+			mr->access = mr->access | ERDMA_MR_ACC_RW;
+
 		regmr_sge->addr = cpu_to_le64(mr->ibmr.iova);
 		regmr_sge->length = cpu_to_le32(mr->ibmr.length);
 		regmr_sge->stag = cpu_to_le32(reg_wr(send_wr)->key);
-		attrs = FIELD_PREP(ERDMA_SQE_MR_ACCESS_MASK, mr->access) |
+		regmr_sge->attr1 = FIELD_PREP(ERDMA_SQE_MR_PGSZ_MASK,
+					      ilog2(mr->ibmr.page_size));
+		attrs = FIELD_PREP(ERDMA_SQE_MR_PGSZ_AVAIL_MASK, 1) |
+			FIELD_PREP(ERDMA_SQE_MR_ACCESS_MASK, mr->access) |
 			FIELD_PREP(ERDMA_SQE_MR_MTT_CNT_MASK,
 				   mr->mem.mtt_nents);
 
@@ -418,7 +543,7 @@ static int erdma_push_one_sqe(struct erdma_qp *qp, u16 *pi,
 			wqe_size = sizeof(struct erdma_reg_mr_sqe);
 		}
 
-		regmr_sge->attrs = cpu_to_le32(attrs);
+		regmr_sge->attr0 = cpu_to_le32(attrs);
 		goto out;
 	case IB_WR_LOCAL_INV:
 		wqe_hdr |= FIELD_PREP(ERDMA_SQE_HDR_OPCODE_MASK,
@@ -492,23 +617,26 @@ static void kick_sq_db(struct erdma_qp *qp, u16 pi)
 	u64 db_data = FIELD_PREP(ERDMA_SQE_HDR_QPN_MASK, QP_ID(qp)) |
 		      FIELD_PREP(ERDMA_SQE_HDR_WQEBB_INDEX_MASK, pi);
 
-	*(u64 *)qp->kern_qp.sq_db_info = db_data;
+	*(u64 *)qp->kern_qp.sq_dbrec = db_data;
 	writeq(db_data, qp->kern_qp.hw_sq_db);
 }
 
 int erdma_post_send(struct ib_qp *ibqp, const struct ib_send_wr *send_wr,
 		    const struct ib_send_wr **bad_send_wr)
 {
+	const struct ib_send_wr *wr = send_wr;
 	struct erdma_qp *qp = to_eqp(ibqp);
 	int ret = 0;
-	const struct ib_send_wr *wr = send_wr;
 	unsigned long flags;
 	u16 sq_pi;
 
 	if (!send_wr)
 		return -EINVAL;
 
-	spin_lock_irqsave(&qp->lock, flags);
+	if (compat_mode && unlikely(ibqp->qp_type == IB_QPT_GSI))
+		return erdma_post_send_mad(ibqp, send_wr, bad_send_wr);
+
+	spin_lock_irqsave(&qp->kern_qp.sq_lock, flags);
 	sq_pi = qp->kern_qp.sq_pi;
 
 	while (wr) {
@@ -528,7 +656,7 @@ int erdma_post_send(struct ib_qp *ibqp, const struct ib_send_wr *send_wr,
 
 		wr = wr->next;
 	}
-	spin_unlock_irqrestore(&qp->lock, flags);
+	spin_unlock_irqrestore(&qp->kern_qp.sq_lock, flags);
 
 	if (unlikely(qp->flags & ERDMA_QP_IN_FLUSHING))
 		mod_delayed_work(qp->dev->reflush_wq, &qp->reflush_dwork,
@@ -540,12 +668,16 @@ int erdma_post_send(struct ib_qp *ibqp, const struct ib_send_wr *send_wr,
 static int erdma_post_recv_one(struct erdma_qp *qp,
 			       const struct ib_recv_wr *recv_wr)
 {
-	struct erdma_rqe *rqe =
-		get_queue_entry(qp->kern_qp.rq_buf, qp->kern_qp.rq_pi,
-				qp->attrs.rq_size, RQE_SHIFT);
+	struct erdma_rqe *rqe = get_queue_entry(qp->kern_qp.rq_buf,
+						qp->kern_qp.rq_pi,
+						qp->attrs.rq_size, RQE_SHIFT);
 
 	rqe->qe_idx = cpu_to_le16(qp->kern_qp.rq_pi + 1);
 	rqe->qpn = cpu_to_le32(QP_ID(qp));
+
+	if ((u16)(qp->kern_qp.rq_pi - qp->kern_qp.rq_ci) ==
+	    (u16)qp->attrs.rq_size)
+		return -ENOMEM;
 
 	if (recv_wr->num_sge == 0) {
 		rqe->length = 0;
@@ -557,7 +689,7 @@ static int erdma_post_recv_one(struct erdma_qp *qp,
 		return -EINVAL;
 	}
 
-	*(u64 *)qp->kern_qp.rq_db_info = *(u64 *)rqe;
+	*(u64 *)qp->kern_qp.rq_dbrec = *(u64 *)rqe;
 	writeq(*(u64 *)rqe, qp->kern_qp.hw_rq_db);
 
 	qp->kern_qp.rwr_tbl[qp->kern_qp.rq_pi & (qp->attrs.rq_size - 1)] =
@@ -573,9 +705,12 @@ int erdma_post_recv(struct ib_qp *ibqp, const struct ib_recv_wr *recv_wr,
 	const struct ib_recv_wr *wr = recv_wr;
 	struct erdma_qp *qp = to_eqp(ibqp);
 	unsigned long flags;
-	int ret;
+	int ret = 0;
 
-	spin_lock_irqsave(&qp->lock, flags);
+	if (compat_mode && unlikely(ibqp->qp_type == IB_QPT_GSI))
+		return erdma_post_recv_mad(ibqp, recv_wr, bad_recv_wr);
+
+	spin_lock_irqsave(&qp->kern_qp.rq_lock, flags);
 
 	while (wr) {
 		ret = erdma_post_recv_one(qp, wr);
@@ -586,7 +721,7 @@ int erdma_post_recv(struct ib_qp *ibqp, const struct ib_recv_wr *recv_wr,
 		wr = wr->next;
 	}
 
-	spin_unlock_irqrestore(&qp->lock, flags);
+	spin_unlock_irqrestore(&qp->kern_qp.rq_lock, flags);
 
 	if (unlikely(qp->flags & ERDMA_QP_IN_FLUSHING))
 		mod_delayed_work(qp->dev->reflush_wq, &qp->reflush_dwork,

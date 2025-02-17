@@ -7,6 +7,7 @@
 #ifndef __ERDMA_H__
 #define __ERDMA_H__
 
+#include "kcompat.h"
 #include <linux/bitfield.h>
 #include <linux/netdevice.h>
 #include <linux/pci.h>
@@ -14,9 +15,20 @@
 #include <rdma/ib_verbs.h>
 
 #include "erdma_hw.h"
+#include "erdma_ioctl.h"
+#include "erdma_stats.h"
+#include "compat/sw_verbs.h"
 
 #define DRV_MODULE_NAME "erdma"
 #define ERDMA_NODE_DESC "Elastic RDMA(iWARP) stack"
+
+extern bool legacy_mode;
+extern bool use_zeronet;
+extern bool compat_mode;
+
+struct erdma_stats {
+	atomic64_t value[ERDMA_STATS_MAX];
+};
 
 struct erdma_eq {
 	void *qbuf;
@@ -33,7 +45,7 @@ struct erdma_eq {
 	atomic64_t notify_num;
 
 	void __iomem *db;
-	u64 *db_record;
+	u64 *dbrec;
 };
 
 struct erdma_cmdq_sq {
@@ -48,7 +60,9 @@ struct erdma_cmdq_sq {
 
 	u16 wqebb_cnt;
 
-	u64 *db_record;
+	u64 total_cmds;
+	u64 total_comp_cmds;
+	u64 *dbrec;
 };
 
 struct erdma_cmdq_cq {
@@ -61,7 +75,7 @@ struct erdma_cmdq_cq {
 	u32 ci;
 	u32 cmdsn;
 
-	u64 *db_record;
+	u64 *dbrec;
 
 	atomic64_t armed_num;
 };
@@ -116,7 +130,7 @@ enum erdma_cc_alg {
 	ERDMA_CC_CUBIC,
 	ERDMA_CC_HPCC_RTT,
 	ERDMA_CC_HPCC_ECN,
-	ERDMA_CC_HPCC_INT,
+	ERDMA_CC_MPCC,
 	ERDMA_CC_METHODS_NUM
 };
 
@@ -128,7 +142,15 @@ struct erdma_devattr {
 
 	int numa_node;
 	enum erdma_cc_alg cc;
-	u32 irq_num;
+	u8 retrans_num;
+	u8 rsvd;
+	u32 grp_num;
+	u32 max_ceqs;
+	int irq_num;
+
+	bool disable_dwqe;
+	u16 dwqe_pages;
+	u16 dwqe_entries;
 
 	u32 max_qp;
 	u32 max_send_wr;
@@ -180,11 +202,17 @@ enum {
 #define ERDMA_EXTRA_BUFFER_SIZE ERDMA_DB_SIZE
 #define WARPPED_BUFSIZE(size) ((size) + ERDMA_EXTRA_BUFFER_SIZE)
 
+enum {
+	ERDMA_STATE_AEQ_INIT_DONE = 0,
+};
+
 struct erdma_dev {
 	struct ib_device ibdev;
 	struct net_device *netdev;
+	rwlock_t netdev_lock;
 	struct pci_dev *pdev;
 	struct notifier_block netdev_nb;
+	struct sw_dev sw_dev;
 	struct workqueue_struct *reflush_wq;
 
 	resource_size_t func_bar_addr;
@@ -193,7 +221,8 @@ struct erdma_dev {
 
 	struct erdma_devattr attrs;
 	/* physical port state (only one port per device) */
-	enum ib_port_state state;
+	enum ib_port_state port_state;
+	unsigned long state;
 	u32 mtu;
 
 	/* cmdq and aeq use the same msix vector */
@@ -202,6 +231,7 @@ struct erdma_dev {
 	struct erdma_eq aeq;
 	struct erdma_eq_cb ceqs[ERDMA_NUM_MSIX_VEC - 1];
 
+	struct erdma_stats stats;
 	spinlock_t lock;
 	struct erdma_resource_cb res_cb[ERDMA_RES_CNT];
 	struct xarray qp_xa;
@@ -210,8 +240,28 @@ struct erdma_dev {
 	u32 next_alloc_qpn;
 	u32 next_alloc_cqn;
 
+	spinlock_t db_bitmap_lock;
+	/* We provide max 64 uContexts that each has one SQ doorbell Page. */
+	DECLARE_BITMAP(sdb_page, ERDMA_DWQE_TYPE0_CNT);
+	/*
+	 * We provide max 496 uContexts that each has one SQ normal Db,
+	 * and one directWQE db.
+	 */
+	DECLARE_BITMAP(sdb_entry, ERDMA_DWQE_TYPE1_CNT);
+
 	atomic_t num_ctx;
+	atomic_t num_cep;
 	struct list_head cep_list;
+
+	/* Fields for compat */
+	struct list_head dev_list;
+	refcount_t refcount;
+	struct completion unreg_completion;
+
+	struct dma_pool *db_pool;
+	struct dma_pool *resp_pool;
+
+	struct dentry *dbg_root;
 };
 
 static inline void *get_queue_entry(void *qbuf, u32 idx, u32 depth, u32 shift)
@@ -254,8 +304,6 @@ static inline u32 erdma_reg_read32_filed(struct erdma_dev *dev, u32 reg,
 	return FIELD_GET(filed_mask, val);
 }
 
-#define ERDMA_GET(val, name) FIELD_GET(ERDMA_CMD_##name##_MASK, val)
-
 int erdma_cmdq_init(struct erdma_dev *dev);
 void erdma_finish_cmdq_init(struct erdma_dev *dev);
 void erdma_cmdq_destroy(struct erdma_dev *dev);
@@ -275,5 +323,23 @@ void erdma_aeq_destroy(struct erdma_dev *dev);
 
 void erdma_aeq_event_handler(struct erdma_dev *dev);
 void erdma_ceq_completion_handler(struct erdma_eq_cb *ceq_cb);
+
+void erdma_chrdev_destroy(void);
+int erdma_chrdev_init(void);
+
+int erdma_query_resource(struct erdma_dev *dev, u32 mod, u32 op, u32 index,
+			 void *out, u32 len);
+int erdma_query_ext_attr(struct erdma_dev *dev, void *out);
+int erdma_set_ext_attr(struct erdma_dev *dev, struct erdma_ext_attr *attr);
+int erdma_set_dack_count(struct erdma_dev *dev, u32 value);
+int erdma_enable_legacy_mode(struct erdma_dev *dev, u32 value);
+void erdma_sync_info(struct erdma_dev *dev);
+
+void erdma_debugfs_register(void);
+void erdma_debugfs_unregister(void);
+
+int erdma_debugfs_files_create(struct erdma_dev *dev);
+void erdma_debugfs_files_destroy(struct erdma_dev *dev);
+extern struct dentry *erdma_debugfs_root;
 
 #endif

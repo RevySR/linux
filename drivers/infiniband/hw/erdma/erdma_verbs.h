@@ -20,6 +20,7 @@
 #define ERDMA_MAX_RECV_SGE 1
 #define ERDMA_MAX_INLINE (sizeof(struct erdma_sge) * (ERDMA_MAX_SEND_SGE))
 #define ERDMA_MAX_FRMR_PA 512
+#define ERDMA_DEFAULT_RETRANS_NUM 24
 
 enum {
 	ERDMA_MMAP_IO_NC = 0, /* no cache */
@@ -31,18 +32,12 @@ struct erdma_user_mmap_entry {
 	u8 mmap_flag;
 };
 
-struct erdma_ext_db_info {
-	bool enable;
-	u16 sdb_off;
-	u16 rdb_off;
-	u16 cdb_off;
-};
-
 struct erdma_ucontext {
 	struct ib_ucontext ibucontext;
 
-	struct erdma_ext_db_info ext_db;
-
+	u32 sdb_type;
+	u32 sdb_bitmap_idx;
+	u32 sdb_entid;
 	u64 sdb;
 	u64 rdb;
 	u64 cdb;
@@ -59,13 +54,14 @@ struct erdma_ucontext {
 struct erdma_pd {
 	struct ib_pd ibpd;
 	u32 pdn;
+	struct sw_pd *sw_pd;
 };
 
 /*
  * MemoryRegion definition.
  */
 #define ERDMA_MAX_INLINE_MTT_ENTRIES 4
-#define MTT_SIZE(mtt_cnt) ((mtt_cnt) << 3) /* per mtt entry takes 8 Bytes. */
+#define MTT_SIZE(mtt_cnt) ((mtt_cnt) << 3) /* per mtt takes 8 Bytes. */
 #define ERDMA_MR_MAX_MTT_CNT 524288
 #define ERDMA_MTT_ENTRY_SIZE 8
 
@@ -73,8 +69,8 @@ struct erdma_pd {
 #define ERDMA_MR_TYPE_FRMR 1
 #define ERDMA_MR_TYPE_DMA 2
 
-#define ERDMA_MR_MTT_0LEVEL 0
-#define ERDMA_MR_MTT_1LEVEL 1
+#define ERDMA_MR_INLINE_MTT 0
+#define ERDMA_MR_INDIRECT_MTT 1
 
 #define ERDMA_MR_ACC_RA BIT(0)
 #define ERDMA_MR_ACC_LR BIT(1)
@@ -90,17 +86,16 @@ static inline u8 to_erdma_access_flags(int access)
 	       (access & IB_ACCESS_REMOTE_ATOMIC ? ERDMA_MR_ACC_RA : 0);
 }
 
-/* Hierarchical storage structure for MTT entries */
 struct erdma_mtt {
-	u64 *buf;
+	void *buf;
 	size_t size;
 
 	bool continuous;
 	union {
 		dma_addr_t buf_dma;
 		struct {
-			struct scatterlist *sglist;
-			u32 nsg;
+			dma_addr_t *dma_addrs;
+			u32 npages;
 			u32 level;
 		};
 	};
@@ -108,14 +103,28 @@ struct erdma_mtt {
 	struct erdma_mtt *low_level;
 };
 
-struct erdma_mem {
-	struct ib_umem *umem;
-	struct erdma_mtt *mtt;
+enum erdma_mem_type {
+	ERDMA_UMEM = 0,
+	ERDMA_KMEM = 1,
+};
 
+struct erdma_kmem {
+	dma_addr_t *dma_addrs;
+	u64 npages;
+};
+
+struct erdma_mem {
+	enum erdma_mem_type type;
+	union {
+		struct ib_umem *umem;
+		struct erdma_kmem *kmem;
+	};
 	u32 page_size;
 	u32 page_offset;
 	u32 page_cnt;
 	u32 mtt_nents;
+
+	struct erdma_mtt *mtt;
 
 	u64 va;
 	u64 len;
@@ -140,8 +149,8 @@ struct erdma_uqp {
 	struct erdma_mem sq_mem;
 	struct erdma_mem rq_mem;
 
-	dma_addr_t sq_db_info_dma_addr;
-	dma_addr_t rq_db_info_dma_addr;
+	dma_addr_t sq_dbrec_dma;
+	dma_addr_t rq_dbrec_dma;
 
 	struct erdma_user_dbrecords_page *user_dbr_page;
 
@@ -149,26 +158,27 @@ struct erdma_uqp {
 };
 
 struct erdma_kqp {
+	spinlock_t sq_lock ____cacheline_aligned;
 	u16 sq_pi;
 	u16 sq_ci;
+	u64 *swr_tbl;
+	void *hw_sq_db;
+	void *sq_buf;
+	void *sq_dbrec;
 
+	spinlock_t rq_lock ____cacheline_aligned;
 	u16 rq_pi;
 	u16 rq_ci;
-
-	u64 *swr_tbl;
 	u64 *rwr_tbl;
-
-	void __iomem *hw_sq_db;
-	void __iomem *hw_rq_db;
-
-	void *sq_buf;
-	dma_addr_t sq_buf_dma_addr;
-
+	void *hw_rq_db;
 	void *rq_buf;
-	dma_addr_t rq_buf_dma_addr;
+	void *rq_dbrec;
 
-	void *sq_db_info;
-	void *rq_db_info;
+	struct erdma_mem sq_mem;
+	struct erdma_mem rq_mem;
+
+	dma_addr_t sq_dbrec_dma;
+	dma_addr_t rq_dbrec_dma;
 
 	u8 sig_all;
 };
@@ -195,7 +205,8 @@ enum erdma_qp_attr_mask {
 };
 
 enum erdma_qp_flags {
-	ERDMA_QP_IN_FLUSHING = (1 << 0),
+	ERDMA_QP_IN_DESTROY = (1 << 0),
+	ERDMA_QP_IN_FLUSHING = (1 << 1),
 };
 
 struct erdma_qp_attrs {
@@ -208,14 +219,28 @@ struct erdma_qp_attrs {
 	u32 max_send_sge;
 	u32 max_recv_sge;
 	u32 cookie;
+	u32 flags;
+
+	u32 remote_cookie;
 #define ERDMA_QP_ACTIVE 0
 #define ERDMA_QP_PASSIVE 1
 	u8 qp_type;
 	u8 pd_len;
+	bool connect_without_cm;
+	__u16 sport;
+	__u16 dport;
+	union {
+		struct sockaddr_in6 in6;
+		struct sockaddr_in in;
+	} laddr, raddr;
+	u32 remote_qp_num;
+	u32 sq_psn;
+	u32 rq_psn;
 };
 
 struct erdma_qp {
 	struct ib_qp ibqp;
+	struct sw_qp *sw_qp;
 	struct kref ref;
 	struct completion safe_free;
 	struct erdma_dev *dev;
@@ -234,25 +259,32 @@ struct erdma_qp {
 	struct erdma_cq *rcq;
 
 	struct erdma_qp_attrs attrs;
-	spinlock_t lock;
+
 };
 
 struct erdma_kcq_info {
 	void *qbuf;
-	dma_addr_t qbuf_dma_addr;
+	struct erdma_mem qbuf_mtt;
+	dma_addr_t dbrec_dma;
 	u32 ci;
 	u32 cmdsn;
 	u32 notify_cnt;
 
 	spinlock_t lock;
 	u8 __iomem *db;
-	u64 *db_record;
+	u64 *dbrec;
 };
 
 struct erdma_ucq_info {
-	struct erdma_mem qbuf_mem;
+	struct erdma_mem qbuf_mtt;
 	struct erdma_user_dbrecords_page *user_dbr_page;
-	dma_addr_t db_info_dma_addr;
+	dma_addr_t dbrec_dma;
+};
+
+struct erdma_dim {
+	enum ib_cq_notify_flags flags;
+	struct hrtimer timer;
+	u16 timeout;
 };
 
 struct erdma_cq {
@@ -266,6 +298,10 @@ struct erdma_cq {
 		struct erdma_kcq_info kern_cq;
 		struct erdma_ucq_info user_cq;
 	};
+
+	struct erdma_dim dim;
+	bool is_soft;
+	struct sw_cq *sw_cq;
 };
 
 #define QP_ID(qp) ((qp)->ibqp.qp_num)
@@ -318,17 +354,20 @@ to_emmap(struct rdma_user_mmap_entry *ibmmap)
 	return container_of(ibmmap, struct erdma_user_mmap_entry, rdma_entry);
 }
 
+enum hrtimer_restart cq_timer_fn(struct hrtimer *t);
+
 int erdma_alloc_ucontext(struct ib_ucontext *ibctx, struct ib_udata *data);
 void erdma_dealloc_ucontext(struct ib_ucontext *ibctx);
 int erdma_query_device(struct ib_device *dev, struct ib_device_attr *attr,
 		       struct ib_udata *data);
-int erdma_get_port_immutable(struct ib_device *dev, u32 port,
+int erdma_get_port_immutable(struct ib_device *dev, port_t port,
 			     struct ib_port_immutable *ib_port_immutable);
 int erdma_create_cq(struct ib_cq *ibcq, const struct ib_cq_init_attr *attr,
 		    struct ib_udata *data);
-int erdma_query_port(struct ib_device *dev, u32 port,
+
+int erdma_query_port(struct ib_device *dev, port_t port,
 		     struct ib_port_attr *attr);
-int erdma_query_gid(struct ib_device *dev, u32 port, int idx,
+int erdma_query_gid(struct ib_device *dev, port_t port, int idx,
 		    union ib_gid *gid);
 int erdma_alloc_pd(struct ib_pd *ibpd, struct ib_udata *data);
 int erdma_dealloc_pd(struct ib_pd *ibpd, struct ib_udata *udata);
@@ -359,7 +398,22 @@ struct ib_mr *erdma_ib_alloc_mr(struct ib_pd *ibpd, enum ib_mr_type mr_type,
 				u32 max_num_sg);
 int erdma_map_mr_sg(struct ib_mr *ibmr, struct scatterlist *sg, int sg_nents,
 		    unsigned int *sg_offset);
+void erdma_disassociate_ucontext(struct ib_ucontext *ibcontext);
 void erdma_port_event(struct erdma_dev *dev, enum ib_event_type reason);
 void erdma_set_mtu(struct erdma_dev *dev, u32 mtu);
+int erdma_set_retrans_num(struct erdma_dev *dev, u32 retrans_num);
+
+struct net_device *erdma_get_netdev(struct ib_device *device, port_t port_num);
+enum rdma_link_layer erdma_get_link_layer(struct ib_device *dev,
+					  port_t port_num);
+int erdma_query_pkey(struct ib_device *ibdev, port_t port, u16 index,
+		     u16 *pkey);
+int erdma_modify_cq(struct ib_cq *ibcq, u16 cq_count, u16 cq_period);
+
+int erdma_query_hw_stats(struct erdma_dev *dev);
+const struct cpumask *erdma_get_vector_affinity(struct ib_device *ibdev,
+						int comp_vector);
+
+#include "erdma_compat.h"
 
 #endif

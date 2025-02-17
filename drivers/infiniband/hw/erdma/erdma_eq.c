@@ -13,7 +13,7 @@ void notify_eq(struct erdma_eq *eq)
 	u64 db_data = FIELD_PREP(ERDMA_EQDB_CI_MASK, eq->ci) |
 		      FIELD_PREP(ERDMA_EQDB_ARM_MASK, 1);
 
-	*eq->db_record = db_data;
+	*eq->dbrec = db_data;
 	writeq(db_data, eq->db);
 
 	atomic64_inc(&eq->notify_num);
@@ -35,6 +35,9 @@ void erdma_aeq_event_handler(struct erdma_dev *dev)
 	struct erdma_cq *cq;
 	struct ib_event event;
 	u32 poll_cnt = 0;
+
+	if (!test_bit(ERDMA_STATE_AEQ_INIT_DONE, &dev->state))
+		return;
 
 	memset(&event, 0, sizeof(event));
 
@@ -99,7 +102,7 @@ int erdma_aeq_init(struct erdma_dev *dev)
 	atomic64_set(&eq->notify_num, 0);
 
 	eq->db = dev->func_bar + ERDMA_REGS_AEQ_DB_REG;
-	eq->db_record = (u64 *)(eq->qbuf + buf_size);
+	eq->dbrec = (u64 *)(eq->qbuf + buf_size);
 
 	erdma_reg_write32(dev, ERDMA_REGS_AEQ_ADDR_H_REG,
 			  upper_32_bits(eq->qbuf_dma_addr));
@@ -108,6 +111,9 @@ int erdma_aeq_init(struct erdma_dev *dev)
 	erdma_reg_write32(dev, ERDMA_REGS_AEQ_DEPTH_REG, eq->depth);
 	erdma_reg_write64(dev, ERDMA_AEQ_DB_HOST_ADDR_REG,
 			  eq->qbuf_dma_addr + buf_size);
+
+	/* erdma_reg_writeXX has memory barrier implicitly */
+	set_bit(ERDMA_STATE_AEQ_INIT_DONE, &dev->state);
 
 	return 0;
 }
@@ -209,7 +215,7 @@ static void erdma_free_ceq_irq(struct erdma_dev *dev, u16 ceqn)
 static int create_eq_cmd(struct erdma_dev *dev, u32 eqn, struct erdma_eq *eq)
 {
 	struct erdma_cmdq_create_eq_req req;
-	dma_addr_t db_info_dma_addr;
+	dma_addr_t dbrec_dma;
 
 	erdma_cmdq_build_reqhdr(&req.hdr, CMDQ_SUBMOD_COMMON,
 				CMDQ_OPCODE_CREATE_EQ);
@@ -219,11 +225,13 @@ static int create_eq_cmd(struct erdma_dev *dev, u32 eqn, struct erdma_eq *eq)
 	req.qtype = ERDMA_EQ_TYPE_CEQ;
 	/* Vector index is the same as EQN. */
 	req.vector_idx = eqn;
-	db_info_dma_addr = eq->qbuf_dma_addr + (eq->depth << EQE_SHIFT);
-	req.db_dma_addr_l = lower_32_bits(db_info_dma_addr);
-	req.db_dma_addr_h = upper_32_bits(db_info_dma_addr);
+	dbrec_dma = eq->qbuf_dma_addr + (eq->depth << EQE_SHIFT);
+	req.db_dma_addr_l = lower_32_bits(dbrec_dma);
+	req.db_dma_addr_h = upper_32_bits(dbrec_dma);
 
-	return erdma_post_cmd_wait(&dev->cmdq, &req, sizeof(req), NULL, NULL);
+	return erdma_post_cmd_wait(&dev->cmdq, &req,
+				   sizeof(struct erdma_cmdq_create_eq_req),
+				   NULL, NULL);
 }
 
 static int erdma_ceq_init_one(struct erdma_dev *dev, u16 ceqn)
@@ -245,7 +253,7 @@ static int erdma_ceq_init_one(struct erdma_dev *dev, u16 ceqn)
 	eq->depth = ERDMA_DEFAULT_EQ_DEPTH;
 	eq->db = dev->func_bar + ERDMA_REGS_CEQ_DB_BASE_REG +
 		 (ceqn + 1) * ERDMA_DB_SIZE;
-	eq->db_record = (u64 *)(eq->qbuf + buf_size);
+	eq->dbrec = (u64 *)(eq->qbuf + buf_size);
 	eq->ci = 0;
 	dev->ceqs[ceqn].dev = dev;
 
@@ -282,10 +290,25 @@ static void erdma_ceq_uninit_one(struct erdma_dev *dev, u16 ceqn)
 
 int erdma_ceqs_init(struct erdma_dev *dev)
 {
+	u64 req_hdr, cap0, cap1;
 	u32 i, j;
 	int err;
 
-	for (i = 0; i < dev->attrs.irq_num - 1; i++) {
+	erdma_cmdq_build_reqhdr(&req_hdr, CMDQ_SUBMOD_RDMA,
+				CMDQ_OPCODE_QUERY_DEVICE);
+
+	err = erdma_post_cmd_wait(&dev->cmdq, &req_hdr, sizeof(req_hdr), &cap0,
+				  &cap1);
+	if (err)
+		return err;
+
+#define ERDMA_GET_CAP(name, cap) FIELD_GET(ERDMA_CMD_DEV_CAP_##name##_MASK, cap)
+
+	dev->attrs.max_ceqs =
+		min((size_t)8 * (size_t)ERDMA_GET_CAP(QBLOCK, cap1),
+		    (size_t)dev->attrs.irq_num);
+
+	for (i = 0; i < dev->attrs.max_ceqs - 1; i++) {
 		err = erdma_ceq_init_one(dev, i);
 		if (err)
 			goto out_err;
@@ -312,7 +335,7 @@ void erdma_ceqs_uninit(struct erdma_dev *dev)
 {
 	u32 i;
 
-	for (i = 0; i < dev->attrs.irq_num - 1; i++) {
+	for (i = 0; i < dev->attrs.max_ceqs - 1; i++) {
 		erdma_free_ceq_irq(dev, i);
 		erdma_ceq_uninit_one(dev, i);
 	}
