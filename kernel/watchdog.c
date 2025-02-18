@@ -27,6 +27,8 @@
 
 #include <asm/irq_regs.h>
 #include <linux/kvm_para.h>
+#include <linux/kallsyms.h>
+#include <linux/fault_event.h>
 
 static DEFINE_MUTEX(watchdog_mutex);
 
@@ -285,6 +287,17 @@ static DEFINE_PER_CPU(unsigned long, watchdog_report_ts);
 static DEFINE_PER_CPU(struct hrtimer, watchdog_hrtimer);
 static DEFINE_PER_CPU(bool, softlockup_touch_sync);
 static unsigned long soft_lockup_nmi_warn;
+unsigned int sysctl_unrecovered_softlockup_sample_interval __read_mostly
+		= 1800;/* seconds */
+unsigned int sysctl_unrecovered_softlockup_thresh_times __read_mostly = 30;
+unsigned int sysctl_unrecovered_softlockup_thresh_cpus __read_mostly = 5;
+static char *unrecovered_softlockup_funcs[] = {
+	"spin_lock",
+	NULL
+};
+static atomic_t unrecovered_softlockup_count = ATOMIC_INIT(0);
+static unsigned long unrecovered_softlockup_start_secs;
+static DECLARE_BITMAP(softlockup_cpu_bits, CONFIG_NR_CPUS);
 
 static int __init softlockup_panic_setup(char *str)
 {
@@ -444,6 +457,64 @@ static int softlockup_fn(void *data)
 	return 0;
 }
 
+static void report_softlockup(struct pt_regs *regs)
+{
+	unsigned long now;
+	int softlockup_cpus;
+	int class = SLIGHT_FAULT;
+
+	if (!fault_monitor_enable())
+		return;
+
+	if (regs) {
+		char func[KSYM_NAME_LEN] = { 0 };
+		int i = 0;
+		int nr_funcs =
+		  sizeof(unrecovered_softlockup_funcs) / sizeof(char *);
+
+		scnprintf(func, sizeof(func), "%ps", (void *)instruction_pointer(regs));
+		while (i < nr_funcs && unrecovered_softlockup_funcs[i]) {
+			if (strstr(func, unrecovered_softlockup_funcs[i])) {
+				report_fault_event(raw_smp_processor_id(), current,
+					FATAL_FAULT, FE_SOFTLOCKUP, NULL);
+				return;
+			}
+			i++;
+		}
+	}
+
+	if (sysctl_unrecovered_softlockup_sample_interval) {
+		now = get_timestamp();
+
+		if (unrecovered_softlockup_start_secs == 0)
+			unrecovered_softlockup_start_secs = now;
+
+		if ((now - unrecovered_softlockup_start_secs) >
+			sysctl_unrecovered_softlockup_sample_interval) {
+			unrecovered_softlockup_start_secs = now;
+			atomic_set(&unrecovered_softlockup_count, 0);
+			bitmap_clear(softlockup_cpu_bits, 0, CONFIG_NR_CPUS);
+		}
+
+		set_bit(raw_smp_processor_id(), softlockup_cpu_bits);
+		atomic_inc(&unrecovered_softlockup_count);
+
+		softlockup_cpus = __bitmap_weight(softlockup_cpu_bits,
+				CONFIG_NR_CPUS);
+		if (sysctl_unrecovered_softlockup_thresh_cpus &&
+			softlockup_cpus >=
+			sysctl_unrecovered_softlockup_thresh_cpus)
+			class = FATAL_FAULT;
+		else if (sysctl_unrecovered_softlockup_thresh_times &&
+			atomic_read(&unrecovered_softlockup_count) >=
+			sysctl_unrecovered_softlockup_thresh_times)
+			class = FATAL_FAULT;
+	}
+
+	report_fault_event(raw_smp_processor_id(), current,
+			class, FE_SOFTLOCKUP, NULL);
+}
+
 /* watchdog kicker functions */
 static enum hrtimer_restart watchdog_timer_fn(struct hrtimer *hrtimer)
 {
@@ -505,6 +576,8 @@ static enum hrtimer_restart watchdog_timer_fn(struct hrtimer *hrtimer)
 	touch_ts = __this_cpu_read(watchdog_touch_ts);
 	duration = is_softlockup(touch_ts, period_ts, now);
 	if (unlikely(duration)) {
+		report_softlockup(regs);
+
 		/*
 		 * Prevent multiple soft-lockup reports if one cpu is already
 		 * engaged in dumping all cpu back traces.
@@ -911,6 +984,30 @@ static struct ctl_table watchdog_sysctls[] = {
 		.extra2		= SYSCTL_ONE,
 	},
 #endif /* CONFIG_SMP */
+	{
+		.procname	= "unrecovered_softlockup_thresh_cpus",
+		.data		= &sysctl_unrecovered_softlockup_thresh_cpus,
+		.maxlen		= sizeof(unsigned int),
+		.mode		= 0644,
+		.proc_handler	= proc_dointvec_minmax,
+		.extra1		= SYSCTL_ZERO,
+	},
+	{
+		.procname	= "unrecovered_softlockup_sample_seconds",
+		.data		= &sysctl_unrecovered_softlockup_sample_interval,
+		.maxlen		= sizeof(unsigned int),
+		.mode		= 0644,
+		.proc_handler	= proc_dointvec_minmax,
+		.extra1		= SYSCTL_ZERO,
+	},
+	{
+		.procname	= "unrecovered_softlockup_thresh_times",
+		.data		= &sysctl_unrecovered_softlockup_thresh_times,
+		.maxlen		= sizeof(unsigned int),
+		.mode		= 0644,
+		.proc_handler	= proc_dointvec_minmax,
+		.extra1		= SYSCTL_ZERO,
+	},
 #endif
 #ifdef CONFIG_HARDLOCKUP_DETECTOR
 	{
