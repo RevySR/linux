@@ -1216,6 +1216,10 @@ int __filemap_add_folio(struct address_space *mapping, struct folio *folio,
 bool filemap_range_has_writeback(struct address_space *mapping,
 				 loff_t start_byte, loff_t end_byte);
 
+bool filemap_range_is_marked(struct address_space *mapping,
+			     loff_t start_byte, loff_t end_byte,
+			     xa_mark_t mark);
+
 /**
  * filemap_range_needs_writeback - check if range potentially needs writeback
  * @mapping:           address space within which to check

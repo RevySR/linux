@@ -653,6 +653,30 @@ bool filemap_range_has_writeback(struct address_space *mapping,
 }
 EXPORT_SYMBOL_GPL(filemap_range_has_writeback);
 
+bool filemap_range_is_marked(struct address_space *mapping,
+			     loff_t start_byte, loff_t end_byte,
+			     xa_mark_t mark)
+{
+	XA_STATE(xas, &mapping->i_pages, start_byte >> PAGE_SHIFT);
+	pgoff_t max = end_byte >> PAGE_SHIFT;
+	struct folio *folio;
+
+	if (end_byte < start_byte)
+		return false;
+
+	rcu_read_lock();
+	xas_for_each_marked(&xas, folio, max, mark) {
+		if (xas_retry(&xas, folio))
+			continue;
+		if (xa_is_value(folio))
+			continue;
+		break;
+	}
+	rcu_read_unlock();
+	return folio != NULL;
+}
+EXPORT_SYMBOL_GPL(filemap_range_is_marked);
+
 /**
  * filemap_write_and_wait_range - write out & wait on a file range
  * @mapping:	the address_space for the pages
