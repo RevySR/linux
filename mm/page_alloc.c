@@ -51,6 +51,7 @@
 #include <linux/lockdep.h>
 #include <linux/psi.h>
 #include <linux/khugepaged.h>
+#include <linux/fault_event.h>
 #include <linux/delayacct.h>
 #include <linux/kfence.h>
 #include <linux/cacheinfo.h>
@@ -3446,6 +3447,9 @@ void warn_alloc(gfp_t gfp_mask, nodemask_t *nodemask, const char *fmt, ...)
 	     !__ratelimit(&nopage_rs) ||
 	     ((gfp_mask & __GFP_DMA) && !has_managed_dma()))
 		return;
+
+	report_fault_event(raw_smp_processor_id(), current,
+		NORMAL_FAULT, FE_ALLOCFAIL, NULL);
 
 	va_start(args, fmt);
 	vaf.fmt = fmt;
