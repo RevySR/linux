@@ -411,6 +411,8 @@ static void truncate_dup_pages(void)
 				__dedup_page(folio_page(folio, 0), false);
 				folio_unlock(folio);
 				folio_put(folio);
+
+				cond_resched();
 			}
 		}
 	}
