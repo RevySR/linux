@@ -45,6 +45,7 @@
 #include <linux/task_work.h>
 #include <linux/hardirq.h>
 #include <linux/kexec.h>
+#include <linux/fault_event.h>
 
 #include <asm/intel-family.h>
 #include <asm/processor.h>
@@ -740,6 +741,13 @@ bool machine_check_poll(enum mcp_flags flags, mce_banks_t *b)
 		continue;
 
 log_it:
+		if (m.status & MCI_STATUS_UC)
+			report_fault_event(-1, NULL, SLIGHT_FAULT,
+				FE_MCE, "UCE hardware failure");
+		else
+			report_fault_event(-1, NULL, SLIGHT_FAULT,
+				FE_MCE, "CE hardware failure");
+
 		error_seen = true;
 
 		if (flags & MCP_DONTLOG)
@@ -1350,6 +1358,8 @@ static void kill_me_maybe(struct callback_head *cb)
 	if (!ret) {
 		set_mce_nospec(pfn);
 		sync_core();
+		report_fault_event(raw_smp_processor_id(), p, SLIGHT_FAULT,
+			FE_MCE, "UCE recovered");
 		return;
 	}
 
@@ -1357,6 +1367,8 @@ static void kill_me_maybe(struct callback_head *cb)
 		return;
 
 	pr_err("Memory error not recovered");
+	report_fault_event(raw_smp_processor_id(), p, FATAL_FAULT,
+		FE_MCE, "UCE not recovered");
 	kill_me_now(cb);
 }
 
