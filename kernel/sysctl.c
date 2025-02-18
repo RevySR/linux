@@ -64,6 +64,7 @@
 #include <linux/userfaultfd_k.h>
 #include <linux/pid.h>
 #include <linux/pid_namespace.h>
+#include <linux/fault_event.h>
 
 #include "../lib/kstrtox.h"
 
@@ -2117,6 +2118,35 @@ static struct ctl_table kern_table[] = {
 		.extra1         = SYSCTL_TWO,
 	},
 #endif
+	{
+		.procname       = "fault_event_enable",
+		.data           = &sysctl_fault_event_enable,
+		.maxlen         = sizeof(unsigned int),
+		.mode           = 0644,
+		.proc_handler   = proc_dointvec_minmax,
+		.extra1         = SYSCTL_ZERO,
+		.extra2         = SYSCTL_ONE,
+	},
+#if defined CONFIG_PRINTK
+	{
+		.procname       = "fault_event_print",
+		.data           = &sysctl_fault_event_print,
+		.maxlen         = sizeof(unsigned int),
+		.mode           = 0644,
+		.proc_handler   = proc_dointvec_minmax,
+		.extra1         = SYSCTL_ZERO,
+		.extra2         = SYSCTL_ONE,
+	},
+#endif
+	{
+		.procname       = "panic_on_fatal_event",
+		.data           = &sysctl_panic_on_fatal_event,
+		.maxlen         = sizeof(unsigned int),
+		.mode           = 0644,
+		.proc_handler   = proc_dointvec_minmax,
+		.extra1         = SYSCTL_ZERO,
+		.extra2         = SYSCTL_ONE,
+	},
 	{ }
 };
 
