@@ -100,6 +100,7 @@
 #include <linux/user_events.h>
 #include <linux/iommu.h>
 #include <linux/tick.h>
+#include <linux/fault_event.h>
 
 #include <asm/pgalloc.h>
 #include <linux/uaccess.h>
@@ -859,14 +860,20 @@ static void check_mm(struct mm_struct *mm)
 	for (i = 0; i < NR_MM_COUNTERS; i++) {
 		long x = percpu_counter_sum(&mm->rss_stat[i]);
 
-		if (unlikely(x))
+		if (unlikely(x)) {
+			report_fault_event(-1, NULL, FATAL_FAULT,
+				FE_MM_STATE, "Bad rss-counter");
 			pr_alert("BUG: Bad rss-counter state mm:%p type:%s val:%ld\n",
 				 mm, resident_page_types[i], x);
+		}
 	}
 
-	if (mm_pgtables_bytes(mm))
+	if (mm_pgtables_bytes(mm)) {
+		report_fault_event(-1, NULL, FATAL_FAULT,
+			FE_MM_STATE, "non-zero pgtables_bytes");
 		pr_alert("BUG: non-zero pgtables_bytes on freeing mm: %ld\n",
 				mm_pgtables_bytes(mm));
+	}
 
 #if defined(CONFIG_TRANSPARENT_HUGEPAGE) && !USE_SPLIT_PMD_PTLOCKS
 	VM_BUG_ON_MM(mm->pmd_huge_pte, mm);
