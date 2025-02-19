@@ -48,6 +48,7 @@
 #include <linux/fsnotify.h>
 #include <linux/fs_context.h>
 #include <linux/fs_parser.h>
+#include <linux/fault_event.h>
 
 #include "ext4.h"
 #include "ext4_extents.h"	/* Needed for trace points definition */
@@ -833,6 +834,9 @@ void __ext4_error(struct super_block *sb, const char *function,
 
 	trace_ext4_error(sb, function, line);
 	if (ext4_error_ratelimit(sb)) {
+		report_fault_event(raw_smp_processor_id(), current,
+			NORMAL_FAULT, FE_EXT4_ERR, "ext4-fs error");
+
 		va_start(args, fmt);
 		vaf.fmt = fmt;
 		vaf.va = &args;
@@ -858,6 +862,9 @@ void __ext4_error_inode(struct inode *inode, const char *function,
 
 	trace_ext4_error(inode->i_sb, function, line);
 	if (ext4_error_ratelimit(inode->i_sb)) {
+		report_fault_event(raw_smp_processor_id(), current,
+			NORMAL_FAULT, FE_EXT4_ERR, "ext4-fs error");
+
 		va_start(args, fmt);
 		vaf.fmt = fmt;
 		vaf.va = &args;
@@ -893,6 +900,9 @@ void __ext4_error_file(struct file *file, const char *function,
 
 	trace_ext4_error(inode->i_sb, function, line);
 	if (ext4_error_ratelimit(inode->i_sb)) {
+		report_fault_event(raw_smp_processor_id(), current,
+			NORMAL_FAULT, FE_EXT4_ERR, "ext4-fs error");
+
 		path = file_path(file, pathname, sizeof(pathname));
 		if (IS_ERR(path))
 			path = "(unknown)";
@@ -978,6 +988,9 @@ void __ext4_std_error(struct super_block *sb, const char *function,
 		return;
 
 	if (ext4_error_ratelimit(sb)) {
+		report_fault_event(raw_smp_processor_id(), current,
+			NORMAL_FAULT, FE_EXT4_ERR, "ext4-fs error");
+
 		errstr = ext4_decode_error(sb, errno, nbuf);
 		printk(KERN_CRIT "EXT4-fs error (device %s) in %s:%d: %s\n",
 		       sb->s_id, function, line, errstr);
@@ -1026,6 +1039,9 @@ void __ext4_warning(struct super_block *sb, const char *function,
 	if (!ext4_warning_ratelimit(sb))
 		return;
 
+	report_fault_event(raw_smp_processor_id(), current,
+		SLIGHT_FAULT, FE_EXT4_ERR, "ext4-fs warning");
+
 	va_start(args, fmt);
 	vaf.fmt = fmt;
 	vaf.va = &args;
@@ -1042,6 +1058,9 @@ void __ext4_warning_inode(const struct inode *inode, const char *function,
 
 	if (!ext4_warning_ratelimit(inode->i_sb))
 		return;
+
+	report_fault_event(raw_smp_processor_id(), current,
+		SLIGHT_FAULT, FE_EXT4_ERR, "ext4-fs warning");
 
 	va_start(args, fmt);
 	vaf.fmt = fmt;
@@ -1067,6 +1086,9 @@ __acquires(bitlock)
 
 	trace_ext4_error(sb, function, line);
 	if (ext4_error_ratelimit(sb)) {
+		report_fault_event(raw_smp_processor_id(), current,
+			NORMAL_FAULT, FE_EXT4_ERR, "ext4-fs error");
+
 		va_start(args, fmt);
 		vaf.fmt = fmt;
 		vaf.va = &args;
