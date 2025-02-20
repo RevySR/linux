@@ -191,26 +191,39 @@ out:
 	ClearPageDup(page);
 }
 
+#ifdef CONFIG_MEMCG
+static inline bool memcg_allow_duptext(struct mm_struct *mm)
+{
+	struct mem_cgroup *memcg;
+	bool allow_duptext = false;
+
+	memcg = get_mem_cgroup_from_mm(mm);
+	if (memcg) {
+		allow_duptext = memcg->allow_duptext;
+		css_put(&memcg->css);
+	}
+
+	return allow_duptext;
+}
+#else
+static inline bool memcg_allow_duptext(struct mm_struct *mm)
+{
+	return true;
+}
+#endif
+
 bool __dup_page_suitable(struct vm_area_struct *vma, struct mm_struct *mm)
 {
 	/* Is executable file? */
 	if ((vma->vm_flags & VM_EXEC) && vma->vm_file)  {
 		struct inode *inode = vma->vm_file->f_inode;
-		struct mem_cgroup *memcg;
-		bool allow_duptext = false;
 
 		/* Is read-only ? */
 		if (!S_ISREG(inode->i_mode) || inode_is_open_for_write(inode))
 			return false;
 
-		/* Allow dup? */
-		memcg = get_mem_cgroup_from_mm(mm);
-		if (memcg) {
-			allow_duptext = memcg->allow_duptext;
-			css_put(&memcg->css);
-		}
-
-		return allow_duptext;
+		/* Memcg allow duptext ? */
+		return memcg_allow_duptext(mm);
 	}
 
 	return false;
