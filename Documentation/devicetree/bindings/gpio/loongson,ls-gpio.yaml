@@ -14,6 +14,15 @@ properties:
     enum:
       - loongson,ls2k-gpio
       - loongson,ls7a-gpio
+      - loongson,ls2k0500-gpio0
+      - loongson,ls2k0500-gpio1
+      - loongson,ls2k2000-gpio0
+      - loongson,ls2k2000-gpio1
+      - loongson,ls2k2000-gpio2
+      - loongson,ls3a5000-gpio
+      - loongson,ls7a2000-gpio1
+      - loongson,ls7a2000-gpio2
+      - loongson,ls3a6000-gpio
 
   reg:
     maxItems: 1
