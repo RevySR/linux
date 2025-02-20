@@ -13,6 +13,7 @@
 #include <linux/fs.h>
 #include <linux/module.h>
 #include <linux/page_dup.h>
+#include <linux/cpuset.h>
 
 #include "internal.h"
 
@@ -269,14 +270,22 @@ out:
 /* NOTE @page can be file THP head or tail page */
 struct page *__dup_page(struct page *page, struct vm_area_struct *vma)
 {
-	int target_node = numa_node_id();
 	struct page *dup_hpage = NULL;
 	struct page *hpage = compound_head(page);
 	struct folio *folio = page_folio(page);
+	int target_node = numa_node_id();
+	int folio_node = folio_nid(folio);
 
 	VM_BUG_ON_PAGE(!PageLocked(hpage), hpage);
 
-	if (likely(page_to_nid(hpage) == target_node) ||
+	if (!node_isset(target_node, cpuset_current_mems_allowed)) {
+		if (!node_isset(folio_node, cpuset_current_mems_allowed))
+			target_node = first_node(cpuset_current_mems_allowed);
+		else
+			target_node = folio_node;
+	}
+
+	if (likely(folio_node == target_node) ||
 			!dup_page_suitable(vma, current->mm) ||
 			unlikely(PageDirty(page) || PageWriteback(page) || !PageUptodate(page)))
 		return NULL;
