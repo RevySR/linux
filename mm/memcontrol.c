@@ -6132,6 +6132,36 @@ static int mem_cgroup_allow_duptext_write(struct cgroup_subsys_state *css,
 
 	return 0;
 }
+
+static int mem_cgroup_duptext_nodes_show(struct seq_file *m, void *v)
+{
+	struct mem_cgroup *memcg = mem_cgroup_from_css(seq_css(m));
+
+	seq_printf(m, "%*pbl\n", nodemask_pr_args(&memcg->duptext_nodes));
+	return 0;
+}
+
+static ssize_t mem_cgroup_duptext_nodes_write(struct kernfs_open_file *of,
+		char *buf, size_t nbytes, loff_t off)
+{
+	struct mem_cgroup *memcg = mem_cgroup_from_css(of_css(of));
+	nodemask_t nodes;
+	int retval;
+
+	buf = strstrip(buf);
+	if (!*buf)
+		return -EINVAL;
+
+	retval = nodelist_parse(buf, nodes);
+	if (retval < 0)
+		return retval;
+
+	if (!nodes_subset(nodes, node_states[N_MEMORY]))
+		return -EINVAL;
+
+	memcg->duptext_nodes = nodes;
+	return nbytes;
+}
 #endif
 
 static struct cftype mem_cgroup_legacy_files[] = {
@@ -6408,6 +6438,12 @@ static struct cftype mem_cgroup_legacy_files[] = {
 		.read_u64 = mem_cgroup_allow_duptext_read,
 		.write_u64 = mem_cgroup_allow_duptext_write,
 	},
+	{
+		.name = "duptext_nodes",
+		.seq_show = mem_cgroup_duptext_nodes_show,
+		.write = mem_cgroup_duptext_nodes_write,
+		.max_write_len = (100U + 6 * MAX_NUMNODES),
+	},
 #endif
 	{ },	/* terminate */
 };
@@ -6649,6 +6685,9 @@ static struct mem_cgroup *mem_cgroup_alloc(void)
 	INIT_LIST_HEAD(&memcg->deferred_split_queue.split_queue);
 	memcg->deferred_split_queue.split_queue_len = 0;
 #endif
+#ifdef CONFIG_DUPTEXT
+	memcg->duptext_nodes = node_states[N_MEMORY];
+#endif
 	lru_gen_init_memcg(memcg);
 	return memcg;
 fail:
@@ -6700,6 +6739,7 @@ mem_cgroup_css_alloc(struct cgroup_subsys_state *parent_css)
 #endif
 #ifdef CONFIG_DUPTEXT
 		memcg->allow_duptext = parent->allow_duptext;
+		memcg->duptext_nodes = parent->duptext_nodes;
 #endif
 		page_counter_init(&memcg->memory, &parent->memory);
 		page_counter_init(&memcg->swap, &parent->swap);

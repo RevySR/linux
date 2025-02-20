@@ -205,10 +205,40 @@ static inline bool memcg_allow_duptext(struct mm_struct *mm)
 
 	return allow_duptext;
 }
+
+static inline int duptext_target_node(struct mm_struct *mm, int page_node)
+{
+	struct mem_cgroup *memcg;
+	nodemask_t allowed_nodes = cpuset_current_mems_allowed;
+	int target_node = numa_node_id();
+
+	memcg = get_mem_cgroup_from_mm(mm);
+	if (memcg) {
+		nodes_and(allowed_nodes, allowed_nodes, memcg->duptext_nodes);
+		css_put(&memcg->css);
+	}
+
+	if (unlikely(nodes_empty(allowed_nodes)))
+		return page_node;
+
+	if (!node_isset(target_node, allowed_nodes)) {
+		if (!node_isset(page_node, allowed_nodes))
+			target_node = first_node(allowed_nodes);
+		else
+			target_node = page_node;
+	}
+
+	return target_node;
+}
 #else
 static inline bool memcg_allow_duptext(struct mm_struct *mm)
 {
 	return true;
+}
+
+static inline int duptext_target_node(struct mm_struct *mm, int page_node)
+{
+	return page_node;
 }
 #endif
 
@@ -285,25 +315,24 @@ struct page *__dup_page(struct page *page, struct vm_area_struct *vma)
 {
 	struct page *dup_hpage = NULL;
 	struct page *hpage = compound_head(page);
+	struct mm_struct *mm = current->mm;
 	struct folio *folio = page_folio(page);
-	int target_node = numa_node_id();
 	int folio_node = folio_nid(folio);
+	int target_node;
 
 	VM_BUG_ON_PAGE(!PageLocked(hpage), hpage);
 
 	if (is_zero_folio(folio))
 		return NULL;
 
-	if (!node_isset(target_node, cpuset_current_mems_allowed)) {
-		if (!node_isset(folio_node, cpuset_current_mems_allowed))
-			target_node = first_node(cpuset_current_mems_allowed);
-		else
-			target_node = folio_node;
-	}
+	if (!__dup_page_suitable(vma, mm))
+		return NULL;
 
-	if (likely(folio_node == target_node) ||
-			!dup_page_suitable(vma, current->mm) ||
-			unlikely(PageDirty(hpage) || PageWriteback(hpage) || !PageUptodate(hpage)))
+	target_node = duptext_target_node(mm, folio_node);
+	if (likely(folio_node == target_node))
+		return NULL;
+
+	if (unlikely(PageDirty(hpage) || PageWriteback(hpage) || !PageUptodate(hpage)))
 		return NULL;
 
 	if (folio_needs_release(folio) && folio_trylock(folio)) {

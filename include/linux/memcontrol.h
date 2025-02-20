@@ -438,6 +438,7 @@ struct mem_cgroup {
 	unsigned long reap_background;
 #ifdef CONFIG_DUPTEXT
 	bool allow_duptext;
+	nodemask_t duptext_nodes;
 #endif
 
 	CK_KABI_RESERVE(1)
