@@ -291,6 +291,9 @@ struct page *__dup_page(struct page *page, struct vm_area_struct *vma)
 
 	VM_BUG_ON_PAGE(!PageLocked(hpage), hpage);
 
+	if (is_zero_folio(folio))
+		return NULL;
+
 	if (!node_isset(target_node, cpuset_current_mems_allowed)) {
 		if (!node_isset(folio_node, cpuset_current_mems_allowed))
 			target_node = first_node(cpuset_current_mems_allowed);
@@ -300,7 +303,7 @@ struct page *__dup_page(struct page *page, struct vm_area_struct *vma)
 
 	if (likely(folio_node == target_node) ||
 			!dup_page_suitable(vma, current->mm) ||
-			unlikely(PageDirty(page) || PageWriteback(page) || !PageUptodate(page)))
+			unlikely(PageDirty(hpage) || PageWriteback(hpage) || !PageUptodate(hpage)))
 		return NULL;
 
 	if (folio_needs_release(folio) && folio_trylock(folio)) {
