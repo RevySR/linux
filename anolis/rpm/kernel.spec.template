@@ -1334,9 +1334,11 @@ fi\
 /bin/kernel-install add %{KVERREL}%{?1:+%{1}} /lib/modules/%{KVERREL}%{?1:+%{1}}/vmlinuz || exit $?\
 %ifarch aarch64  \
 grubby --update-kernel /boot/vmlinuz-%{KVERREL}%{?1:+%{1}} --args="%%ARM_CMDLINE%%"\
-%elifarch loongarch64 \
+%endif  \
+%ifarch loongarch64 \
 grubby --update-kernel /boot/vmlinuz-%{KVERREL}%{?1:+%{1}} --args="%%LOONGARCH_CMDLINE%%"\
-%else \
+%endif  \
+%ifarch x86_64 \
 grubby --update-kernel /boot/vmlinuz-%{KVERREL}%{?1:+%{1}} --args="%%X86_CMDLINE%%"\
 %endif  \
 %{nil}
