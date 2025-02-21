@@ -109,7 +109,14 @@ static inline bool dup_page_mapped(struct page *page)
 static inline bool dedup_page(struct page *page, bool locked)
 {
 	if (page_dup_master(page))
-		return __dedup_page(page, locked, false);
+		return __dedup_page(page, locked, true);
+	return true;
+}
+
+static inline bool dedup_page2(struct page *page, bool locked, bool ignore_mlock)
+{
+	if (page_dup_master(page))
+		return __dedup_page(page, locked, ignore_mlock);
 	return true;
 }
 #endif /* _LINUX_PAGE_DUP_H_ */

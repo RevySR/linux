@@ -474,6 +474,22 @@ struct page *__dup_page(struct page *page, struct vm_area_struct *vma)
 		: dup_hpage;
 }
 
+/*
+ * NOTE Be careful if you want to call __dedup_page with ignore_mlock as false.
+ *
+ * Truncating routines should always succeed, perhaps with multiple attempts,
+ * usually accompanied by unmap_mapping_range().  In order to coordinate with
+ * truncating, __dedup_page() should better succeed in this scenario, with
+ * ignore_mlock as true.
+ *
+ * On the other hand, invalidating routines have __dup_page_mapped() check in
+ * common helper, i.e., invalidate_inode_page(). That is to say, mapped slave
+ * pages should not be invalidated irrespective of whether mlocked or not.
+ *
+ * Finally the only place currently where mlock is honoured is reclaiming
+ * routines, e.g., shrink_folio_list, where __dedup_page() can be called with
+ * ignore_mlock as false.
+ */
 bool __dedup_page(struct page *page, bool locked, bool ignore_mlock)
 {
 	page = compound_head(page);

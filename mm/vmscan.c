@@ -1445,13 +1445,6 @@ static int __remove_mapping(struct address_space *mapping, struct folio *folio,
 	BUG_ON(!folio_test_locked(folio));
 	BUG_ON(mapping != folio_mapping(folio));
 
-	/*
-	 * If duplicated slaver pages can not be released, maintain master
-	 * page here.
-	 */
-	if (!dedup_page(folio_page(folio, 0), false))
-		return 0;
-
 	if (!folio_test_swapcache(folio))
 		spin_lock(&mapping->host->i_lock);
 	xa_lock_irq(&mapping->i_pages);
@@ -1529,6 +1522,8 @@ static int __remove_mapping(struct address_space *mapping, struct folio *folio,
 
 		if (free_folio)
 			free_folio(folio);
+
+		dedup_page(folio_page(folio, 0), false);
 	}
 
 	return 1;
@@ -2027,6 +2022,11 @@ retry:
 					stat->nr_lazyfree_fail += nr_pages;
 				goto activate_locked;
 			}
+		}
+
+		if (unlikely(dup_page_mapped(folio_page(folio, 0)))) {
+			if (!dedup_page2(folio_page(folio, 0), false, false))
+				goto activate_locked;
 		}
 
 		/*
