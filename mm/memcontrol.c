@@ -6133,6 +6133,26 @@ static int mem_cgroup_allow_duptext_write(struct cgroup_subsys_state *css,
 	return 0;
 }
 
+static u64 mem_cgroup_allow_duptext_refresh_read(struct cgroup_subsys_state *css,
+		struct cftype *cft)
+{
+	struct mem_cgroup *memcg = mem_cgroup_from_css(css);
+
+	return memcg->allow_duptext_refresh;
+}
+
+static int mem_cgroup_allow_duptext_refresh_write(struct cgroup_subsys_state *css,
+		struct cftype *cft, u64 val)
+{
+	struct mem_cgroup *memcg = mem_cgroup_from_css(css);
+
+	if (val > 1)
+		return -EINVAL;
+	memcg->allow_duptext_refresh = val;
+
+	return 0;
+}
+
 static int mem_cgroup_duptext_nodes_show(struct seq_file *m, void *v)
 {
 	struct mem_cgroup *memcg = mem_cgroup_from_css(seq_css(m));
@@ -6437,6 +6457,11 @@ static struct cftype mem_cgroup_legacy_files[] = {
 		.name = "allow_duptext",
 		.read_u64 = mem_cgroup_allow_duptext_read,
 		.write_u64 = mem_cgroup_allow_duptext_write,
+	},
+	{
+		.name = "allow_duptext_refresh",
+		.read_u64 = mem_cgroup_allow_duptext_refresh_read,
+		.write_u64 = mem_cgroup_allow_duptext_refresh_write,
 	},
 	{
 		.name = "duptext_nodes",
