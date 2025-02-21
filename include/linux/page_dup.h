@@ -70,8 +70,10 @@ extern bool __dup_page_mapped(struct page *page);
 /*
  * Remove all the dup pages
  * @page: master page
+ * @locked: hold rmap_lock or not
+ * @ignore_mlock: ignore mlock or not
  */
-extern void __dedup_page(struct page *page, bool locked);
+extern bool __dedup_page(struct page *page, bool locked, bool ignore_mlock);
 
 static inline bool dup_page_suitable(struct vm_area_struct *vma, struct mm_struct *mm)
 {
@@ -101,9 +103,13 @@ static inline bool dup_page_mapped(struct page *page)
 	return false;
 }
 
-static inline void dedup_page(struct page *page, bool locked)
+/*
+ * Return false if the duplicated slave page can not be released successfully.
+ */
+static inline bool dedup_page(struct page *page, bool locked)
 {
 	if (page_dup_master(page))
-		__dedup_page(page, locked);
+		return __dedup_page(page, locked, false);
+	return true;
 }
 #endif /* _LINUX_PAGE_DUP_H_ */
