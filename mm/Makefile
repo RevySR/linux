@@ -138,7 +138,6 @@ obj-$(CONFIG_IO_MAPPING) += io-mapping.o
 obj-$(CONFIG_HAVE_BOOTMEM_INFO_NODE) += bootmem_info.o
 obj-$(CONFIG_GENERIC_IOREMAP) += ioremap.o
 obj-$(CONFIG_SHRINKER_DEBUG) += shrinker_debug.o
-obj-$(CONFIG_ASYNC_FORK) += async_fork.o
 obj-$(CONFIG_DUPTEXT) += page_dup.o
 obj-$(CONFIG_PAGECACHE_LIMIT) += pagecache_limit.o
 obj-y += unevictable.o
