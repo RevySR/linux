@@ -1,1 +1,1 @@
-CONFIG_VIRT_FUSE=m
+# CONFIG_VIRT_FUSE is not set
