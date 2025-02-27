@@ -481,8 +481,8 @@
 #define X86_FEATURE_SRSO_NO		(20*32+29) /* "" CPU is not affected by SRSO */
 
 /* HYGON-defined CPU features, CPUID level 0x8c860000:0 (EDX), word 22 */
-#define X86_FEATURE_SM3			(22*32 + 1) /* SM3 instructions */
-#define X86_FEATURE_SM4			(22*32 + 2) /* SM4 instructions */
+#define X86_FEATURE_HYGON_CIS_SM3	(22*32 + 1) /* "sm3" SM3 instructions */
+#define X86_FEATURE_HYGON_CIS_SM4	(22*32 + 2) /* "sm4" SM4 instructions */
 
 /* VIA/Cyrix/Centaur-defined CPU features, CPUID level 0xC0000006, word 23 */
 #define X86_FEATURE_ZXPAUSE		(23*32 + 0) /* ZHAOXIN ZXPAUSE */
