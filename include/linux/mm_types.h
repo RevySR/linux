@@ -1490,4 +1490,9 @@ enum {
 	/* See also internal only FOLL flags in mm/internal.h */
 };
 
+enum cpr_mode {
+	CPR_NORMAL,
+
+	CPR_MAX_MODE,
+};
 #endif /* _LINUX_MM_TYPES_H */
