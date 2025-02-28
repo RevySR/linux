@@ -1492,7 +1492,8 @@ enum {
 
 enum cpr_mode {
 	CPR_NORMAL,
-
+	CPR_FAST,
+	CPR_SLOW,
 	CPR_MAX_MODE,
 };
 #endif /* _LINUX_MM_TYPES_H */

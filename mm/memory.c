@@ -1076,6 +1076,7 @@ copy_pte_range(struct vm_area_struct *dst_vma, struct vm_area_struct *src_vma,
 	int rss[NR_MM_COUNTERS];
 	swp_entry_t entry = (swp_entry_t){0};
 	struct folio *prealloc = NULL;
+	struct page *page = NULL;
 	int nr;
 
 again:
@@ -1096,6 +1097,29 @@ again:
 		goto out;
 	}
 
+	if (unlikely(mode == CPR_SLOW && !page)) {
+		/*
+		 * We use the dst_pmd page's PG_lock to synchronize copying
+		 * ptes concurrently.   If we detect another one is copying
+		 * the ptes, wait until it is finished.
+		 */
+		page = pmd_page(*dst_pmd);
+		if (!get_page_unless_zero(page)) {
+			WARN_ON_ONCE(1);
+			pte_unmap_unlock(dst_pte, dst_ptl);
+			page = NULL;
+			ret = -EINVAL;
+			goto out;
+		}
+		if (!trylock_page(page)) {
+			pte_unmap_unlock(dst_pte, dst_ptl);
+			wait_on_page_locked(page);
+			put_page(page);
+			page = NULL;
+			goto again;
+		}
+	}
+
 	src_pte = pte_offset_map_nolock(src_mm, src_pmd, addr, &src_ptl);
 	if (!src_pte) {
 		pte_unmap_unlock(dst_pte, dst_ptl);
@@ -1106,6 +1130,15 @@ again:
 	orig_src_pte = src_pte;
 	orig_dst_pte = dst_pte;
 	arch_enter_lazy_mmu_mode();
+
+	/* check with src_ptl lock hold */
+	if (unlikely(mode == CPR_SLOW)) {
+		if (unlikely(!is_pmd_copied_slow(*src_pmd))) {
+			/* skip PMDs without WP attribute: already handled */
+			addr = end;
+			goto loop_out;
+		}
+	}
 
 	do {
 		nr = 1;
@@ -1119,6 +1152,14 @@ again:
 			if (need_resched() ||
 			    spin_needbreak(src_ptl) || spin_needbreak(dst_ptl))
 				break;
+		}
+		if ((mode == CPR_SLOW) && !pte_none(*dst_pte)) {
+			/*
+			 * This could happen when the pmd is being copied by
+			 * more than one callers concurrently.
+			 */
+			progress++;
+			continue;
 		}
 		ptent = ptep_get(src_pte);
 		if (pte_none(ptent)) {
@@ -1173,6 +1214,7 @@ again:
 	} while (dst_pte += nr, src_pte += nr, addr += PAGE_SIZE * nr,
 		 addr != end);
 
+loop_out:
 	arch_leave_lazy_mmu_mode();
 	pte_unmap_unlock(orig_src_pte, src_ptl);
 	add_mm_rss_vec(dst_mm, rss);
@@ -1202,9 +1244,31 @@ again:
 	if (addr != end)
 		goto again;
 
+	if (unlikely(mode == CPR_SLOW)) {
+		/*
+		 * We allow pmds are copied concurrently in slow path, as a
+		 * result of the major premise which no others can modify the
+		 * page table before child done or parent fixup, meanwhile
+		 * special pmds (e.g. swap/huge/devmap) already skips in
+		 * upper caller.
+		 * Hence acquire the pte lock of each pmd is secure and
+		 * efficient.
+		 */
+		src_ptl = pte_lockptr(src_mm, src_pmd);
+		spin_lock_nested(src_ptl, SINGLE_DEPTH_NESTING);
+		/* The src_pmd can't be swap/huge/devmap pmds here. */
+		if (is_pmd_wp(*src_pmd))
+			pmdp_clear_wp(src_pmd, src_vma);
+		spin_unlock(src_ptl);
+	}
+
 out:
 	if (unlikely(prealloc))
 		folio_put(prealloc);
+	if (page) {
+		unlock_page(page);
+		put_page(page);
+	}
 	return ret;
 }
 
@@ -1225,6 +1289,44 @@ copy_pmd_range(struct vm_area_struct *dst_vma, struct vm_area_struct *src_vma,
 	do {
 		next = pmd_addr_end(addr, end);
 
+		if (unlikely(mode == CPR_SLOW)) {
+			pmd_t pmd = READ_ONCE(*dst_pmd);
+
+			/*
+			 * If we see a non-empty pmd, it doesn't mean the copy
+			 * jobs are done.   We still need to call the function
+			 * copy_pte_range() which will promise that all the
+			 * jobs have been finished when return.
+			 *
+			 * If we see an empty pmd, check whether the source pmd
+			 * is write protected.
+			 */
+			if (!pmd_none(pmd)) {
+				/*
+				 * Skip swap/huge/devmap pmds, which should be
+				 * copied in fast path. We cannot check the src
+				 * pmds here, because they can be splited after
+				 * copied (fixed up).
+				 */
+				if (is_swap_pmd(pmd) || pmd_trans_huge(pmd) ||
+				    pmd_devmap(pmd))
+					continue;
+			} else {
+				if (!is_pmd_copied_slow(*src_pmd))
+					continue;
+			}
+
+			/* non-aligned pmd must be copied in fast path */
+			if ((addr & ~PMD_MASK) || (next != (addr + PMD_SIZE)))
+				continue;
+
+			/*
+			 * We can't check the source pmd here because we don't
+			 * hold any lock. Do check in copy_pte_range() instead.
+			 */
+			goto copy;
+		}
+
 		if (is_swap_pmd(*src_pmd) || pmd_trans_huge(*src_pmd)
 			|| pmd_devmap(*src_pmd)) {
 			int err;
@@ -1240,6 +1342,15 @@ copy_pmd_range(struct vm_area_struct *dst_vma, struct vm_area_struct *src_vma,
 		if (pmd_none_or_clear_bad(src_pmd))
 			continue;
 
+		if (unlikely(mode == CPR_FAST)) {
+			/* set PMDs WP attribute in fast path */
+			if (!(addr & ~PMD_MASK) && next == (addr + PMD_SIZE)) {
+				pmdp_set_wp(src_mm, addr, src_pmd);
+				continue;
+			}
+		}
+
+copy:
 		if (copy_pte_range(dst_vma, src_vma, dst_pmd, src_pmd,
 				   addr, next, mode))
 			return -ENOMEM;
@@ -1263,8 +1374,13 @@ copy_pud_range(struct vm_area_struct *dst_vma, struct vm_area_struct *src_vma,
 	src_pud = pud_offset(src_p4d, addr);
 	do {
 		next = pud_addr_end(addr, end);
+		if ((mode == CPR_SLOW) && pud_none(*dst_pud))
+			continue;
 		if (pud_trans_huge(*src_pud) || pud_devmap(*src_pud)) {
 			int err;
+
+			if (unlikely(mode == CPR_SLOW))
+				continue;
 
 			VM_BUG_ON_VMA(next-addr != HPAGE_PUD_SIZE, src_vma);
 			err = copy_huge_pud(dst_mm, src_mm,
@@ -1299,6 +1415,8 @@ copy_p4d_range(struct vm_area_struct *dst_vma, struct vm_area_struct *src_vma,
 	src_p4d = p4d_offset(src_pgd, addr);
 	do {
 		next = p4d_addr_end(addr, end);
+		if ((mode == CPR_SLOW) && p4d_none(*dst_p4d))
+			continue;
 		if (p4d_none_or_clear_bad(src_p4d))
 			continue;
 		if (copy_pud_range(dst_vma, src_vma, dst_p4d, src_p4d,
@@ -1340,11 +1458,11 @@ vma_needs_copy(struct vm_area_struct *dst_vma, struct vm_area_struct *src_vma)
 	return false;
 }
 
-static int __copy_page_range(struct vm_area_struct *dst_vma,
-			     struct vm_area_struct *src_vma,
-			     unsigned long addr,
-			     unsigned long end,
-			     enum cpr_mode mode)
+int __copy_page_range(struct vm_area_struct *dst_vma,
+		      struct vm_area_struct *src_vma,
+		      unsigned long addr,
+		      unsigned long end,
+		      enum cpr_mode mode)
 {
 	pgd_t *src_pgd, *dst_pgd;
 	struct mm_struct *dst_mm = dst_vma->vm_mm;
@@ -1361,6 +1479,9 @@ static int __copy_page_range(struct vm_area_struct *dst_vma,
 	if (addr >= end)
 		return -EINVAL;
 
+	if (mode == CPR_SLOW)
+		goto copy;
+
 	if (!vma_needs_copy(dst_vma, src_vma))
 		return 0;
 
@@ -1373,6 +1494,7 @@ static int __copy_page_range(struct vm_area_struct *dst_vma,
 			return ret;
 	}
 
+copy:
 	/*
 	 * We need to invalidate the secondary MMU mappings only when
 	 * there could be a permission downgrade on the ptes of the
@@ -1396,11 +1518,19 @@ static int __copy_page_range(struct vm_area_struct *dst_vma,
 		raw_write_seqcount_begin(&src_mm->write_protect_seq);
 	}
 
+	if (unlikely(mode == CPR_FAST)) {
+		/* NOTE only support cow mapping currently */
+		if (!is_cow || !vma_is_anonymous(src_vma))
+			mode = CPR_NORMAL;
+	}
+
 	ret = 0;
 	dst_pgd = pgd_offset(dst_mm, addr);
 	src_pgd = pgd_offset(src_mm, addr);
 	do {
 		next = pgd_addr_end(addr, end);
+		if ((mode == CPR_SLOW) && pgd_none(*dst_pgd))
+			continue;
 		if (pgd_none_or_clear_bad(src_pgd))
 			continue;
 		if (unlikely(copy_p4d_range(dst_vma, src_vma, dst_pgd, src_pgd,
@@ -1423,6 +1553,49 @@ int
 copy_page_range(struct vm_area_struct *dst_vma, struct vm_area_struct *src_vma)
 {
 	return __copy_page_range(dst_vma, src_vma, 0, -1UL, CPR_NORMAL);
+}
+
+/*
+ * Fast path, always copy P{G,4,U}Ds. PMDs are on depends
+ *
+ * Operations on PMDs in fast path may be the following cases:
+ *  (a). source is an empty PMD, just skip it.
+ *  (b). source is a huge PMD, copy it.
+ *  (c). source is a normal PMD, set WP attribute and skip.
+ *
+ *  NOTE: fast path can only be called in fork(2), no concurrency
+ *  scenario.
+ */
+int
+copy_page_range_fast(struct vm_area_struct *dst_vma,
+		     struct vm_area_struct *src_vma)
+{
+	return __copy_page_range(dst_vma, src_vma, 0, -1UL, CPR_FAST);
+}
+
+/*
+ * Slow path, P{G,4,U}Ds are skipped, PMDs are on depends
+ * as it is used to co-copy with fast path, it has to handle
+ * following PMD cases
+ *
+ * Operations on PMDs in slow path may be the following cases:
+ *  (a). source is an empty PMD, just skip it.
+ *  (b). dst pmd is not none, skip swap/huge/devmaps PMDs, still
+ *       attempt to copy ptes as it may not done in fast path
+ *  (c). dst pmd is none, only copy PMDs with WP attribute set by
+ *       fast path.
+ *
+ *  NOTE: slow path can be called concurrently to sync up page tables,
+ *  locks must be carefully handled:
+ *   (a). use PMD lock when operating PMD copy
+ *   (b). use PMD page's PG_lock to protect pte copy, this lock allows
+ *        caller to sleep
+ */
+int
+copy_page_range_slow(struct vm_area_struct *dst_vma,
+		     struct vm_area_struct *src_vma)
+{
+	return __copy_page_range(dst_vma, src_vma, 0, -1UL, CPR_SLOW);
 }
 
 /* Whether we should zap all COWed (private) pages too */
@@ -6994,7 +7167,6 @@ void ptlock_free(struct ptdesc *ptdesc)
 static inline bool is_pmd_tbl_wrprotect(pmd_t pmd)
 {
 #if defined(CONFIG_ARM64)
-#define PMD_SECT_AP_WRPROTECT (_AT(pmdval_t, 2) << 61)	/* APTable[1:0] */
 	return (pmd_val(pmd) & PMD_TABLE_BIT) &&
 		(pmd_val(pmd) & PMD_SECT_AP_WRPROTECT);
 #elif defined(CONFIG_X86)

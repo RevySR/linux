@@ -1036,10 +1036,28 @@ static inline unsigned long pmd_page_vaddr(pmd_t pmd)
 	pfn_pte(page_to_pfn(page), __pgprot);				  \
 })
 
+/*
+ * If shadow stack is supported, W=0, D=1 could be regarded as shadow
+ * stack. However kernel might create RO PMDs which makes W=0, D=1. In this
+ * case _PAGE_SAVED_DIRTY is introduced instead of the hardware _PAGE_DIRTY
+ * bit (W=0, SavedDiry=1, D=0).
+ * Hence _PAGE_SAVE_DIRTY and _PAGE_DIRTY have to be masked to check whether
+ * PMD is bad or not.
+ */
+#define WP_MASK	(_PAGE_ACCESSED | _PAGE_DIRTY_BITS | _PAGE_RW)
 static inline int pmd_bad(pmd_t pmd)
 {
-	return (pmd_flags(pmd) & ~(_PAGE_USER | _PAGE_ACCESSED)) !=
-	       (_KERNPG_TABLE & ~_PAGE_ACCESSED);
+	unsigned long flags = pmd_flags(pmd);
+	bool pmd_wp = false;
+
+	pmd_wp = !(flags & (_PAGE_RW | _PAGE_DIRTY)) &&
+			(flags & _PAGE_SAVED_DIRTY);
+
+	return pmd_wp ?
+		((flags & ~(_PAGE_USER | WP_MASK)) !=
+		(_KERNPG_TABLE & ~WP_MASK)) :
+		((flags & ~(_PAGE_USER | _PAGE_ACCESSED)) !=
+		(_KERNPG_TABLE & ~_PAGE_ACCESSED));
 }
 
 static inline unsigned long pages_to_mb(unsigned long npg)

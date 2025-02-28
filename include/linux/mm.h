@@ -2420,6 +2420,17 @@ void free_pgd_range(struct mmu_gather *tlb, unsigned long addr,
 		unsigned long end, unsigned long floor, unsigned long ceiling);
 int
 copy_page_range(struct vm_area_struct *dst_vma, struct vm_area_struct *src_vma);
+int
+copy_page_range_fast(struct vm_area_struct *dst_vma,
+		     struct vm_area_struct *src_vma);
+int
+copy_page_range_slow(struct vm_area_struct *dst_vma,
+		     struct vm_area_struct *src_vma);
+int __copy_page_range(struct vm_area_struct *dst_vma,
+		      struct vm_area_struct *src_vma,
+		      unsigned long addr,
+		      unsigned long end,
+		      enum cpr_mode mode);
 int follow_pte(struct mm_struct *mm, unsigned long address,
 	       pte_t **ptepp, spinlock_t **ptlp);
 int follow_pfn(struct vm_area_struct *vma, unsigned long address,
@@ -4151,5 +4162,55 @@ bool is_pmd_fast_reflink(pmd_t pmd);
 void fast_reflink_fixup_pmd(struct vm_area_struct *vma, pmd_t *pmd,
 			    unsigned long addr);
 void fast_reflink_fixup_vma(struct vm_area_struct *vma);
+
+#ifdef CONFIG_ARM64
+#define PMD_SECT_AP_WRPROTECT (_AT(pmdval_t, 2) << 61)	/* APTable[1:0] */
+#endif
+
+static inline void pmdp_set_wp(struct mm_struct *mm, unsigned long addr,
+			       pmd_t *pmdp)
+{
+	BUG_ON(pmd_trans_huge(*pmdp) || pmd_devmap(*pmdp));
+#if defined(CONFIG_ARM64)
+	/*
+	 * pmdp_set_wrprotect() is arch specific, arm64 requires
+	 * CONFIG_TRANSPARENT_HUGEPAGE to be defined, so we directly
+	 * use set_pmd() here.
+	 */
+	set_pmd(pmdp, __pmd(pmd_val(*pmdp) | PMD_SECT_AP_WRPROTECT));
+#elif defined(CONFIG_X86)
+	pmdp_set_wrprotect(mm, addr, pmdp);
+#endif
+}
+
+static inline void pmdp_clear_wp(pmd_t *pmdp, struct vm_area_struct *vma)
+{
+#if defined(CONFIG_ARM64)
+	set_pmd(pmdp, __pmd(pmd_val(*pmdp) & ~PMD_SECT_AP_WRPROTECT));
+#elif defined(CONFIG_X86)
+	set_pmd(pmdp, pmd_mkwrite(*pmdp, vma));
+#endif
+}
+
+static inline bool is_pmd_wp(pmd_t pmd)
+{
+#if defined(CONFIG_ARM64)
+	return (pmd_val(pmd) & PMD_TABLE_BIT) &&
+		(pmd_val(pmd) & PMD_SECT_AP_WRPROTECT);
+#elif defined(CONFIG_X86)
+	/* See comments in pmd_bad() */
+	return (pmd_flags(pmd) & ~(_PAGE_USER | _PAGE_DIRTY_BITS)) ==
+		(_KERNPG_TABLE & ~(_PAGE_RW | _PAGE_DIRTY_BITS));
+#else
+	return false;
+#endif
+}
+
+/* See comments in copy_page_range_slow() */
+static inline bool is_pmd_copied_slow(pmd_t pmd)
+{
+	return !is_swap_pmd(pmd) && !pmd_trans_huge(pmd) &&
+		!pmd_devmap(pmd) && is_pmd_wp(pmd);
+}
 
 #endif /* _LINUX_MM_H */
