@@ -1750,7 +1750,7 @@ bool vma_migratable(struct vm_area_struct *vma)
 			< policy_zone)
 		return false;
 
-	if (dup_page_suitable(vma, vma->vm_mm))
+	if (dup_folio_suitable(vma, vma->vm_mm))
 		return false;
 
 	return true;

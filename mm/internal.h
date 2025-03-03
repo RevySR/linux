@@ -909,7 +909,7 @@ static inline void mlock_vma_folio(struct folio *folio,
 				struct vm_area_struct *vma)
 {
 	/* TODO Do not mlock slave duplicated page */
-	if (page_dup_slave(folio_page(folio, 0)))
+	if (folio_dup_slave(folio))
 		return;
 
 	/*

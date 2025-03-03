@@ -1130,7 +1130,7 @@ isolate_migratepages_block(struct compact_control *cc, unsigned long low_pfn,
 		 * page release code relies on it.
 		 */
 		folio = folio_get_nontail_page(page);
-		if (unlikely(!folio))
+		if (unlikely(!folio) || folio_dup_any(folio))
 			goto isolate_fail;
 
 		/*

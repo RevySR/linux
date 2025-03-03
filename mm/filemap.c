@@ -236,7 +236,9 @@ void filemap_free_folio(struct address_space *mapping, struct folio *folio)
 	if (free_folio)
 		free_folio(folio);
 
-	dedup_page(folio_page(folio, 0), false);
+	if (!dedup_folio(folio, false))
+		pr_warn_once("duptext: dedup folio failed, folio mapcount=%d\n",
+			     folio_mapcount(folio));
 
 	folio_put_refs(folio, refs);
 }
@@ -882,7 +884,9 @@ void replace_page_cache_folio(struct folio *old, struct folio *new)
 	if (free_folio)
 		free_folio(old);
 
-	dedup_page(folio_page(old, 0), false);
+	if (!dedup_folio(old, false))
+		pr_warn_once("duptext: dedup folio failed, folio mapcount=%d\n",
+			     folio_mapcount(old));
 
 	folio_put(old);
 }
@@ -3804,7 +3808,7 @@ vm_fault_t filemap_map_pages(struct vm_fault *vmf,
 
 	folio_type = mm_counter_file(&folio->page);
 	do {
-		struct page *d_page;
+		struct folio *d_folio;
 		unsigned long end;
 
 		addr += (xas.xa_index - last_pgoff) << PAGE_SHIFT;
@@ -3813,11 +3817,11 @@ vm_fault_t filemap_map_pages(struct vm_fault *vmf,
 		end = folio->index + folio_nr_pages(folio) - 1;
 		nr_pages = min(end, end_pgoff) - xas.xa_index + 1;
 
-		d_page = dup_page(folio_page(folio, 0), vma);
-		if (d_page) {
+		d_folio = dup_folio(folio, vma);
+		if (d_folio) {
 			folio_unlock(folio);
 			folio_put(folio);
-			folio = page_folio(d_page);
+			folio = d_folio;
 		}
 
 		if (!folio_test_large(folio))
@@ -3828,10 +3832,11 @@ vm_fault_t filemap_map_pages(struct vm_fault *vmf,
 					xas.xa_index - folio->index, addr,
 					nr_pages, &rss, &mmap_miss);
 
-		if (!d_page) {
+		if (!d_folio)
 			folio_unlock(folio);
-			folio_put(folio);
-		}
+
+		/* Dup slave folio should also put refcnt here */
+		folio_put(folio);
 	} while ((folio = next_uptodate_folio(&xas, mapping, end_pgoff)) != NULL);
 	add_mm_counter(vma->vm_mm, folio_type, rss);
 	pte_unmap_unlock(vmf->pte, vmf->ptl);

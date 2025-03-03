@@ -1523,7 +1523,9 @@ static int __remove_mapping(struct address_space *mapping, struct folio *folio,
 		if (free_folio)
 			free_folio(folio);
 
-		dedup_page(folio_page(folio, 0), false);
+		if (!dedup_folio(folio, false))
+			pr_warn_once("duptext: dedup folio failed, folio mapcount=%d\n",
+				     folio_mapcount(folio));
 	}
 
 	return 1;
@@ -2024,8 +2026,8 @@ retry:
 			}
 		}
 
-		if (unlikely(dup_page_mapped(folio_page(folio, 0)))) {
-			if (!dedup_page2(folio_page(folio, 0), false, false))
+		if (unlikely(dup_folio_mapped(folio))) {
+			if (!dedup_folio2(folio, false, false))
 				goto activate_locked;
 		}
 

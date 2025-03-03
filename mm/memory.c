@@ -5322,6 +5322,9 @@ static vm_fault_t do_read_fault(struct vm_fault *vmf)
 {
 	vm_fault_t ret = 0;
 	struct folio *folio;
+#ifdef CONFIG_DUPTEXT
+	struct folio *d_folio;
+#endif
 
 	/*
 	 * Let's call ->map_pages() first and use ->fault() as fallback
@@ -5344,7 +5347,8 @@ static vm_fault_t do_read_fault(struct vm_fault *vmf)
 		return ret;
 
 #ifdef CONFIG_DUPTEXT
-	vmf->dup_page = dup_page(vmf->page, vmf->vma);
+	d_folio = dup_folio(page_folio(vmf->page), vmf->vma);
+	vmf->dup_page = &d_folio->page;
 #endif
 
 	ret |= finish_fault(vmf);
@@ -5354,12 +5358,12 @@ static vm_fault_t do_read_fault(struct vm_fault *vmf)
 	if (vmf->dup_page)
 		folio_put(folio);
 #endif
-	if (unlikely(ret & (VM_FAULT_ERROR | VM_FAULT_NOPAGE | VM_FAULT_RETRY)))
-#ifdef CONFIG_DUPTEXT
-		folio_put(vmf->dup_page ? page_folio(vmf->dup_page) : folio);
-#else
-		folio_put(folio);
-#endif
+	if (unlikely(ret & (VM_FAULT_ERROR | VM_FAULT_NOPAGE | VM_FAULT_RETRY))) {
+		if (IS_ENABLED(CONFIG_DUPTEXT) && d_folio)
+			folio_put(d_folio);
+		else
+			folio_put(folio);
+	}
 	return ret;
 }
 

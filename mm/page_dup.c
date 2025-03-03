@@ -20,7 +20,7 @@
 #include "internal.h"
 
 DEFINE_STATIC_KEY_FALSE(duptext_enabled_key);
-struct xarray dup_pages[MAX_NUMNODES];
+struct xarray dup_folios[MAX_NUMNODES];
 
 #define DUPTEXT_REFRESH_KICK 0
 
@@ -31,42 +31,43 @@ struct duptext_refresh {
 
 static void duptext_refresh_workfn(struct work_struct *work);
 
-/* XXX copy_huge_page without cond_resched */
-static void copy_huge_page(struct page *dst, struct page *src)
+/* XXX A variant of folio_copy for copying in atomic context */
+static void folio_copy_atomic(struct folio *dst, struct folio *src)
 {
-	int nr_pages;
-	int i;
+	long i = 0;
+	long nr = folio_nr_pages(src);
 
-	nr_pages = thp_nr_pages(src);
-
-	for (i = 0; i < nr_pages; i++)
-		copy_highpage(dst + i, src + i);
+	for (;;) {
+		copy_highpage(folio_page(dst, i), folio_page(src, i));
+		if (++i == nr)
+			break;
+	}
 }
 
-static inline void attach_dup_page_private(struct page *dup_page,
-		struct page *page)
+static inline void attach_dup_folio_private(struct folio *dup_folio,
+		struct folio *folio)
 {
-	set_page_private(dup_page, (unsigned long)page);
-	SetPagePrivate(dup_page);
+	dup_folio->private = folio;
+	folio_set_private(dup_folio);
 }
 
-static inline void detach_dup_page_private(struct page *dup_page)
+static inline void detach_dup_folio_private(struct folio *dup_folio)
 {
-	ClearPagePrivate(dup_page);
-	set_page_private(dup_page, 0);
+	folio_clear_private(dup_folio);
+	dup_folio->private = 0;
 }
 
-static struct page *find_get_dup_page(struct page *page, int node)
+static struct folio *find_get_dup_folio(struct folio *folio, int node)
 {
-	struct page *dup_page, *tmp_page;
+	struct folio *dup_folio, *tmp_folio;
 	struct list_head *list;
-	int nid = page_to_nid(page);
+	int nid = folio_nid(folio);
 
-	XA_STATE(xas, &dup_pages[nid], page_to_pfn(page));
+	XA_STATE(xas, &dup_folios[nid], folio_pfn(folio));
 
 	rcu_read_lock();
 repeat:
-	dup_page = NULL;
+	dup_folio = NULL;
 	xas_reset(&xas);
 	list = xas_load(&xas);
 	if (xas_retry(&xas, list))
@@ -75,37 +76,38 @@ repeat:
 	if (!list)
 		goto out;
 
-	list_for_each_entry(tmp_page, list, lru) {
-		if (page_to_nid(tmp_page) == node) {
-			dup_page = tmp_page;
+	list_for_each_entry(tmp_folio, list, lru) {
+		if (folio_nid(tmp_folio) == node) {
+			dup_folio = tmp_folio;
 			break;
 		}
 	}
 
-	if (dup_page && !folio_try_get(page_folio(dup_page)))
+	if (dup_folio && !folio_try_get(dup_folio))
 		goto repeat;
 
 out:
 	rcu_read_unlock();
-	return dup_page;
+	return dup_folio;
 }
 
-static int add_to_dup_pages(struct page *new_page, struct page *page)
+static int add_to_dup_folios(struct folio *new_folio, struct folio *folio)
 {
 	struct list_head *list;
 	unsigned long flags;
 	int ret = 0;
-	int nid = page_to_nid(page);
+	int nid = folio_nid(folio);
+	int nr_pages = folio_nr_pages(folio);
 
-	XA_STATE(xas, &dup_pages[nid], page_to_pfn(page));
+	XA_STATE(xas, &dup_folios[nid], folio_pfn(folio));
 
-	get_page(new_page);
+	folio_get(new_folio);
 	xas_lock_irqsave(&xas, flags);
 
 	/*
 	 * Check the global enabled key inside xa_lock, in order to ensure
-	 * this dup_page not to be added, or truncation not to miss this
-	 * dup_page.
+	 * this dup_folio not to be added, or truncation not to miss this
+	 * dup_folio.
 	 */
 	if (!static_branch_likely(&duptext_enabled_key)) {
 		ret = -EBUSY;
@@ -124,50 +126,51 @@ static int add_to_dup_pages(struct page *new_page, struct page *page)
 		xas_store(&xas, list);
 	}
 
-	new_page->mapping = page->mapping;
-	new_page->index = page->index;
-	attach_dup_page_private(new_page, page);
-	SetPageDup(new_page);
-	list_add(&new_page->lru, list);
+	new_folio->mapping = folio->mapping;
+	new_folio->index = folio->index;
+	attach_dup_folio_private(new_folio, folio);
+	folio_set_dup(new_folio);
+	list_add(&new_folio->lru, list);
 
-	if (!PageDup(page))
-		SetPageDup(page);
-	__mod_node_page_state(page_pgdat(page), NR_DUPTEXT,
-			PageTransHuge(page) ? HPAGE_PMD_NR : 1);
-	filemap_nr_duptext_add(page_mapping(page),
-			PageTransHuge(page) ? HPAGE_PMD_NR : 1);
+	if (!folio_dup_master(folio))
+		folio_set_dup(folio);
+	__node_stat_mod_folio(folio, NR_DUPTEXT, nr_pages);
+	filemap_nr_duptext_add(folio_mapping(folio), nr_pages);
 
 out:
 	xas_unlock_irqrestore(&xas, flags);
 	if (unlikely(ret))
-		put_page(new_page);
+		folio_put(new_folio);
 	return ret;
 }
 
-static void __delete_from_dup_pages(struct page *dup_page, struct page *page)
+static void __delete_from_dup_folios(struct folio *dup_folio, struct folio *folio)
 {
-	struct address_space *mapping = page_mapping(dup_page);
+	struct address_space *mapping = folio_mapping(dup_folio);
+	int nr_pages = folio_nr_pages(folio);
 
-	list_del(&dup_page->lru);
-	ClearPageDup(dup_page);
-	detach_dup_page_private(dup_page);
-	dup_page->mapping = NULL;
-	dup_page->index = 0;
-	__mod_node_page_state(page_pgdat(page), NR_DUPTEXT,
-			PageTransHuge(page) ? -HPAGE_PMD_NR : -1);
-	filemap_nr_duptext_add(mapping,
-			PageTransHuge(page) ? -HPAGE_PMD_NR : -1);
+	list_del(&dup_folio->lru);
+	folio_clear_dup(dup_folio);
+	detach_dup_folio_private(dup_folio);
+	dup_folio->mapping = NULL;
+	dup_folio->index = 0;
+	folio_put(dup_folio);
+	__node_stat_mod_folio(folio, NR_DUPTEXT, -nr_pages);
+	filemap_nr_duptext_add(mapping, -nr_pages);
 }
 
-static bool delete_from_dup_pages(struct page *page, bool locked, bool ignore_mlock)
+static bool delete_from_dup_folios(struct folio *folio, bool locked, bool ignore_mlock)
 {
-	struct page *tmp_page, *next_page;
+	struct folio *tmp_folio, *next_folio;
 	struct list_head *list;
 	unsigned long flags;
 	enum ttu_flags ttu_flags = TTU_SYNC | TTU_BATCH_FLUSH;
-	int nid = page_to_nid(page);
+	int nid = folio_nid(folio);
+	unsigned int order = folio_order(folio);
 
-	XA_STATE(xas, &dup_pages[nid], page_to_pfn(page));
+	VM_BUG_ON_FOLIO(!folio_test_locked(folio), folio);
+
+	XA_STATE(xas, &dup_folios[nid], folio_pfn(folio));
 
 	xas_lock_irqsave(&xas, flags);
 	list = xas_load(&xas);
@@ -182,30 +185,38 @@ static bool delete_from_dup_pages(struct page *page, bool locked, bool ignore_ml
 		ttu_flags |= TTU_RMAP_LOCKED;
 	if (ignore_mlock)
 		ttu_flags |= TTU_IGNORE_MLOCK;
-	if (unlikely(PageTransHuge(page)))
+	if (unlikely(folio_test_pmd_mappable(folio)))
 		ttu_flags |= TTU_SPLIT_HUGE_PMD;
 
-	list_for_each_entry_safe(tmp_page, next_page, list, lru) {
-		VM_BUG_ON_PAGE(!page_dup_slave(tmp_page), tmp_page);
+	list_for_each_entry_safe(tmp_folio, next_folio, list, lru) {
+		/* Dup master folio or dup slave folio has been splited */
+		VM_BUG_ON_FOLIO(folio_order(tmp_folio) != order, tmp_folio);
+
+		VM_BUG_ON_FOLIO(!folio_dup_slave(tmp_folio), tmp_folio);
 
 		/* Unmap before delete */
-		if (page_mapped(tmp_page)) {
-			lock_page(tmp_page);
-			try_to_unmap(page_folio(tmp_page), ttu_flags);
-			if (page_mapped(tmp_page)) {
-				unlock_page(tmp_page);
+		if (folio_mapped(tmp_folio)) {
+			folio_lock(tmp_folio);
+			try_to_unmap(tmp_folio, ttu_flags);
+			if (folio_mapped(tmp_folio)) {
+				folio_unlock(tmp_folio);
+				/*
+				 * FIXME: Since the xas lock has been released,
+				 * changes to the XArray node must be considered
+				 * during error recovery processing.
+				 */
 				goto error;
 			}
-			unlock_page(tmp_page);
+			folio_unlock(tmp_folio);
 		}
 
-		__delete_from_dup_pages(tmp_page, page);
-		put_page(tmp_page);
+		__delete_from_dup_folios(tmp_folio, folio);
+		folio_put(tmp_folio);
 	}
 
 	kfree(list);
 out:
-	ClearPageDup(page);
+	folio_clear_dup(folio);
 	return true;
 
 error:
@@ -244,7 +255,7 @@ static inline bool memcg_allow_duptext_refresh(struct mm_struct *mm)
 	return allow_duptext_refresh;
 }
 
-static inline int duptext_target_node(struct mm_struct *mm, int page_node)
+static inline int duptext_target_node(struct mm_struct *mm, int folio_node)
 {
 	struct mem_cgroup *memcg;
 	nodemask_t allowed_nodes = cpuset_current_mems_allowed;
@@ -257,13 +268,13 @@ static inline int duptext_target_node(struct mm_struct *mm, int page_node)
 	}
 
 	if (unlikely(nodes_empty(allowed_nodes)))
-		return page_node;
+		return folio_node;
 
 	if (!node_isset(target_node, allowed_nodes)) {
-		if (!node_isset(page_node, allowed_nodes))
+		if (!node_isset(folio_node, allowed_nodes))
 			target_node = first_node(allowed_nodes);
 		else
-			target_node = page_node;
+			target_node = folio_node;
 	}
 
 	return target_node;
@@ -279,13 +290,13 @@ static inline bool memcg_allow_duptext_refresh(struct mm_struct *mm)
 	return false;
 }
 
-static inline int duptext_target_node(struct mm_struct *mm, int page_node)
+static inline int duptext_target_node(struct mm_struct *mm, int folio_node)
 {
-	return page_node;
+	return folio_node;
 }
 #endif
 
-bool __dup_page_suitable(struct vm_area_struct *vma, struct mm_struct *mm)
+bool __dup_folio_suitable(struct vm_area_struct *vma, struct mm_struct *mm)
 {
 	/* Is executable file? */
 	if ((vma->vm_flags & VM_EXEC) && vma->vm_file)  {
@@ -302,34 +313,29 @@ bool __dup_page_suitable(struct vm_area_struct *vma, struct mm_struct *mm)
 	return false;
 }
 
-struct page *__dup_page_master(struct page *page)
+struct folio *__dup_folio_master(struct folio *folio)
 {
-	struct page *mhpage = NULL;
-	struct page *hpage = compound_head(page);
+	if (!folio_dup_slave(folio))
+		return folio;
 
-	if (!page_dup_slave(hpage))
-		return page;
-
-	mhpage = (struct page *)page_private(hpage);
-
-	return mhpage + (page - hpage);
+	return folio_get_private(folio);
 }
 
-bool __dup_page_mapped(struct page *page)
+bool __dup_folio_mapped(struct folio *folio)
 {
-	struct page *tmp_page;
+	struct folio *tmp_folio;
 	struct list_head *list;
 	bool ret = false;
-	int nid = page_to_nid(page);
+	int nid = folio_nid(folio);
+	unsigned int order = folio_order(folio);
 
-	XA_STATE(xas, &dup_pages[nid], 0);
+	XA_STATE(xas, &dup_folios[nid], 0);
 
-	page = compound_head(page);
-	VM_BUG_ON_PAGE(!PageLocked(page), page);
+	VM_BUG_ON_FOLIO(!folio_test_locked(folio), folio);
 
-	if (!page_dup_master(page))
+	if (!folio_dup_master(folio))
 		return false;
-	xas_set(&xas, page_to_pfn(page));
+	xas_set(&xas, folio_pfn(folio));
 
 	rcu_read_lock();
 repeat:
@@ -341,8 +347,11 @@ repeat:
 	if (!list)
 		goto out;
 
-	list_for_each_entry(tmp_page, list, lru) {
-		if (page_mapped(tmp_page)) {
+	list_for_each_entry(tmp_folio, list, lru) {
+		/* Dup master folio or dup slave folio has been splited */
+		VM_BUG_ON_FOLIO(folio_order(tmp_folio) != order, folio);
+
+		if (folio_mapped(tmp_folio)) {
 			ret = true;
 			break;
 		}
@@ -353,29 +362,29 @@ out:
 	return ret;
 }
 
-/* NOTE @page can be file THP head or tail page */
-struct page *__dup_page(struct page *page, struct vm_area_struct *vma)
+/* NOTE @page can be any order folio */
+struct folio *__dup_folio(struct folio *folio, struct vm_area_struct *vma)
 {
-	struct page *dup_hpage = NULL;
-	struct page *hpage = compound_head(page);
+	struct address_space *mapping = folio_mapping(folio);
+	struct folio *dup_folio = NULL;
 	struct mm_struct *mm = current->mm;
-	struct folio *folio = page_folio(page);
 	int folio_node = folio_nid(folio);
 	int target_node;
 
-	VM_BUG_ON_PAGE(!PageLocked(hpage), hpage);
+	VM_BUG_ON_FOLIO(!folio_test_locked(folio), folio);
 
 	if (is_zero_folio(folio))
 		return NULL;
 
-	if (!__dup_page_suitable(vma, mm))
+	if (!__dup_folio_suitable(vma, mm))
 		return NULL;
 
 	target_node = duptext_target_node(mm, folio_node);
 	if (likely(folio_node == target_node))
 		return NULL;
 
-	if (unlikely(PageDirty(hpage) || PageWriteback(hpage) || !PageUptodate(hpage))) {
+	if (unlikely(folio_test_dirty(folio) || folio_test_writeback(folio) ||
+				!folio_test_uptodate(folio))) {
 		struct duptext_refresh *refresh;
 		int delay_ms;
 
@@ -404,52 +413,43 @@ struct page *__dup_page(struct page *page, struct vm_area_struct *vma)
 		return NULL;
 	}
 
-	if (folio_needs_release(folio) && folio_trylock(folio)) {
-		if (!filemap_release_folio(folio, GFP_ATOMIC)) {
-			folio_unlock(folio);
+	if (folio_needs_release(folio)) {
+		if (!filemap_release_folio(folio, GFP_ATOMIC))
 			return NULL;
-		}
-
-		folio_unlock(folio);
 	}
 
-	if (page_dup_master(hpage))
-		dup_hpage = find_get_dup_page(hpage, target_node);
+	if (folio_dup_master(folio))
+		dup_folio = find_get_dup_folio(folio, target_node);
 
-	if (!dup_hpage) {
+	if (!dup_folio) {
 		/*
-		 * XXX GFP_ATOMIC is used, since dup_page is called
+		 * XXX GFP_ATOMIC is used, since dup_folio is called
 		 * inside rcu lock in filemap_map_pages.
 		 */
 		gfp_t gfp_mask = GFP_ATOMIC | __GFP_THISNODE;
 		unsigned int order = 0;
-		struct page *new_hpage = NULL;
+		struct folio *new_folio = NULL;
 		int ret;
 
-		if (PageTransHuge(hpage)) {
-			gfp_mask |= __GFP_COMP | __GFP_NOMEMALLOC | __GFP_NOWARN;
-			order = HPAGE_PMD_ORDER;
+		if (folio_test_large(folio)) {
+			gfp_mask |= __GFP_COMP | __GFP_NOMEMALLOC | __GFP_NOWARN | __GFP_MOVABLE;
+			order = folio_order(folio);
 		}
 
-		new_hpage = __alloc_pages(gfp_mask, order, target_node, NULL);
-		if (!new_hpage)
+		new_folio = __folio_alloc_node(gfp_mask, order, target_node);
+		if (!new_folio)
 			return NULL;
 
-		if (page_to_nid(new_hpage) != target_node) {
-			__free_pages(new_hpage, order);
+		if (folio_nid(new_folio) != target_node) {
+			folio_put(new_folio);
 			return NULL;
 		}
 
-		if (PageTransHuge(new_hpage)) {
-			page_rmappable_folio(new_hpage);
-			copy_huge_page(new_hpage, hpage);
-		} else {
-			copy_highpage(new_hpage, hpage);
-		}
+		folio_copy_atomic(new_folio, folio);
 
-		ret = add_to_dup_pages(new_hpage, hpage);
+		ret = add_to_dup_folios(new_folio, folio);
 		if (ret) {
-			put_page(new_hpage);
+			folio_put(new_folio);
 			return NULL;
 		}
 
@@ -460,62 +460,64 @@ struct page *__dup_page(struct page *page, struct vm_area_struct *vma)
 		 * the file is opened writable.
 		 */
 		smp_mb();
-		if (inode_is_open_for_write(hpage->mapping->host)) {
-			__delete_from_dup_pages(new_hpage, hpage);
-			put_page(new_hpage);
+		if (inode_is_open_for_write(mapping->host)) {
+			__delete_from_dup_folios(new_folio, folio);
+			folio_put(new_folio);
 			return NULL;
 		}
 
-		dup_hpage = new_hpage;
+		dup_folio = new_folio;
+		folio_get(dup_folio);
 	}
 
-	/* dup_page is returned with refcount increased, but !PageLocked */
-	return PageTransHuge(dup_hpage) ? find_subpage(dup_hpage, page_to_pgoff(page))
-		: dup_hpage;
+	/* dup_folio is returned with refcount increased, but !PageLocked */
+	return dup_folio;
 }
 
 /*
- * NOTE Be careful if you want to call __dedup_page with ignore_mlock as false.
+ * NOTE Be careful if you want to call __dedup_folio with ignore_mlock as false.
  *
  * Truncating routines should always succeed, perhaps with multiple attempts,
  * usually accompanied by unmap_mapping_range().  In order to coordinate with
- * truncating, __dedup_page() should better succeed in this scenario, with
+ * truncating, __dedup_folio() should better succeed in this scenario, with
  * ignore_mlock as true.
  *
- * On the other hand, invalidating routines have __dup_page_mapped() check in
+ * On the other hand, invalidating routines have __dup_folio_mapped() check in
  * common helper, i.e., invalidate_inode_page(). That is to say, mapped slave
  * pages should not be invalidated irrespective of whether mlocked or not.
  *
  * Finally the only place currently where mlock is honoured is reclaiming
- * routines, e.g., shrink_folio_list, where __dedup_page() can be called with
+ * routines, e.g., shrink_folio_list, where __dedup_folio() can be called with
  * ignore_mlock as false.
  */
-bool __dedup_page(struct page *page, bool locked, bool ignore_mlock)
+bool __dedup_folio(struct folio *folio, bool locked, bool ignore_mlock)
 {
-	page = compound_head(page);
-	VM_BUG_ON_PAGE(!PageLocked(page), page);
+	VM_BUG_ON_FOLIO(!folio_test_locked(folio), folio);
 
-	if (!page_dup_master(page))
+	if (!folio_dup_master(folio))
 		return true;
-	return delete_from_dup_pages(page, locked, ignore_mlock);
+	return delete_from_dup_folios(folio, locked, ignore_mlock);
 }
 
-static unsigned int find_get_master_pages(struct folio_batch *fbatch, int nid,
-		unsigned long start_pfn, unsigned long end_pfn)
+static unsigned int find_get_master_folios(struct xa_state *xas,
+		struct folio_batch *fbatch, unsigned long end_pfn)
 {
-	XA_STATE(xas, &dup_pages[nid], start_pfn);
 	struct page *page;
 	struct folio *folio;
-	void *entry;
+	struct list_head *entry;
 
 	folio_batch_init(fbatch);
 
 	rcu_read_lock();
-	xas_for_each(&xas, entry, end_pfn) {
-		if (xas_retry(&xas, entry))
+	for (;;) {
+		entry = xas_find(xas, end_pfn);
+		if (!entry)
+			break;
+
+		if (xas_retry(xas, entry))
 			continue;
 
-		page = pfn_to_online_page(xas.xa_index);
+		page = pfn_to_online_page(xas->xa_index);
 		if (!page)
 			continue;
 
@@ -523,15 +525,29 @@ static unsigned int find_get_master_pages(struct folio_batch *fbatch, int nid,
 		if (!folio_try_get(folio))
 			continue;
 
+		VM_BUG_ON_FOLIO(!folio_dup_master(folio), folio);
+
+		if (unlikely(page_folio(page) != folio)) {
+			folio_put(folio);
+			continue;
+		}
+
+		if (unlikely(entry != xas_reload(xas))) {
+			folio_put(folio);
+			xas_reset(xas);
+			continue;
+		}
+
 		if (folio_batch_add(fbatch, folio) == 0)
 			break;
+
 	}
 	rcu_read_unlock();
 
 	return folio_batch_count(fbatch);
 }
 
-static void truncate_dup_pages(void)
+static void truncate_dup_folios(void)
 {
 	int nid;
 
@@ -542,12 +558,14 @@ static void truncate_dup_pages(void)
 		struct folio *folio;
 		int i;
 
-		while (find_get_master_pages(&fbatch, nid, start_pfn, end_pfn)) {
+		/* TODO: Update the start_pfn to optimize the XArray traversal*/
+		XA_STATE(xas, &dup_folios[nid], start_pfn);
+		while (find_get_master_folios(&xas, &fbatch, end_pfn)) {
 			for (i = 0; i < folio_batch_count(&fbatch); i++) {
 				folio = fbatch.folios[i];
 
 				folio_lock(folio);
-				__dedup_page(folio_page(folio, 0), false, true);
+				__dedup_folio(folio, false, true);
 				folio_unlock(folio);
 				folio_put(folio);
 
@@ -588,22 +606,23 @@ static ssize_t duptext_enabled_store(struct kobject *kobj,
 
 		static_branch_disable(&duptext_enabled_key);
 		/*
-		 * Grab xa_lock of each dup_pages xarray after disable the
-		 * global enabled key, in order to prevent new dup_page from
-		 * being added, or wait for all inflight dup_page to be added.
+		 * Grab xa_lock of each dup_folios xarray after disable the
+		 * global enabled key, in order to prevent new dup_folio from
+		 * being added, or wait for all inflight dup_folio to be added.
 		 *
 		 * On the other hand, PG_locked will serialize
-		 * page_add_file_rmap() and truncate_dup_pages() for each
+		 * page_add_file_rmap() and truncate_dup_folios() for each
 		 * identical page.
 		 */
 		for_each_online_node(nid) {
-			xa_lock(&dup_pages[nid]);
-			xa_unlock(&dup_pages[nid]);
+			xa_lock(&dup_folios[nid]);
+			xa_unlock(&dup_folios[nid]);
 		}
 
-		truncate_dup_pages();
-	} else
+		truncate_dup_folios();
+	} else {
 		ret = -EINVAL;
+	}
 
 	mutex_unlock(&mutex);
 	return ret;
@@ -649,7 +668,7 @@ static int __init duptext_init(void)
 	int ret = 0, nid;
 
 	for_each_node(nid)
-		xa_init_flags(&dup_pages[nid], XA_FLAGS_LOCK_IRQ);
+		xa_init_flags(&dup_folios[nid], XA_FLAGS_LOCK_IRQ);
 
 #ifdef CONFIG_SYSFS
 	ret = duptext_init_sysfs();
@@ -679,7 +698,7 @@ static void duptext_refresh_mm(struct mm_struct *mm)
 	mmap_read_lock(mm);
 	vma_iter_init(&vmi, mm, 0);
 	for_each_vma(vmi, vma) {
-		if (!__dup_page_suitable(vma, mm))
+		if (!__dup_folio_suitable(vma, mm))
 			continue;
 		zap_page_range_single(vma, vma->vm_start,
 				vma->vm_end - vma->vm_start, NULL);

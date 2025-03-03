@@ -1229,7 +1229,7 @@ static int migrate_folio_unmap(new_folio_t get_new_folio,
 	 * Check PG_dup with page lock here. A page can become PG_dup after the
 	 * check of suitable_migration_source or vma_migratable.
 	 */
-	if (page_dup_any(folio_page(src, 0))) {
+	if (folio_dup_any(src)) {
 		rc = -EBUSY;
 		goto out;
 	}

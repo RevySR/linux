@@ -459,7 +459,7 @@ static void smaps_account(struct mem_size_stats *mss, struct page *page,
 	}
 
 #ifdef CONFIG_DUPTEXT
-	if (page_dup_slave(page))
+	if (folio_dup_slave(page_folio(page)))
 		mss->duptext += size;
 #endif
 

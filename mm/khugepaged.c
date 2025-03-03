@@ -1976,7 +1976,9 @@ static int collapse_file(struct mm_struct *mm, unsigned long addr,
 			try_to_unmap(folio,
 					TTU_IGNORE_MLOCK | TTU_BATCH_FLUSH);
 
-		dedup_page(folio_page(folio, 0), false);
+		if (!dedup_folio(folio, false))
+			pr_warn_once("duptext: dedup folio failed, folio mapcount=%d\n",
+				     folio_mapcount(folio));
 
 		xas_lock_irq(&xas);
 

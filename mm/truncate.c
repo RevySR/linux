@@ -279,6 +279,9 @@ static long mapping_evict_folio(struct address_space *mapping,
 	if (!filemap_release_folio(folio, 0))
 		return 0;
 
+	if (dup_folio_mapped(folio))
+		return 0;
+
 	return remove_mapping(mapping, folio);
 }
 
@@ -300,10 +303,6 @@ long invalidate_inode_page(struct page *page)
 	/* The page may have been truncated before it was locked */
 	if (!mapping)
 		return 0;
-
-	if (dup_page_mapped(page))
-		return 0;
-
 	return mapping_evict_folio(mapping, folio);
 }
 
