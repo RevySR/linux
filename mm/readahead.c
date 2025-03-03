@@ -556,7 +556,7 @@ void page_cache_ra_order(struct readahead_control *ractl,
 		if (index & ((1UL << order) - 1))
 			order = select_new_order(order, __ffs(index), orders);
 		/* Don't allocate pages past EOF */
-		while (index + (1UL << order) - 1 > limit &&
+		while (index + (1UL << order) - 1 > limit ||
 			(BIT(order) & orders) == 0)
 			order--;
 		err = ra_alloc_folio(ractl, index, mark, order, gfp);
