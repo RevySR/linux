@@ -167,9 +167,9 @@ static int meminfo_proc_show(struct seq_file *m, void *v)
 #endif
 
 #ifdef CONFIG_TRANSPARENT_HUGEPAGE
-	show_val_kb(m, "AnonHugePages:  ", ext.anon_thps * HPAGE_PMD_NR);
-	show_val_kb(m, "ShmemHugePages: ", ext.shmem_thps * HPAGE_PMD_NR);
-	show_val_kb(m, "ShmemPmdMapped: ", ext.shmem_pmd_mapped * HPAGE_PMD_NR);
+	show_val_kb(m, "AnonHugePages:  ", ext.anon_thps);
+	show_val_kb(m, "ShmemHugePages: ", ext.shmem_thps);
+	show_val_kb(m, "ShmemPmdMapped: ", ext.shmem_pmd_mapped);
 	show_val_kb(m, "FileHugePages:  ",
 		    global_node_page_state(NR_FILE_THPS));
 	show_val_kb(m, "FilePmdMapped:  ",
