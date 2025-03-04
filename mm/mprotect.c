@@ -768,6 +768,7 @@ static int do_mprotect_pkey(unsigned long start, size_t len,
 		unsigned long newflags;
 		int new_vma_pkey;
 
+		async_fork_fixup_vma(vma);
 		if (vma->vm_start != tmp) {
 			error = -ENOMEM;
 			break;

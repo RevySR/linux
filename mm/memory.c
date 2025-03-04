@@ -1525,7 +1525,9 @@ copy:
 		 * Use the raw variant of the seqcount_t write API to avoid
 		 * lockdep complaining about preemptibility.
 		 */
-		vma_assert_write_locked(src_vma);
+		if (!src_vma->async_fork_vma ||
+		    test_bit(ASYNC_FORK_PARENT, &src_mm->async_fork_flags))
+			vma_assert_write_locked(src_vma);
 		raw_write_seqcount_begin(&src_mm->write_protect_seq);
 	}
 
@@ -1921,6 +1923,10 @@ static inline unsigned long zap_pmd_range(struct mmu_gather *tlb,
 			 */
 			spin_unlock(ptl);
 		}
+
+		/* oom killer can call this routine directly, fixup it */
+		async_fork_fixup_pmd(vma, pmd, addr);
+
 		if (pmd_none(*pmd)) {
 			addr = next;
 			continue;
@@ -6175,6 +6181,7 @@ retry_pud:
 				return 0;
 			}
 		}
+		async_fork_fixup_pmd(vma, vmf.pmd, address);
 	}
 
 	return handle_pte_fault(&vmf);

@@ -4761,6 +4761,25 @@ void memcg_lat_stat_end(enum mem_lat_stat_item sidx, u64 start)
 }
 #endif /* CONFIG_MEMSLI */
 
+#ifdef CONFIG_ASYNC_FORK
+static u64 mem_cgroup_async_fork_read(struct cgroup_subsys_state *css,
+					struct cftype *cft)
+{
+	struct mem_cgroup *memcg = mem_cgroup_from_css(css);
+
+	return memcg->async_fork;
+}
+
+static int mem_cgroup_async_fork_write(struct cgroup_subsys_state *css,
+					 struct cftype *cft, u64 val)
+{
+	struct mem_cgroup *memcg = mem_cgroup_from_css(css);
+
+	memcg->async_fork = val;
+	return 0;
+}
+#endif
+
 static u64 mem_cgroup_priority_read(struct cgroup_subsys_state *css,
 				struct cftype *cft)
 {
@@ -6444,6 +6463,13 @@ static struct cftype mem_cgroup_legacy_files[] = {
 		.max_write_len = (100U + 6 * MAX_NUMNODES),
 	},
 #endif
+#ifdef CONFIG_ASYNC_FORK
+	{
+		.name = "async_fork",
+		.read_u64 = mem_cgroup_async_fork_read,
+		.write_u64 = mem_cgroup_async_fork_write,
+	},
+#endif
 	{ },	/* terminate */
 };
 
@@ -6736,6 +6762,9 @@ mem_cgroup_css_alloc(struct cgroup_subsys_state *parent_css)
 #ifdef CONFIG_DUPTEXT
 		memcg->allow_duptext = parent->allow_duptext;
 		memcg->duptext_nodes = parent->duptext_nodes;
+#endif
+#ifdef CONFIG_ASYNC_FORK
+		memcg->async_fork = parent->async_fork;
 #endif
 		page_counter_init(&memcg->memory, &parent->memory);
 		page_counter_init(&memcg->swap, &parent->swap);
@@ -8333,6 +8362,13 @@ static struct cftype memory_files[] = {
 		.name = "pgtable_misplaced",
 		.write_u64 = memcg_pgtable_misplaced_write,
 		.read_u64 = memcg_pgtable_misplaced_read,
+	},
+#endif
+#ifdef CONFIG_ASYNC_FORK
+	{
+		.name = "async_fork",
+		.read_u64 = mem_cgroup_async_fork_read,
+		.write_u64 = mem_cgroup_async_fork_write,
 	},
 #endif
 	{ }	/* terminate */

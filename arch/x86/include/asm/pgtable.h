@@ -1036,6 +1036,13 @@ static inline unsigned long pmd_page_vaddr(pmd_t pmd)
 	pfn_pte(page_to_pfn(page), __pgprot);				  \
 })
 
+#ifndef CONFIG_ASYNC_FORK
+static inline int pmd_bad(pmd_t pmd)
+{
+	return (pmd_flags(pmd) & ~(_PAGE_USER | _PAGE_ACCESSED)) !=
+		(_KERNPG_TABLE & ~_PAGE_ACCESSED);
+}
+#else
 /*
  * If shadow stack is supported, W=0, D=1 could be regarded as shadow
  * stack. However kernel might create RO PMDs which makes W=0, D=1. In this
@@ -1059,6 +1066,7 @@ static inline int pmd_bad(pmd_t pmd)
 		((flags & ~(_PAGE_USER | _PAGE_ACCESSED)) !=
 		(_KERNPG_TABLE & ~_PAGE_ACCESSED));
 }
+#endif
 
 static inline unsigned long pages_to_mb(unsigned long npg)
 {

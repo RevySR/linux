@@ -350,6 +350,10 @@ anon_vma_interval_tree_pre_update_vma(struct vm_area_struct *vma)
 {
 	struct anon_vma_chain *avc;
 
+#ifdef CONFIG_ASYNC_FORK
+	WARN_ON_ONCE(vma->async_fork_vma);
+#endif
+
 	list_for_each_entry(avc, &vma->anon_vma_chain, same_vma)
 		anon_vma_interval_tree_remove(avc, &avc->anon_vma->rb_root);
 }
@@ -358,6 +362,10 @@ static inline void
 anon_vma_interval_tree_post_update_vma(struct vm_area_struct *vma)
 {
 	struct anon_vma_chain *avc;
+
+#ifdef CONFIG_ASYNC_FORK
+	WARN_ON_ONCE(vma->async_fork_vma);
+#endif
 
 	list_for_each_entry(avc, &vma->anon_vma_chain, same_vma)
 		anon_vma_interval_tree_insert(avc, &avc->anon_vma->rb_root);
@@ -888,6 +896,9 @@ struct vm_area_struct *vma_merge(struct vma_iterator *vmi, struct mm_struct *mm,
 	if (vm_flags & VM_SPECIAL)
 		return NULL;
 
+	if (prev)
+		async_fork_fixup_vma(prev);
+
 	/* Does the input range span an existing VMA? (cases 5 - 8) */
 	curr = find_vma_intersection(mm, prev ? prev->vm_end : 0, end);
 
@@ -896,6 +907,9 @@ struct vm_area_struct *vma_merge(struct vma_iterator *vmi, struct mm_struct *mm,
 		next = vma_lookup(mm, end);
 	else
 		next = NULL;		/* case 5 */
+
+	if (next)
+		async_fork_fixup_vma(next);
 
 	if (prev) {
 		vma_start = prev->vm_start;
@@ -2009,6 +2023,8 @@ static int expand_upwards(struct vm_area_struct *vma, unsigned long address)
 		return -ENOMEM;
 	}
 
+	async_fork_fixup_vma(vma);
+
 	/* Lock the VMA before expanding to prevent concurrent page faults */
 	vma_start_write(vma);
 	/*
@@ -2101,6 +2117,8 @@ int expand_downwards(struct vm_area_struct *vma, unsigned long address)
 		mas_destroy(&mas);
 		return -ENOMEM;
 	}
+
+	async_fork_fixup_vma(vma);
 
 	/* Lock the VMA before expanding to prevent concurrent page faults */
 	vma_start_write(vma);
@@ -2366,6 +2384,8 @@ int __split_vma(struct vma_iterator *vmi, struct vm_area_struct *vma,
 	struct vm_area_struct *new;
 	int err;
 
+	async_fork_fixup_vma(vma);
+
 	WARN_ON(vma->vm_start >= addr);
 	WARN_ON(vma->vm_end <= addr);
 
@@ -2514,6 +2534,7 @@ do_vmi_align_munmap(struct vma_iterator *vmi, struct vm_area_struct *vma,
 			if (error)
 				goto end_split_failed;
 		}
+		async_fork_fixup_vma(next);
 		vma_start_write(next);
 		mas_set(&mas_detach, count);
 		error = mas_store_gfp(&mas_detach, next, GFP_KERNEL);
@@ -3156,6 +3177,9 @@ static int do_brk_flags(struct vma_iterator *vmi, struct vm_area_struct *vma,
 
 	if (security_vm_enough_memory_mm(mm, len >> PAGE_SHIFT))
 		return -ENOMEM;
+
+	if (vma)
+		async_fork_fixup_vma(vma);
 
 	/*
 	 * Expand the existing vma if possible; Note that singular lists do not
