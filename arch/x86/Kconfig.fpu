@@ -17,7 +17,7 @@ if USING_FPU_IN_KERNEL_NONATOMIC
 choice
 	prompt "X86_HYGON_LMC"
 	depends on X86_64 && CPU_SUP_HYGON
-	default X86_HYGON_LMC_SSE2_ON
+	default X86_HYGON_LMC_AVX2_ON
 	help
 	  Select the type of non-temporal (NT) copy instructions to use for
 	  large memory copy operations between kernel and user mode. You can
