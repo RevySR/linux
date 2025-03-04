@@ -4213,4 +4213,40 @@ static inline bool is_pmd_copied_slow(pmd_t pmd)
 		!pmd_devmap(pmd) && is_pmd_wp(pmd);
 }
 
+#ifdef CONFIG_ASYNC_FORK
+void async_fork_fixup_pmd(struct vm_area_struct *mpnt, pmd_t *pmd,
+			  unsigned long addr);
+void async_fork_fixup_vma(struct vm_area_struct *mpnt);
+void async_fork_cpr_bind(struct mm_struct *oldmm, struct mm_struct *mm,
+			 int err);
+int async_fork_cpr_fast(struct vm_area_struct *vma,
+			struct vm_area_struct *mpnt);
+void async_fork_cpr_rest(void);
+void async_fork_cpr_done(struct mm_struct *mm, bool recover,
+			 bool locked);
+#else
+static inline void async_fork_cpr_bind(struct mm_struct *oldmm,
+				       struct mm_struct *mm, int err)
+{
+}
+static inline int async_fork_cpr_fast(struct vm_area_struct *vma,
+				      struct vm_area_struct *mpnt)
+{
+	return -EOPNOTSUPP;
+}
+static inline void async_fork_cpr_rest(void)
+{
+}
+static inline void async_fork_cpr_done(struct mm_struct *mm, bool r, bool l)
+{
+}
+static inline void async_fork_fixup_pmd(struct vm_area_struct *mpnt, pmd_t *pmd,
+					unsigned long addr)
+{
+}
+static inline void async_fork_fixup_vma(struct vm_area_struct *mpnt)
+{
+}
+#endif
+
 #endif /* _LINUX_MM_H */

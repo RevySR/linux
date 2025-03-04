@@ -1135,6 +1135,17 @@ again:
 	if (unlikely(mode == CPR_SLOW)) {
 		if (unlikely(!is_pmd_copied_slow(*src_pmd))) {
 			/* skip PMDs without WP attribute: already handled */
+#ifdef CONFIG_ASYNC_FORK
+			/*
+			 * In async fork scenario, child won't reset parent's
+			 * async_fork_mm (src_mm->async_fork_mm) to be NULL,
+			 * In parent's perspective CPR_SLOW is only call in its
+			 * fixup or recovery path, if reach here src_mm's mmap
+			 * lock must be hold, it is not possible to see another
+			 * new fork.
+			 */
+			BUG_ON(src_mm->async_fork_mm != dst_mm);
+#endif
 			addr = end;
 			goto loop_out;
 		}
@@ -1522,6 +1533,11 @@ copy:
 		/* NOTE only support cow mapping currently */
 		if (!is_cow || !vma_is_anonymous(src_vma))
 			mode = CPR_NORMAL;
+#ifdef CONFIG_ASYNC_FORK
+		else
+			/* Indicates parent has been on fast path */
+			src_vma->async_fork_vma = VMA_FAST_COPIED;
+#endif
 	}
 
 	ret = 0;
