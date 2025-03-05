@@ -585,8 +585,6 @@ static unsigned int shmem_huge_global_enabled(struct inode *inode, pgoff_t index
 					      struct vm_area_struct *vma,
 					      unsigned long vm_flags)
 {
-	unsigned int maybe_pmd_order = HPAGE_PMD_ORDER > MAX_PAGECACHE_ORDER ?
-		0 : BIT(HPAGE_PMD_ORDER);
 	unsigned long within_size_orders;
 	unsigned int order;
 	pgoff_t aligned_index;
@@ -597,7 +595,7 @@ static unsigned int shmem_huge_global_enabled(struct inode *inode, pgoff_t index
 	if (shmem_huge == SHMEM_HUGE_DENY)
 		return 0;
 	if (shmem_huge_force || shmem_huge == SHMEM_HUGE_FORCE)
-		return maybe_pmd_order;
+		return THP_ORDERS_ALL_FILE_DEFAULT;
 
 	/*
 	 * The huge order allocation for anon shmem is controlled through
@@ -614,12 +612,12 @@ static unsigned int shmem_huge_global_enabled(struct inode *inode, pgoff_t index
 	switch (SHMEM_SB(inode->i_sb)->huge) {
 	case SHMEM_HUGE_ALWAYS:
 		if (vma)
-			return maybe_pmd_order;
+			return THP_ORDERS_ALL_FILE_DEFAULT;
 
 		return shmem_mapping_size_orders(inode->i_mapping, index, write_end);
 	case SHMEM_HUGE_WITHIN_SIZE:
 		if (vma)
-			within_size_orders = maybe_pmd_order;
+			within_size_orders = THP_ORDERS_ALL_FILE_DEFAULT;
 		else
 			within_size_orders = shmem_mapping_size_orders(inode->i_mapping,
 								       index, write_end);
@@ -637,7 +635,7 @@ static unsigned int shmem_huge_global_enabled(struct inode *inode, pgoff_t index
 		fallthrough;
 	case SHMEM_HUGE_ADVISE:
 		if (vm_flags & VM_HUGEPAGE)
-			return maybe_pmd_order;
+			return THP_ORDERS_ALL_FILE_DEFAULT;
 		fallthrough;
 	default:
 		return 0;
@@ -1788,8 +1786,11 @@ unsigned long shmem_allowable_huge_orders(struct inode *inode,
 	global_orders = shmem_huge_global_enabled(inode, index, write_end,
 						  shmem_huge_force, vma, vm_flags);
 	/* Tmpfs huge pages allocation */
-	if (!vma || !vma_is_anon_shmem(vma))
-		return global_orders;
+	if (!vma || !vma_is_anon_shmem(vma)) {
+		unsigned int file_allow_orders = file_orders_always();
+
+		return global_orders & file_allow_orders;
+	}
 
 	/*
 	 * Following the 'deny' semantics of the top level, force the huge
