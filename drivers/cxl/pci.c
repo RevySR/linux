@@ -194,6 +194,41 @@ static void cxl_mbox_scan_media_work(struct work_struct *work)
 	mutex_unlock(&mds->mbox_mutex);
 }
 
+struct cxl_pci_quirk {
+	u16 vendor;
+	u16 device;
+};
+
+static const struct cxl_pci_quirk cxl_quirk_list[] = {
+	{ 0x2042, 0x0ddb}, /* aliscm1.0 */
+	{ } /* END */
+};
+
+const struct cxl_pci_quirk *
+cxl_pci_quirk_lookup_id(u16 vendor, u16 device,
+			const struct cxl_pci_quirk *list)
+{
+	const struct cxl_pci_quirk *q;
+
+	for (q = list; q->vendor || q->device; q++) {
+		if (q->vendor != vendor)
+			continue;
+		if (!q->device || device == q->device)
+			return q;
+	}
+	return NULL;
+}
+
+const struct cxl_pci_quirk *
+cxl_pci_quirk_lookup(struct pci_dev *pci, const struct cxl_pci_quirk *list)
+{
+	if (!pci)
+		return NULL;
+	return cxl_pci_quirk_lookup_id(pci->vendor,
+				       pci->device,
+				       list);
+}
+
 /**
  * __cxl_pci_mbox_send_cmd() - Execute a mailbox command
  * @mds: The memory device driver data
@@ -260,7 +295,8 @@ static int __cxl_pci_mbox_send_cmd(struct cxl_memdev_state *mds,
 	 * not be in sync. Ensure no new command comes in until so. Keep the
 	 * hardware semantics and only allow device health status.
 	 */
-	if (mds->security.poll_tmo_secs > 0) {
+	if (mds->security.poll_tmo_secs > 0 &&
+		!cxl_pci_quirk_lookup(to_pci_dev(dev), cxl_quirk_list)) {
 		if (mbox_cmd->opcode != CXL_MBOX_OP_GET_HEALTH_INFO)
 			return -EBUSY;
 	}
@@ -908,7 +944,7 @@ static int cxl_pci_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 	if (rc)
 		dev_dbg(&pdev->dev, "Failed to map RAS capability.\n");
 
-	if (pdev->vendor == PCI_VENDOR_ID_ALISCM && pdev->device == 0x0ddb)
+	if (cxl_pci_quirk_lookup(pdev, cxl_quirk_list))
 		rc = cxl_wait_for_aliscm_ready(cxlds);
 	else
 		rc = cxl_await_media_ready(cxlds);

@@ -192,12 +192,18 @@ struct cxl_mbox_cmd_rc cxl_mbox_cmd_rctable[] ={ CMD_CMD_RC_TABLE };
 
 static inline const char *cxl_mbox_cmd_rc2str(struct cxl_mbox_cmd *mbox_cmd)
 {
-	return cxl_mbox_cmd_rctable[mbox_cmd->return_code].desc;
+	if (mbox_cmd->return_code < ARRAY_SIZE(cxl_mbox_cmd_rctable))
+		return cxl_mbox_cmd_rctable[mbox_cmd->return_code].desc;
+	else
+		return "unknown return code";
 }
 
 static inline int cxl_mbox_cmd_rc2errno(struct cxl_mbox_cmd *mbox_cmd)
 {
-	return cxl_mbox_cmd_rctable[mbox_cmd->return_code].err;
+	if (mbox_cmd->return_code < ARRAY_SIZE(cxl_mbox_cmd_rctable))
+		return cxl_mbox_cmd_rctable[mbox_cmd->return_code].err;
+	else
+		return -ENXIO;
 }
 
 /*
