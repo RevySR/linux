@@ -72,7 +72,7 @@ quiet_cmd_orc_hash = GEN     $@
 		     $(CONFIG_SHELL) $(orc_hash_sh) < $< > $@
 $(orc_hash_h): $(srctree)/arch/arm64/include/asm/orc_types.h $(orc_hash_sh) FORCE
 	$(call if_changed,orc_hash)
-prepare: $(orc_hash_h)
+archprepare: $(orc_hash_h)
 endif
 
 ifeq ($(CONFIG_ARM64_BTI_KERNEL),y)
