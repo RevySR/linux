@@ -20,11 +20,11 @@ static inline bool folio_dup_any(struct folio *folio)
 }
 static inline bool folio_dup_master(struct folio *folio)
 {
-	return folio_test_dup(folio) && !folio_test_private(folio);
+	return folio_test_dup(folio) && !folio_test_dup_slave(folio);
 }
 static inline bool folio_dup_slave(struct folio *folio)
 {
-	return folio_test_dup(folio) && !folio_test_private(folio);
+	return folio_test_dup(folio) && folio_test_dup_slave(folio);
 }
 
 static inline bool page_dup_any(struct page *page)

@@ -199,6 +199,10 @@ enum pageflags {
 	PG_has_hwpoisoned = PG_error,
 	PG_large_rmappable = PG_workingset, /* anon or file-backed */
 	PG_partially_mapped = PG_reclaim, /* was identified to be partially mapped */
+#ifdef CONFIG_DUPTEXT
+	/* Reuse PG_dirty to indicate whether the duplicate page is a master or slave */
+	PG_dup_slave = PG_dirty,
+#endif
 };
 
 #define PAGEFLAGS_MASK		((1UL << NR_PAGEFLAGS) - 1)
@@ -665,6 +669,7 @@ __PAGEFLAG(Kfence, kfence, PF_ANY)
 #ifdef CONFIG_DUPTEXT
 /* PageDup() is used to track page that has NUMA replicas. */
 PAGEFLAG(Dup, dup, PF_HEAD)
+PAGEFLAG(Dup_Slave, dup_slave, PF_HEAD)
 #endif
 
 /*

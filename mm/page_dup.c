@@ -49,12 +49,16 @@ static inline void attach_dup_folio_private(struct folio *dup_folio,
 {
 	dup_folio->private = folio;
 	folio_set_private(dup_folio);
+
+	folio_set_dup_slave(dup_folio);
 }
 
 static inline void detach_dup_folio_private(struct folio *dup_folio)
 {
 	folio_clear_private(dup_folio);
 	dup_folio->private = 0;
+
+	folio_clear_dup_slave(dup_folio);
 }
 
 static struct folio *find_get_dup_folio(struct folio *folio, int node)
