@@ -2460,8 +2460,21 @@ static int __init arm64_mpam_register_cpus(void)
 	return mpam_register_requestor(partid_max, pmg_max);
 }
 
+static int mpam_on;
+
+static int __init mpam_on_setup(char *str)
+{
+	mpam_on = 1;
+	pr_info("MPAM is supported now");
+	return 1;
+}
+__setup("mpam_on", mpam_on_setup);
+
 static int __init mpam_msc_driver_init(void)
 {
+	if (!mpam_on)
+		return 0;
+
 	bool mpam_not_available = false;
 	int err;
 
