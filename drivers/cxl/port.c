@@ -120,6 +120,12 @@ static int cxl_endpoint_port_probe(struct cxl_port *port)
 	if (rc)
 		return rc;
 
+	if (resource_size(&cxlds->pmem_res) && IS_ENABLED(CONFIG_CXL_PMEM)) {
+		rc = devm_cxl_add_nvdimm(cxlmd);
+		if (rc == -ENODEV)
+			dev_info(cxlds->dev, "PMEM disabled by platform\n");
+	}
+
 	/*
 	 * This can't fail in practice as CXL root exit unregisters all
 	 * descendant ports and that in turn synchronizes with cxl_port_probe()

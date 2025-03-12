@@ -821,6 +821,13 @@ static struct cxl_port *__devm_cxl_add_port(struct device *host,
 	if (rc)
 		goto err;
 
+	/* update memdev endpoint */
+	if (is_cxl_memdev(uport_dev)) {
+		struct cxl_memdev *cxlmd = to_cxl_memdev(uport_dev);
+
+		cxlmd->endpoint = port;
+	}
+
 	rc = device_add(dev);
 	if (rc)
 		goto err;
@@ -1331,7 +1338,6 @@ int cxl_endpoint_autoremove(struct cxl_memdev *cxlmd, struct cxl_port *endpoint)
 
 	get_device(host);
 	get_device(&endpoint->dev);
-	cxlmd->endpoint = endpoint;
 	cxlmd->depth = endpoint->depth;
 	return devm_add_action_or_reset(dev, delete_endpoint, cxlmd);
 }
