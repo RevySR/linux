@@ -210,6 +210,7 @@ void async_fork_cpr_done(struct mm_struct *mm, bool recover, bool locked)
 	if (oldmm->async_fork_mm == mm) {
 		oldmm->async_fork_mm = NULL;
 		oldmm->async_fork_flags = 0;
+		atomic_set(&oldmm->async_fork_refcnt, 0);
 	}
 
 #ifdef CONFIG_ARM64
@@ -242,6 +243,7 @@ void async_fork_cpr_bind(struct mm_struct *oldmm, struct mm_struct *mm,
 
 		oldmm->async_fork_mm = mm;
 		set_bit(ASYNC_FORK_PARENT, &oldmm->async_fork_flags);
+		atomic_set(&oldmm->async_fork_refcnt, 0);
 	} else
 		async_fork_cpr_done(mm, true, true);
 }

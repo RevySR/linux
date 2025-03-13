@@ -1482,6 +1482,7 @@ int __copy_page_range(struct vm_area_struct *dst_vma,
 	unsigned long next, pfn;
 	bool is_cow;
 	int ret;
+	bool seq_should_lock = true;
 
 	if (addr < src_vma->vm_start)
 		addr = src_vma->vm_start;
@@ -1525,10 +1526,16 @@ copy:
 		 * Use the raw variant of the seqcount_t write API to avoid
 		 * lockdep complaining about preemptibility.
 		 */
-		if (!src_vma->async_fork_vma ||
-		    test_bit(ASYNC_FORK_PARENT, &src_mm->async_fork_flags))
+#ifdef CONFIG_ASYNC_FORK
+		if (mode != CPR_SLOW)
 			vma_assert_write_locked(src_vma);
-		raw_write_seqcount_begin(&src_mm->write_protect_seq);
+		if (mode == CPR_SLOW && atomic_add_return(1, &src_mm->async_fork_refcnt) != 1)
+			seq_should_lock = false;
+#else
+		vma_assert_write_locked(src_vma);
+#endif
+		if (seq_should_lock)
+			raw_write_seqcount_begin(&src_mm->write_protect_seq);
 	}
 
 	if (unlikely(mode == CPR_FAST)) {
@@ -1559,7 +1566,12 @@ copy:
 	} while (dst_pgd++, src_pgd++, addr = next, addr != end);
 
 	if (is_cow) {
-		raw_write_seqcount_end(&src_mm->write_protect_seq);
+		if (seq_should_lock)
+			raw_write_seqcount_end(&src_mm->write_protect_seq);
+#ifdef CONFIG_ASYNC_FORK
+		if (mode == CPR_SLOW)
+			atomic_dec(&src_mm->async_fork_refcnt);
+#endif
 		mmu_notifier_invalidate_range_end(&range);
 	}
 	if (ret && unlikely(src_vma->vm_flags & VM_PFNMAP))
