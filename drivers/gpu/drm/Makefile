@@ -204,4 +204,4 @@ obj-$(CONFIG_DRM_SPRD) += sprd/
 obj-$(CONFIG_DRM_LOONGSON) += loongson/
 obj-$(CONFIG_HYDCU_FIXUP_HEADER) += hygon/hydcu-fixup-header/
 obj-$(CONFIG_DRM_PHYTIUM) += phytium/
-obj-$(CONFIG_DRM_INSPUR)  += inspur/
+obj-$(CONFIG_DRM_YHGCH)  += yhgch/

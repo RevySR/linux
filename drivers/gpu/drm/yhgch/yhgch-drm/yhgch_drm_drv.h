@@ -22,7 +22,7 @@
 struct drm_device;
 struct drm_gem_object;
 
-#define inspur_framebuffer drm_framebuffer
+#define yhgch_framebuffer drm_framebuffer
 #define BPP16_RED    0x0000f800
 #define BPP16_GREEN  0x000007e0
 #define BPP16_BLUE   0x0000001f
@@ -32,18 +32,18 @@ struct drm_gem_object;
 #define BPP16_CYAN   0x000007ff
 #define BPP16_PINK   0x0000f81f
 #define BPP16_BLACK  0x00000000
-struct inspur_fbdev {
+struct yhgch_fbdev {
 	struct drm_fb_helper helper;
-	struct inspur_framebuffer *fb;
+	struct yhgch_framebuffer *fb;
 	int size;
 };
 
-struct inspur_cursor {
+struct yhgch_cursor {
 	struct drm_gem_vram_object *gbo[2];
 	unsigned int next_index;
 };
 
-struct inspur_drm_private {
+struct yhgch_drm_private {
 	/* hw */
 	void __iomem *mmio;
 	void __iomem *fb_map;
@@ -57,30 +57,30 @@ struct inspur_drm_private {
 	struct drm_atomic_state *suspend_state;
 
 	/* fbdev */
-	struct inspur_fbdev *fbdev;
+	struct yhgch_fbdev *fbdev;
 
 	/* hw cursor */
-	struct inspur_cursor cursor;
+	struct yhgch_cursor cursor;
 };
 
-#define to_inspur_framebuffer(x) container_of(x, struct inspur_framebuffer, fb)
+#define to_yhgch_framebuffer(x) container_of(x, struct yhgch_framebuffer, fb)
 
-void inspur_set_power_mode(struct inspur_drm_private *priv,
+void yhgch_set_power_mode(struct yhgch_drm_private *priv,
 			   unsigned int power_mode);
-void inspur_set_current_gate(struct inspur_drm_private *priv,
+void yhgch_set_current_gate(struct yhgch_drm_private *priv,
 			     unsigned int gate);
-int inspur_load(struct drm_device *dev, unsigned long flags);
-void inspur_unload(struct drm_device *dev);
+int yhgch_load(struct drm_device *dev, unsigned long flags);
+void yhgch_unload(struct drm_device *dev);
 
-int inspur_de_init(struct inspur_drm_private *priv);
-int inspur_vdac_init(struct inspur_drm_private *priv);
+int yhgch_de_init(struct yhgch_drm_private *priv);
+int yhgch_vdac_init(struct yhgch_drm_private *priv);
 
-int inspur_gem_create(struct drm_device *dev, u32 size, bool iskernel,
+int yhgch_gem_create(struct drm_device *dev, u32 size, bool iskernel,
 		      struct drm_gem_object **obj);
 
-int inspur_dumb_create(struct drm_file *file, struct drm_device *dev,
+int yhgch_dumb_create(struct drm_file *file, struct drm_device *dev,
 		       struct drm_mode_create_dumb *args);
 
-extern const struct drm_mode_config_funcs inspur_mode_funcs;
+extern const struct drm_mode_config_funcs yhgch_mode_funcs;
 
 #endif

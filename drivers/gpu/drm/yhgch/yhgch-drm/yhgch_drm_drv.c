@@ -11,17 +11,17 @@
 #include <drm/drm_crtc_helper.h>
 #include <drm/drm_probe_helper.h>
 
-#include "inspur_drm_drv.h"
-#include "inspur_drm_regs.h"
+#include "yhgch_drm_drv.h"
+#include "yhgch_drm_regs.h"
 
 #define MEM_SIZE_RESERVE4KVM 0x200000
 
-DEFINE_DRM_GEM_FOPS(inspur_fops);
-irqreturn_t inspur_drm_interrupt(int irq, void *arg)
+DEFINE_DRM_GEM_FOPS(yhgch_fops);
+irqreturn_t yhgch_drm_interrupt(int irq, void *arg)
 {
 	struct drm_device *dev = (struct drm_device *)arg;
-	struct inspur_drm_private *priv =
-	    (struct inspur_drm_private *)dev->dev_private;
+	struct yhgch_drm_private *priv =
+	    (struct yhgch_drm_private *)dev->dev_private;
 	u32 status;
 
 	status = readl(priv->mmio + INSPUR_RAW_INTERRUPT);
@@ -35,25 +35,25 @@ irqreturn_t inspur_drm_interrupt(int irq, void *arg)
 	return IRQ_HANDLED;
 }
 
-static struct drm_driver inspur_driver = {
+static struct drm_driver yhgch_driver = {
 	.driver_features = DRIVER_GEM | DRIVER_MODESET |
 	    DRIVER_ATOMIC | DRIVER_HAVE_IRQ,
 
-	.fops = &inspur_fops,
-	.name = "inspur",
-	.date = "20240201",
-	.desc = "inspur drm driver",
+	.fops = &yhgch_fops,
+	.name = "yhgch",
+	.date = "20250312",
+	.desc = "yhgch drm driver",
 	.major = 3,
-	.minor = 0,
-	.dumb_create = inspur_dumb_create,
+	.minor = 3,
+	.dumb_create = yhgch_dumb_create,
 	.dumb_map_offset = drm_gem_ttm_dumb_map_offset,
 };
 
-static int __maybe_unused inspur_pm_suspend(struct device *dev)
+static int __maybe_unused yhgch_pm_suspend(struct device *dev)
 {
 	struct pci_dev *pdev = to_pci_dev(dev);
 	struct drm_device *drm_dev = pci_get_drvdata(pdev);
-	struct inspur_drm_private *priv = drm_dev->dev_private;
+	struct yhgch_drm_private *priv = drm_dev->dev_private;
 
 	drm_kms_helper_poll_disable(drm_dev);
 	priv->suspend_state = drm_atomic_helper_suspend(drm_dev);
@@ -67,11 +67,11 @@ static int __maybe_unused inspur_pm_suspend(struct device *dev)
 	return 0;
 }
 
-static int __maybe_unused inspur_pm_resume(struct device *dev)
+static int __maybe_unused yhgch_pm_resume(struct device *dev)
 {
 	struct pci_dev *pdev = to_pci_dev(dev);
 	struct drm_device *drm_dev = pci_get_drvdata(pdev);
-	struct inspur_drm_private *priv = drm_dev->dev_private;
+	struct yhgch_drm_private *priv = drm_dev->dev_private;
 
 	drm_atomic_helper_resume(drm_dev, priv->suspend_state);
 	drm_kms_helper_poll_enable(drm_dev);
@@ -79,12 +79,12 @@ static int __maybe_unused inspur_pm_resume(struct device *dev)
 	return 0;
 }
 
-static const struct dev_pm_ops inspur_pm_ops = {
-	SET_SYSTEM_SLEEP_PM_OPS(inspur_pm_suspend,
-				inspur_pm_resume)
+static const struct dev_pm_ops yhgch_pm_ops = {
+	SET_SYSTEM_SLEEP_PM_OPS(yhgch_pm_suspend,
+				yhgch_pm_resume)
 };
 
-static int inspur_kms_init(struct inspur_drm_private *priv)
+static int yhgch_kms_init(struct yhgch_drm_private *priv)
 {
 	int ret;
 
@@ -97,15 +97,15 @@ static int inspur_kms_init(struct inspur_drm_private *priv)
 	priv->dev->mode_config.max_height = 1200;
 	priv->dev->mode_config.preferred_depth = 32;
 	priv->dev->mode_config.prefer_shadow = 1;
-	priv->dev->mode_config.funcs = (void *)&inspur_mode_funcs;
+	priv->dev->mode_config.funcs = (void *)&yhgch_mode_funcs;
 
-	ret = inspur_de_init(priv);
+	ret = yhgch_de_init(priv);
 	if (ret) {
 		DRM_ERROR("failed to init de: %d\n", ret);
 		return ret;
 	}
 
-	ret = inspur_vdac_init(priv);
+	ret = yhgch_vdac_init(priv);
 	if (ret) {
 		DRM_ERROR("failed to init vdac: %d\n", ret);
 		return ret;
@@ -114,18 +114,10 @@ static int inspur_kms_init(struct inspur_drm_private *priv)
 	return 0;
 }
 
-static void inspur_kms_fini(struct inspur_drm_private *priv)
-{
-	if (priv->mode_config_initialized) {
-		drm_mode_config_cleanup(priv->dev);
-		priv->mode_config_initialized = false;
-	}
-}
-
 /*
  * It can operate in one of three modes: 0, 1 or Sleep.
  */
-void inspur_set_power_mode(struct inspur_drm_private *priv,
+void yhgch_set_power_mode(struct yhgch_drm_private *priv,
 			   unsigned int power_mode)
 {
 	unsigned int control_value = 0;
@@ -146,7 +138,7 @@ void inspur_set_power_mode(struct inspur_drm_private *priv,
 	writel(control_value, mmio + INSPUR_POWER_MODE_CTRL);
 }
 
-void inspur_set_current_gate(struct inspur_drm_private *priv, unsigned int gate)
+void yhgch_set_current_gate(struct yhgch_drm_private *priv, unsigned int gate)
 {
 	unsigned int gate_reg;
 	unsigned int mode;
@@ -172,12 +164,12 @@ void inspur_set_current_gate(struct inspur_drm_private *priv, unsigned int gate)
 	writel(gate, mmio + gate_reg);
 }
 
-static void inspur_hw_config(struct inspur_drm_private *priv)
+static void yhgch_hw_config(struct yhgch_drm_private *priv)
 {
 	unsigned int reg;
 
 	/* On hardware reset, power mode 0 is default. */
-	inspur_set_power_mode(priv, INSPUR_PW_MODE_CTL_MODE_MODE0);
+	yhgch_set_power_mode(priv, INSPUR_PW_MODE_CTL_MODE_MODE0);
 
 	/* Enable display power gate & LOCALMEM power gate */
 	reg = readl(priv->mmio + INSPUR_CURRENT_GATE);
@@ -186,7 +178,7 @@ static void inspur_hw_config(struct inspur_drm_private *priv)
 	reg |= INSPUR_CURR_GATE_DISPLAY(1);
 	reg |= INSPUR_CURR_GATE_LOCALMEM(1);
 
-	inspur_set_current_gate(priv, reg);
+	yhgch_set_current_gate(priv, reg);
 
 	/*
 	 * Reset the memory controller. If the memory controller
@@ -205,7 +197,7 @@ static void inspur_hw_config(struct inspur_drm_private *priv)
 	writel(reg, priv->mmio + INSPUR_MISC_CTRL);
 }
 
-static int inspur_hw_map(struct inspur_drm_private *priv)
+static int yhgch_hw_map(struct yhgch_drm_private *priv)
 {
 	struct drm_device *dev = priv->dev;
 	struct pci_dev *pdev = to_pci_dev(dev->dev);
@@ -232,65 +224,42 @@ static int inspur_hw_map(struct inspur_drm_private *priv)
 	return 0;
 }
 
-static void inspur_hw_unmap(struct inspur_drm_private *priv)
-{
-	struct drm_device *dev = priv->dev;
 
-	if (priv->mmio) {
-		devm_iounmap(dev->dev, priv->mmio);
-		priv->mmio = NULL;
-	}
 
-	if (priv->fb_map) {
-		devm_iounmap(dev->dev, priv->fb_map);
-		priv->fb_map = NULL;
-	}
-}
-
-static int inspur_hw_init(struct inspur_drm_private *priv)
+static int yhgch_hw_init(struct yhgch_drm_private *priv)
 {
 	int ret;
 
-	ret = inspur_hw_map(priv);
+	ret = yhgch_hw_map(priv);
 	if (ret)
 		return ret;
-
-	inspur_hw_config(priv);
-
+	yhgch_hw_config(priv);
 	return 0;
 }
 
-void inspur_unload(struct drm_device *dev)
+void yhgch_unload(struct drm_device *dev)
 {
-	struct inspur_drm_private *priv = dev->dev_private;
-	struct pci_dev *pdev = to_pci_dev(dev->dev);
+
 
 	drm_atomic_helper_shutdown(dev);
 
-	free_irq(pdev->irq, dev);
-
-	inspur_kms_fini(priv);
-	inspur_hw_unmap(priv);
-	pci_disable_msi(to_pci_dev(dev->dev));
-	dev->dev_private = NULL;
-
 }
 
-int inspur_load(struct drm_device *dev, unsigned long flags)
+int yhgch_load(struct drm_device *dev, unsigned long flags)
 {
-	struct inspur_drm_private *priv;
+	struct yhgch_drm_private *priv;
 	struct pci_dev *pdev = to_pci_dev(dev->dev);
 	int ret;
 
 	priv = devm_kzalloc(dev->dev, sizeof(*priv), GFP_KERNEL);
 	if (!priv) {
-		DRM_ERROR("no memory to allocate for inspur_drm_private\n");
+		DRM_ERROR("no memory to allocate for yhgch_drm_private\n");
 		return -ENOMEM;
 	}
 	dev->dev_private = priv;
 	priv->dev = dev;
 
-	ret = inspur_hw_init(priv);
+	ret = yhgch_hw_init(priv);
 	if (ret)
 		goto err;
 
@@ -301,7 +270,7 @@ int inspur_load(struct drm_device *dev, unsigned long flags)
 		drm_err(dev, "Error initializing VRAM MM; %d\n", ret);
 		goto err;
 	}
-	ret = inspur_kms_init(priv);
+	ret = yhgch_kms_init(priv);
 	if (ret)
 		goto err;
 
@@ -311,12 +280,12 @@ int inspur_load(struct drm_device *dev, unsigned long flags)
 	return 0;
 
 err:
-	inspur_unload(dev);
+	yhgch_unload(dev);
 	DRM_ERROR("failed to initialize drm driver: %d\n", ret);
 	return ret;
 }
 
-static int inspur_pci_probe(struct pci_dev *pdev,
+static int yhgch_pci_probe(struct pci_dev *pdev,
 			    const struct pci_device_id *ent)
 {
 	int ret = 0;
@@ -324,11 +293,11 @@ static int inspur_pci_probe(struct pci_dev *pdev,
 
 	ret =
 	    drm_aperture_remove_conflicting_pci_framebuffers(pdev,
-							     &inspur_driver);
+							     &yhgch_driver);
 	if (ret)
 		return ret;
 
-	dev = drm_dev_alloc(&inspur_driver, &pdev->dev);
+	dev = drm_dev_alloc(&yhgch_driver, &pdev->dev);
 	if (IS_ERR(dev)) {
 		DRM_ERROR("failed to allocate drm_device\n");
 		return PTR_ERR(dev);
@@ -340,65 +309,67 @@ static int inspur_pci_probe(struct pci_dev *pdev,
 		drm_err(dev, "failed to enable pci device: %d\n", ret);
 		return ret;
 	}
-	ret = inspur_load(dev, ent->driver_data);
+	ret = yhgch_load(dev, ent->driver_data);
 	if (ret)
 		goto err_return;
 
 	ret = drm_dev_register(dev, ent->driver_data);
 	if (ret)
-		goto err_inspur_driver_unload;
+		goto err_yhgch_driver_unload;
 
 	drm_fbdev_generic_setup(dev, dev->mode_config.preferred_depth);
 
 	return 0;
-err_inspur_driver_unload:
-	inspur_unload(dev);
+err_yhgch_driver_unload:
+	yhgch_unload(dev);
 err_return:
 	return ret;
 }
 
-static void inspur_pci_remove(struct pci_dev *pdev)
+static void yhgch_pci_remove(struct pci_dev *pdev)
 {
 	struct drm_device *dev = pci_get_drvdata(pdev);
 
-	drm_put_dev(dev);
-	pci_disable_device(pdev);
+	drm_dev_unregister(dev);
+	yhgch_unload(dev);
 }
 
-static void inspur_pci_shutdown(struct pci_dev *pdev)
+static void yhgch_pci_shutdown(struct pci_dev *pdev)
 {
-	inspur_pci_remove(pdev);
+	yhgch_pci_remove(pdev);
 }
 
-static struct pci_device_id inspur_pci_table[] = {
+static struct pci_device_id yhgch_pci_table[] = {
 	{ 0x1bd4, 0x0750, PCI_ANY_ID, PCI_ANY_ID, 0, 0, 0 },
 	{ 0, }
 };
 
-static struct pci_driver inspur_pci_driver = {
-	.name = "inspur-drm",
-	.id_table = inspur_pci_table,
-	.probe = inspur_pci_probe,
-	.remove = inspur_pci_remove,
-	.shutdown = inspur_pci_shutdown,
-	.driver.pm = &inspur_pm_ops,
+static struct pci_driver yhgch_pci_driver = {
+	.name = "yhgch-drm",
+	.id_table = yhgch_pci_table,
+	.probe = yhgch_pci_probe,
+	.remove = yhgch_pci_remove,
+	.shutdown = yhgch_pci_shutdown,
+	.driver.pm = &yhgch_pm_ops,
 };
 
-static int __init inspur_init(void)
+static int __init yhgch_init(void)
 {
-	return pci_register_driver(&inspur_pci_driver);
+	if (drm_firmware_drivers_only())
+		return -ENODEV;
+	return pci_register_driver(&yhgch_pci_driver);
 }
 
-static void __exit inspur_exit(void)
+static void __exit yhgch_exit(void)
 {
-	return pci_unregister_driver(&inspur_pci_driver);
+	return pci_unregister_driver(&yhgch_pci_driver);
 }
 
-module_init(inspur_init);
-module_exit(inspur_exit);
+module_init(yhgch_init);
+module_exit(yhgch_exit);
 
-MODULE_DEVICE_TABLE(pci, inspur_pci_table);
+MODULE_DEVICE_TABLE(pci, yhgch_pci_table);
 MODULE_AUTHOR("");
-MODULE_DESCRIPTION("DRM Driver for InspurBMC");
+MODULE_DESCRIPTION("DRM Driver for YhgchBMC");
 MODULE_LICENSE("GPL");
-MODULE_VERSION("3.0");
+MODULE_VERSION("3.3");

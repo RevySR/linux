@@ -392,7 +392,7 @@ source "drivers/gpu/drm/sprd/Kconfig"
 
 source "drivers/gpu/drm/phytium/Kconfig"
 
-source "drivers/gpu/drm/inspur/Kconfig"
+source "drivers/gpu/drm/yhgch/Kconfig"
 
 config DRM_HYPERV
 	tristate "DRM Support for Hyper-V synthetic video device"
