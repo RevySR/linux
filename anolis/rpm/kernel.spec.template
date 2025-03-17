@@ -14,6 +14,29 @@
 %define kernelversion %%DIST_KERNELVERSION%%
 %define pkgrelease %%DIST_PKGRELEASEVERION%%
 
+# Replace '-' with '_' where needed so that variants can use '-' in
+# their name.
+%define uname_suffix() %{lua:
+	local flavour = rpm.expand('%{?1:+%{1}}')
+	flavour = flavour:gsub('-', '_')
+	if flavour ~= '' then
+		print(flavour)
+	end
+}
+
+# This returns the main kernel tied to a debug variant. For example,
+# kernel-debug is the debug version of kernel, so we return an empty
+# string. However, kernel-64k-debug is the debug version of kernel-64k,
+# in this case we need to return "64k", and so on. This is used in
+# macros below where we need this for some uname based requires.
+%define uname_variant() %{lua:
+	local flavour = rpm.expand('%{?1:%{1}}')
+	_, _, main, sub = flavour:find("(%w+)-(.*)")
+	if main then
+		print("+" .. main)
+	end
+}
+
 # allow pkg_release to have configurable %%{?dist} tag
 %define specrelease %{pkgrelease}%{?dist}
 
@@ -34,6 +57,8 @@
 %define with_debug     %{?_without_debug:     0} %{?!_without_debug:     1}
 # kernel-doc
 %define with_doc       %{?_without_doc:       0} %{?!_without_doc:       1}
+# kernel-64k (aarch64 kernel with 64K page_size)
+%define with_arm64_64k %{?_without_arm64_64k: 0} %{?!_without_arm64_64k: 1}
 # kernel-headers
 %define with_headers   %{?_without_headers:   0} %{?!_without_headers:   1}
 # perf
@@ -120,6 +145,11 @@
 %define all_arch_configs %{name}-%{version}-*.config
 %endif
 
+# 64k variants only for aarch64
+%ifnarch aarch64
+%define with_arm64_64k 0
+%endif
+
 # Per-arch tweaks
 
 %ifarch x86_64
@@ -160,12 +190,12 @@
 %define with_perf 0
 %define with_tools 0
 %define with_bpftool 0
+%define with_arm64_64k 0
 %define _enable_debug_packages 0
 %endif
 
 # Architectures we build tools/cpupower on
 %define cpupowerarchs x86_64 aarch64
-
 
 #
 # Packages that need to be installed before the kernel is, because the %%post
@@ -266,7 +296,8 @@ Source40: kernel-%{version}-x86_64-debug.config
 Source43: generate_bls_conf.sh
 Source45: kernel-%{version}-loongarch64.config
 Source46: kernel-%{version}-loongarch64-debug.config
-
+Source47: kernel-%{version}-aarch64-64k.config
+Source48: kernel-%{version}-aarch64-64k-debug.config
 
 # Sources for kernel-tools
 Source2000: cpupower.service
@@ -301,9 +332,9 @@ enterprise customers, etc.
 #
 %define kernel_reqprovconf \
 Provides: %{name} = %{kernelversion}-%{pkg_release}\
-Provides: %{name}-%{_target_cpu} = %{kernelversion}-%{pkg_release}%{?1:+%{1}}\
+Provides: %{name}-%{_target_cpu} = %{kernelversion}-%{pkg_release}%{uname_suffix %{?1:+%{1}}}\
 Provides: kernel-drm-nouveau = 16\
-Provides: %{name}-uname-r = %{KVERREL}%{?variant}%{?1:+%{1}}\
+Provides: %{name}-uname-r = %{KVERREL}%{?variant}%{uname_suffix %{?1:+%{1}}}\
 Requires(pre): %{kernel_prereq}\
 Requires(pre): %{initrd_prereq}\
 Requires(pre): linux-firmware >= 20190516-94.git711d3297\
@@ -520,8 +551,8 @@ This is required to use SystemTap with %{name}%{?1:-%{1}}-%{KVERREL}.\
 Summary: Development package for building kernel modules to match the %{?2:%{2} }kernel\
 Group: System Environment/Kernel\
 Provides: %{name}%{?1:-%{1}}-devel-%{_target_cpu} = %{version}-%{release}\
-Provides: %{name}-devel-%{_target_cpu} = %{version}-%{release}%{?1:+%{1}}\
-Provides: %{name}-devel-uname-r = %{KVERREL}%{?variant}%{?1:+%{1}}\
+Provides: %{name}-devel-%{_target_cpu} = %{version}-%{release}%{uname_suffix %{?1:+%{1}}}\
+Provides: %{name}-devel-uname-r = %{KVERREL}%{?variant}%{uname_suffix %{?1:+%{1}}}\
 Provides: installonlypkg(kernel)\
 AutoReqProv: no\
 Requires(pre): findutils\
@@ -565,6 +596,25 @@ input and output, etc.
 This variant of the kernel has numerous debugging options enabled.
 It should only be installed when trying to gather additional information
 on kernel bugs, as some of these options impact performance noticably.
+
+%if %{with_arm64_64k}
+%define variant_summary The Linux kernel compiled for 64k pagesize usage
+%kernel_variant_package 64k
+%description 64k
+The kernel package contains a variant of the ARM64 Linux kernel using
+a 64K page size.
+%endif
+
+%if %{with_arm64_64k} && %{with_debug}
+%define variant_summary The Linux kernel compiled with extra debugging enabled
+%kernel_variant_package 64k-debug
+%description 64k-debug
+The debug kernel package contains a variant of the ARM64 Linux kernel using
+a 64K page size.
+This variant of the kernel has numerous debugging options enabled.
+It should only be installed when trying to gather additional information
+on kernel bugs, as some of these options impact performance noticably.
+%endif
 
 %prep
 # do a few sanity-checks for --with *only builds
@@ -1057,6 +1107,14 @@ cd linux-%{KVERREL}
 BuildKernel %make_target %kernel_image debug
 %endif
 
+%if %{with_arm64_64k}
+BuildKernel %make_target %kernel_image 64k
+%endif
+
+%if %{with_arm64_64k} && %{with_debug}
+BuildKernel %make_target %kernel_image 64k-debug
+%endif
+
 %if %{with_up}
 BuildKernel %make_target %kernel_image
 %endif
@@ -1378,6 +1436,16 @@ fi\
 %kernel_variant_preun debug
 %kernel_variant_post -v debug
 
+%if %{with_arm64_64k}
+%kernel_variant_preun 64k
+%kernel_variant_post -v 64k
+%endif
+
+%if %{with_debug} && %{with_arm64_64k}
+%kernel_variant_preun 64k-debug
+%kernel_variant_post -v 64k-debug
+%endif
+
 if [ -x /sbin/ldconfig ]
 then
     /sbin/ldconfig -X || exit $?
@@ -1573,6 +1641,14 @@ fi
 
 %kernel_variant_files %{with_up}
 %kernel_variant_files %{with_debug} debug
+
+%if %{with_arm64_64k}
+%kernel_variant_files %{with_arm64_64k} 64k
+%endif
+
+%if %{with_arm64_64k} && %{with_debug}
+%kernel_variant_files %{with_debug} 64k-debug
+%endif
 
 # plz don't put in a version string unless you're going to tag
 # and build.

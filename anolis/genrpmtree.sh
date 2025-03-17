@@ -35,6 +35,10 @@ function do_prep() {
     ${DIST_RPMBUILDDIR_OUTPUT}/SOURCES/kernel-${DIST_KERNELVERSION}-aarch64.config
     cp ${DIST_OUTPUT}/kernel-ANCK-debug-arm64.config \
     ${DIST_RPMBUILDDIR_OUTPUT}/SOURCES/kernel-${DIST_KERNELVERSION}-aarch64-debug.config
+    cp ${DIST_OUTPUT}/kernel-ANCK-arm64-64k.config \
+    ${DIST_RPMBUILDDIR_OUTPUT}/SOURCES/kernel-${DIST_KERNELVERSION}-aarch64-64k.config
+    cp ${DIST_OUTPUT}/kernel-ANCK-debug-arm64-64k.config \
+    ${DIST_RPMBUILDDIR_OUTPUT}/SOURCES/kernel-${DIST_KERNELVERSION}-aarch64-64k-debug.config
     cp ${DIST_OUTPUT}/kernel-ANCK-generic-loongarch.config \
     ${DIST_RPMBUILDDIR_OUTPUT}/SOURCES/kernel-${DIST_KERNELVERSION}-loongarch64.config
     cp ${DIST_OUTPUT}/kernel-ANCK-debug-loongarch.config \

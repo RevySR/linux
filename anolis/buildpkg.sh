@@ -15,6 +15,9 @@ function do_rpmbuild() {
 	#  + modes: official, nightly, dev
 	#TODO: add with-gcov
 	#
+	# DIST_BUILD_ARM64_64K control whether 64k kernels are built,
+	# set DIST_BUILD_ARM64_64K=y to build 64k kernels.
+	#
 	# Matrix
 	#
 	# | BuildMode | KernelName      | GenerateSrpm |
@@ -40,6 +43,12 @@ function do_rpmbuild() {
 		build_opts="$build_opts --with debug"
 	else # assume default
 		build_opts="$build_opts --without debug"
+	fi
+
+	if [ "_${DIST_BUILD_ARM64_64K}" == "_Y" ]; then
+		build_opts="$build_opts --with arm64_64k"
+	else # assume default
+		build_opts="$build_opts --without arm64_64k"
 	fi
 
 	if [ "_${DIST_BUILD_EXTRA}" == "_debuginfo" ]; then
