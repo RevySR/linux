@@ -908,10 +908,6 @@ void mlock_folio(struct folio *folio);
 static inline void mlock_vma_folio(struct folio *folio,
 				struct vm_area_struct *vma)
 {
-	/* TODO Do not mlock slave duplicated page */
-	if (folio_dup_slave(folio))
-		return;
-
 	/*
 	 * The VM_SPECIAL check here serves two purposes.
 	 * 1) VM_IO check prevents migration from double-counting during mlock.

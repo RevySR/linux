@@ -244,6 +244,10 @@ void mlock_folio(struct folio *folio)
 {
 	struct folio_batch *fbatch;
 
+	/* Do not mlock & munlock slave duplicated folio */
+	if (folio_dup_slave(folio))
+		return;
+
 	local_lock(&mlock_fbatch.lock);
 	fbatch = this_cpu_ptr(&mlock_fbatch.fbatch);
 
@@ -291,6 +295,10 @@ void mlock_new_folio(struct folio *folio)
 void munlock_folio(struct folio *folio)
 {
 	struct folio_batch *fbatch;
+
+	/* Do not mlock & munlock slave duplicated folio */
+	if (folio_dup_slave(folio))
+		return;
 
 	local_lock(&mlock_fbatch.lock);
 	fbatch = this_cpu_ptr(&mlock_fbatch.fbatch);
