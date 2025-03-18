@@ -36,7 +36,7 @@
 #define kvm_static_assert(expr, ...) __kvm_static_assert(expr, ##__VA_ARGS__, #expr)
 
 #define KVM_DEV_PATH "/dev/kvm"
-#define KVM_MAX_VCPUS 512
+#define KVM_MAX_VCPUS 1024
 
 #define NSEC_PER_SEC 1000000000L
 
