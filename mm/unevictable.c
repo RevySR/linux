@@ -470,6 +470,17 @@ static void execute_vm_lock(struct work_struct *unused)
 		mm = get_task_mm(tsk);
 		if (mm && !(mm->def_flags & VM_LOCKED)) {
 			VMA_ITERATOR(vmi, mm, 0);
+#ifdef CONFIG_ASYNC_FORK
+			/*
+			 * Before child complete its page table copying, do not
+			 * touch its vmas.
+			 */
+			if (mm->async_fork_mm &&
+			    test_bit(ASYNC_FORK_CHILD, &mm->async_fork_flags)) {
+				need_again = true;
+				goto release_refcnt;
+			}
+#endif
 
 			if (mmap_write_trylock(mm)) {
 				struct vm_area_struct *vma, *prev = NULL;
@@ -519,7 +530,9 @@ static void execute_vm_lock(struct work_struct *unused)
 			__remove_entry(result);
 			kfree(result);
 		}
-
+#ifdef CONFIG_ASYNC_FORK
+release_refcnt:
+#endif
 		if (mm)
 			mmput(mm);
 		if (tsk)
