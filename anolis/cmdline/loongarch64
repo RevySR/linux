@@ -1,3 +1,2 @@
-systemd.unified_cgroup_hierarchy=0
 cgroup.memory=nokmem
 crashkernel=1024M
