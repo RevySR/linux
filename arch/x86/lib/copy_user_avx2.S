@@ -83,7 +83,7 @@ SYM_FUNC_START(copy_user_avx2_pf64_nt_string)
 
     /* if len < 256 jmp to Lless_than_256_bytes_cpy  */
     cmpq $256, %rdx
-    jb	Lless_than_256_bytes_cpy
+    jb	.Lless_than_256_bytes_cpy
 
     /*
      * Check if src is aligned, for 32-bit aligned ones,
@@ -142,7 +142,7 @@ large_block_nt_aligned_cpy:
 
     vzeroupper
     sfence
-    jmp Lless_than_256_bytes_cpy
+    jmp .Lless_than_256_bytes_cpy
 
 large_block_nt_unaligned_cpy:
     PREFETCH(PREFETCH_DISTANCE(%rsi))
@@ -193,7 +193,7 @@ large_block_nt_unaligned_cpy:
 
     vzeroupper
     sfence
-    jmp Lless_than_256_bytes_cpy
+    jmp .Lless_than_256_bytes_cpy
 
 88:
     vzeroupper
@@ -234,21 +234,8 @@ large_block_nt_unaligned_cpy:
     _ASM_EXTABLE_UA(61b, 88b)
     _ASM_EXTABLE_UA(62b, 88b)
     _ASM_EXTABLE_UA(63b, 88b)
-SYM_FUNC_END(copy_user_avx2_pf64_nt_string)
-EXPORT_SYMBOL(copy_user_avx2_pf64_nt_string)
 
-/*
- * If len < 256 bytes, then we use rep mov directly.
- *
- * Input:
- * rdi destination
- * rsi source
- * edx len
- *
- * Output:
- * eax uncopied bytes or 0 if successful.
- */
-SYM_CODE_START_LOCAL(Lless_than_256_bytes_cpy)
+.Lless_than_256_bytes_cpy:
     movl %edx, %ecx
 90:
     rep movsb
@@ -264,7 +251,8 @@ SYM_CODE_START_LOCAL(Lless_than_256_bytes_cpy)
     RET
 
     _ASM_EXTABLE_UA(90b, 99b)
-SYM_CODE_END(Lless_than_256_bytes_cpy)
+SYM_FUNC_END(copy_user_avx2_pf64_nt_string)
+EXPORT_SYMBOL(copy_user_avx2_pf64_nt_string)
 
 /*
  * Try to copy last bytes and clear the rest if needed.
