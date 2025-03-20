@@ -557,6 +557,8 @@ static int tmc_probe(struct amba_device *adev, const struct amba_id *id)
 	} else
 		pm_runtime_put(&adev->dev);
 
+	return 0;
+
 err_delete_cdev:
 	cdev_del(&drvdata->cdev.cdev);
 err_free_tmc_ida:
