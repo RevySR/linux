@@ -5144,7 +5144,8 @@ static int scan_folios(struct lruvec *lruvec, struct scan_control *sc,
 				skipped += delta;
 			}
 
-			if (!--remaining || max(isolated, skipped) >= MIN_LRU_BATCH)
+			if (!--remaining || max(isolated, skipped) >= MIN_LRU_BATCH ||
+			    spin_is_contended(&lruvec->lru_lock))
 				break;
 		}
 
@@ -5153,7 +5154,8 @@ static int scan_folios(struct lruvec *lruvec, struct scan_control *sc,
 			__count_zid_vm_events(PGSCAN_SKIP, zone, skipped);
 		}
 
-		if (!remaining || isolated >= MIN_LRU_BATCH)
+		if (!remaining || isolated >= MIN_LRU_BATCH ||
+		    (scanned && spin_is_contended(&lruvec->lru_lock)))
 			break;
 	}
 
