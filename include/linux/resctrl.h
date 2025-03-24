@@ -214,6 +214,7 @@ struct rdt_resource {
 	unsigned long		fflags;
 	unsigned int		mbm_cfg_mask;
 	bool			cdp_capable;
+	struct rdt_domain	*rdt_domain_list[NR_CPUS];
 };
 
 /*

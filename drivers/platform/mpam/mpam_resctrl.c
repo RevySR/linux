@@ -1197,9 +1197,11 @@ int mpam_resctrl_online_cpu(unsigned int cpu)
 	int i, err;
 	struct mpam_resctrl_dom *dom;
 	struct mpam_resctrl_res *res;
+	struct rdt_resource *r;
 
 	for (i = 0; i < RDT_NUM_RESOURCES; i++) {
 		res = &mpam_resctrl_exports[i];
+		r = &res->resctrl_res;
 
 		if (!res->class)
 			continue;	// dummy_resource;
@@ -1213,6 +1215,7 @@ int mpam_resctrl_online_cpu(unsigned int cpu)
 		dom = mpam_resctrl_alloc_domain(cpu, res);
 		if (IS_ERR(dom))
 			return PTR_ERR(dom);
+		r->rdt_domain_list[i] = &dom->resctrl_dom;
 		err = resctrl_online_domain(&res->resctrl_res, &dom->resctrl_dom);
 		if (err)
 			return err;
@@ -1228,11 +1231,13 @@ int mpam_resctrl_offline_cpu(unsigned int cpu)
 	struct rdt_domain *d;
 	struct mpam_resctrl_res *res;
 	struct mpam_resctrl_dom *dom;
+	struct rdt_resource *r;
 
 	resctrl_offline_cpu(cpu);
 
 	for (i = 0; i < RDT_NUM_RESOURCES; i++) {
 		res = &mpam_resctrl_exports[i];
+		r = &res->resctrl_res;
 
 		if (!res->class)
 			continue;	// dummy resource
@@ -1251,6 +1256,8 @@ int mpam_resctrl_offline_cpu(unsigned int cpu)
 
 		resctrl_offline_domain(&res->resctrl_res, &dom->resctrl_dom);
 		list_del(&d->list);
+
+		r->rdt_domain_list[i] = NULL;
 		kfree(dom);
 	}
 

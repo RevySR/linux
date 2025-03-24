@@ -497,6 +497,7 @@ static void domain_add_cpu(int cpu, struct rdt_resource *r)
 	struct rdt_domain *d;
 	int err;
 
+	BUG_ON(id > NR_CPUS);
 	lockdep_assert_held(&domain_list_lock);
 
 	d = rdt_find_domain(r, id, &add_pos);
@@ -518,6 +519,8 @@ static void domain_add_cpu(int cpu, struct rdt_resource *r)
 
 	d = &hw_dom->d_resctrl;
 	d->id = id;
+	r->rdt_domain_list[id] = d;
+
 	cpumask_set_cpu(cpu, &d->cpu_mask);
 
 	rdt_domain_reconfigure_cdp(r);
@@ -548,6 +551,7 @@ static void domain_remove_cpu(int cpu, struct rdt_resource *r)
 	struct rdt_hw_domain *hw_dom;
 	struct rdt_domain *d;
 
+	BUG_ON(id > NR_CPUS);
 	lockdep_assert_held(&domain_list_lock);
 
 	d = rdt_find_domain(r, id, NULL);
@@ -569,6 +573,7 @@ static void domain_remove_cpu(int cpu, struct rdt_resource *r)
 		 */
 		if (d->plr)
 			d->plr->d = NULL;
+		r->rdt_domain_list[id] = NULL;
 		domain_free(hw_dom);
 
 		return;

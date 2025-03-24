@@ -626,6 +626,16 @@ void cqm_setup_limbo_handler(struct rdt_domain *dom, unsigned long delay_ms,
 		schedule_delayed_work_on(cpu, &dom->cqm_limbo, delay);
 }
 
+bool is_rdt_domain_valid(struct rdt_resource *r, struct rdt_domain *d)
+{
+	int i;
+
+	for (i = 0; i < NR_CPUS; i++)
+		if (r->rdt_domain_list[i] == d)
+			return true;
+	return false;
+}
+
 void mbm_handle_overflow(struct work_struct *work)
 {
 	unsigned long delay = msecs_to_jiffies(MBM_OVERFLOW_INTERVAL);
@@ -646,6 +656,9 @@ void mbm_handle_overflow(struct work_struct *work)
 
 	r = resctrl_arch_get_resource(RDT_RESOURCE_L3);
 	d = container_of(work, struct rdt_domain, mbm_over.work);
+
+	if (!is_rdt_domain_valid(r, d))
+		goto out_unlock;
 
 	list_for_each_entry(prgrp, &rdt_all_groups, rdtgroup_list) {
 		mbm_update(r, d, prgrp->closid, prgrp->mon.rmid);
