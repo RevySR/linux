@@ -2480,9 +2480,6 @@ static void free_unref_page_commit(struct zone *zone, struct per_cpu_pages *pcp,
 	pcp->alloc_factor >>= 1;
 	__count_vm_events(PGFREE, 1 << order);
 
-	if (unlikely(!order && kfence_free_page(page)))
-		return;
-
 	pindex = order_to_pindex(migratetype, order);
 	list_add(&page->pcp_list, &pcp->lists[pindex]);
 	pcp->count += 1 << order;
@@ -2528,6 +2525,9 @@ void free_unref_page(struct page *page, unsigned int order)
 	int migratetype, pcpmigratetype;
 
 	if (!free_unref_page_prepare(page, pfn, order))
+		return;
+
+	if (unlikely(!order && kfence_free_page(page)))
 		return;
 
 	/*
@@ -2577,6 +2577,14 @@ void free_unref_page_list(struct list_head *list)
 			list_del(&page->lru);
 			continue;
 		}
+
+#ifdef CONFIG_KFENCE
+		if (unlikely(PageKfence(page))) {
+			list_del(&page->lru);
+			__kfence_free_page(page, page_to_virt(page));
+			continue;
+		}
+#endif
 
 		/*
 		 * Free isolated pages directly to the allocator, see
