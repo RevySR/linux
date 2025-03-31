@@ -5583,17 +5583,14 @@ static vm_fault_t do_read_fault(struct vm_fault *vmf)
 	if (d_folio) {
 		folio_put(folio);
 		folio_unlock(d_folio);
-		/*
-		 * The dup slave folio must decrease the refcount here to
-		 * match the increase from dup_folio.
-		 */
-		folio_put(d_folio);
 	}
 #endif
 	if (unlikely(ret & (VM_FAULT_ERROR | VM_FAULT_NOPAGE | VM_FAULT_RETRY))) {
 #ifdef CONFIG_DUPTEXT
 		if (!d_folio)
 			folio_put(folio);
+		else
+			folio_put(d_folio);
 #else
 		folio_put(folio);
 #endif
