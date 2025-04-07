@@ -70,6 +70,10 @@ properties:
         items:
           - const: renesas,rzn1-spi
           - const: snps,dw-apb-ssi
+      - description: SOPHGO SG2042 SoC SPI Controller
+        items:
+          - const: sophgo,sg2042-spi
+          - const: snps,dw-apb-ssi
       - description: Intel Keem Bay SPI Controller
         const: intel,keembay-ssi
       - description: Intel Thunder Bay SPI Controller
