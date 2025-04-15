@@ -1188,15 +1188,14 @@ out_unlock:
 	return error;
 }
 
-static int
+static void
 xfs_buffered_write_delalloc_punch(
 	struct inode		*inode,
 	loff_t			offset,
 	loff_t			length,
 	struct iomap            *iomap)
 {
-	return xfs_bmap_punch_delalloc_range(XFS_I(inode), offset,
-			offset + length);
+	xfs_bmap_punch_delalloc_range(XFS_I(inode), offset, offset + length);
 }
 
 static int
@@ -1208,18 +1207,8 @@ xfs_buffered_write_iomap_end(
 	unsigned		flags,
 	struct iomap		*iomap)
 {
-
-	struct xfs_mount	*mp = XFS_M(inode->i_sb);
-	int			error;
-
-	error = iomap_file_buffered_write_punch_delalloc(inode, offset, length,
-			written, flags, iomap,
-			&xfs_buffered_write_delalloc_punch);
-	if (error && !xfs_is_shutdown(mp)) {
-		xfs_alert(mp, "%s: unable to clean up ino 0x%llx",
-			__func__, XFS_I(inode)->i_ino);
-		return error;
-	}
+	iomap_file_buffered_write_punch_delalloc(inode, offset, length, written,
+			flags, iomap, &xfs_buffered_write_delalloc_punch);
 	return 0;
 }
 
