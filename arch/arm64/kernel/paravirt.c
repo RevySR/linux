@@ -200,13 +200,11 @@ static bool kvm_vcpu_is_preempted(int cpu)
 static int pvsched_vcpu_state_dying_cpu(unsigned int cpu)
 {
 	struct pvsched_vcpu_state *reg;
-	struct arm_smccc_res res;
 
 	reg = this_cpu_ptr(&pvsched_vcpu_region);
 	if (!reg)
 		return -EFAULT;
 
-	arm_smccc_1_1_invoke(ARM_SMCCC_HV_PV_SCHED_IPA_RELEASE, &res);
 	memset(reg, 0, sizeof(*reg));
 
 	return 0;
@@ -222,7 +220,7 @@ static int init_pvsched_vcpu_state(unsigned int cpu)
 		return -EFAULT;
 
 	/* Pass the memory address to host via hypercall */
-	arm_smccc_1_1_invoke(ARM_SMCCC_HV_PV_SCHED_IPA_INIT,
+	arm_smccc_1_1_invoke(ARM_SMCCC_HV_PV_LOCK_PREEMPTED,
 			     virt_to_phys(reg), &res);
 
 	return 0;
@@ -254,7 +252,7 @@ static bool has_kvm_pvsched(void)
 		return false;
 
 	arm_smccc_1_1_invoke(ARM_SMCCC_ARCH_FEATURES_FUNC_ID,
-			     ARM_SMCCC_HV_PV_SCHED_FEATURES, &res);
+			     ARM_SMCCC_HV_PV_LOCK_FEATURES, &res);
 
 	return (res.a0 == SMCCC_RET_SUCCESS);
 }
