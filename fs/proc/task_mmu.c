@@ -852,9 +852,6 @@ static void __show_smap(struct seq_file *m, const struct mem_size_stats *mss,
 					mss->swap_pss >> PSS_SHIFT);
 	SEQ_PUT_DEC(" kB\nLocked:         ",
 					mss->pss_locked >> PSS_SHIFT);
-#ifdef CONFIG_DUPTEXT
-	SEQ_PUT_DEC(" kB\nDupText:        ", mss->duptext);
-#endif
 	seq_puts(m, " kB\n");
 }
 
@@ -875,6 +872,11 @@ static int show_smap(struct seq_file *m, void *v)
 	seq_puts(m, " kB\n");
 
 	__show_smap(m, &mss, false);
+
+#ifdef CONFIG_DUPTEXT
+	SEQ_PUT_DEC(" DupText:        ", mss.duptext);
+	seq_puts(m, " kB\n");
+#endif
 
 	seq_printf(m, "THPeligible:    %8u\n",
 		   !!thp_vma_allowable_orders(vma, vma->vm_flags, true, false,
