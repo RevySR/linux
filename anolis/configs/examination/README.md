@@ -4,7 +4,7 @@
 # 目录组织
 - L0-MANDATORY/，用于存放**必须**遵守的 kconfig 规则，如果违反则视为失败
 - L1-RECOMMEND/，用于存放**推荐**遵守的 kconfig 规则，如果违反则会告警
-- {L0-MANDATORY, L1-RECOMMEND}/{x86/arm64/loongarch/sw_64}.config，对应 x86、arm64、龙芯、申威平台的 kconfig 规则
+- {L0-MANDATORY, L1-RECOMMEND}/{x86/arm64/loongarch/sw_64/riscv}.config，对应 x86、arm64、龙芯、申威、riscv平台的 kconfig 规则
 
 # 规则文件说明
 文件的每一行存放一个规则，具体如下：

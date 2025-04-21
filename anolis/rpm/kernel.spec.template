@@ -174,6 +174,14 @@
 %define kernel_image vmlinux
 %endif
 
+%ifarch riscv64
+%define all_arch_configs %{name}-%{version}-riscv64*.config
+%define asmarch riscv
+%define hdrarch riscv
+%define make_target Image
+%define kernel_image arch/riscv/boot/Image
+%endif
+
 # To temporarily exclude an architecture from being built, add it to
 # %%nobuildarches. Do _NOT_ use the ExclusiveArch: line, because if we
 # don't build kernel-headers then the new build system will no longer let
@@ -214,7 +222,7 @@ Release: %{pkg_release}
 Summary: The Linux kernel, based on version %{version}, heavily modified with backports
 # DO NOT CHANGE THE 'ExclusiveArch' LINE TO TEMPORARILY EXCLUDE AN ARCHITECTURE BUILD.
 # SET %%nobuildarches (ABOVE) INSTEAD
-ExclusiveArch: noarch i686 x86_64 aarch64 loongarch64
+ExclusiveArch: noarch i686 x86_64 aarch64 loongarch64 riscv64
 ExclusiveOS: Linux
 
 
@@ -298,6 +306,8 @@ Source45: kernel-%{version}-loongarch64.config
 Source46: kernel-%{version}-loongarch64-debug.config
 Source47: kernel-%{version}-aarch64-64k.config
 Source48: kernel-%{version}-aarch64-64k-debug.config
+Source49: kernel-%{version}-riscv64.config
+Source50: kernel-%{version}-riscv64-debug.config
 
 # Sources for kernel-tools
 Source2000: cpupower.service
@@ -1398,6 +1408,9 @@ grubby --update-kernel /boot/vmlinuz-%{KVERREL}%{?1:+%{1}} --args="%%LOONGARCH_C
 %endif  \
 %ifarch x86_64 \
 grubby --update-kernel /boot/vmlinuz-%{KVERREL}%{?1:+%{1}} --args="%%X86_CMDLINE%%"\
+%endif  \
+%ifarch riscv64 \
+grubby --update-kernel /boot/vmlinuz-%{KVERREL}%{?1:+%{1}} --args="%%RISCV_CMDLINE%%"\
 %endif  \
 %{nil}
 

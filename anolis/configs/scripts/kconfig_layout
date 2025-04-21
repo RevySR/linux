@@ -9,3 +9,5 @@ ANCK/arm64-64k arm64 null generic/default;generic/arm64;64k/arm64
 ANCK/debug-arm64-64k arm64 null generic/default;generic/arm64;64k/arm64;debug/default;debug/arm64
 ANCK/generic-loongarch loongarch null generic/default;generic/loongarch
 ANCK/debug-loongarch loongarch null generic/default;generic/loongarch;debug/default;debug/loongarch
+ANCK/generic-riscv riscv null generic/default;generic/riscv
+ANCK/debug-riscv riscv null generic/default;generic/riscv;debug/default;debug/riscv

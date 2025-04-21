@@ -43,6 +43,10 @@ function do_prep() {
     ${DIST_RPMBUILDDIR_OUTPUT}/SOURCES/kernel-${DIST_KERNELVERSION}-loongarch64.config
     cp ${DIST_OUTPUT}/kernel-ANCK-debug-loongarch.config \
     ${DIST_RPMBUILDDIR_OUTPUT}/SOURCES/kernel-${DIST_KERNELVERSION}-loongarch64-debug.config
+    cp ${DIST_OUTPUT}/kernel-ANCK-generic-riscv.config \
+    ${DIST_RPMBUILDDIR_OUTPUT}/SOURCES/kernel-${DIST_KERNELVERSION}-riscv64.config
+    cp ${DIST_OUTPUT}/kernel-ANCK-debug-riscv.config \
+    ${DIST_RPMBUILDDIR_OUTPUT}/SOURCES/kernel-${DIST_KERNELVERSION}-riscv64-debug.config
 }
 
 do_prep

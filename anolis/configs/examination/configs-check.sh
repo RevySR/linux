@@ -5,7 +5,7 @@
 # usage:
 # - check for only one arch:
 #    ARCH=${arch} make dist-configs-check
-#    available archs are: x86, arm64, loongarch
+#    available archs are: x86, arm64, loongarch, riscv
 # - check for all arch:
 #    make dist-configs-check
 
@@ -42,7 +42,7 @@ function check_arch() {
 }
 
 # arch sw_64 is not available now
-arch_list=("x86" "arm64" "loongarch")
+arch_list=("x86" "arm64" "loongarch" "riscv")
 
 if [ -n "${ARCH}" ]; then
     arch_list=(${ARCH})

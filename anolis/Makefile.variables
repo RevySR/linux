@@ -92,3 +92,6 @@ endif
 ifeq ($(DIST_ARCH),loongarch)
 	DIST_ARCH := loongarch
 endif
+ifeq ($(DIST_ARCH),riscv64)
+	DIST_ARCH := riscv
+endif
