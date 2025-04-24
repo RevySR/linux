@@ -750,7 +750,7 @@ static const struct address_space_operations gfs2_aops = {
 	.bmap = gfs2_bmap,
 	.migrate_folio = filemap_migrate_folio,
 	.is_partially_uptodate = iomap_is_partially_uptodate,
-	.error_remove_page = generic_error_remove_page,
+	.error_remove_folio = generic_error_remove_folio,
 };
 
 static const struct address_space_operations gfs2_jdata_aops = {
@@ -763,7 +763,7 @@ static const struct address_space_operations gfs2_jdata_aops = {
 	.invalidate_folio = gfs2_invalidate_folio,
 	.release_folio = gfs2_release_folio,
 	.is_partially_uptodate = block_is_partially_uptodate,
-	.error_remove_page = generic_error_remove_page,
+	.error_remove_folio = generic_error_remove_folio,
 };
 
 void gfs2_set_aops(struct inode *inode)
