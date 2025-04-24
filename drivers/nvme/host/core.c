@@ -652,10 +652,7 @@ static inline void nvme_clear_nvme_request(struct request *req)
 /* initialize a passthrough request */
 void nvme_init_request(struct request *req, struct nvme_command *cmd)
 {
-	if (req->q->queuedata)
-		req->timeout = NVME_IO_TIMEOUT;
-	else /* no queuedata implies admin queue */
-		req->timeout = NVME_ADMIN_TIMEOUT;
+	req->timeout = req->q->rq_timeout;
 
 	/* passthru commands should let the driver set the SGL flags */
 	cmd->common.flags &= ~NVME_CMD_SGL_ALL;
@@ -4600,10 +4597,11 @@ void nvme_unfreeze(struct nvme_ctrl *ctrl)
 }
 EXPORT_SYMBOL_GPL(nvme_unfreeze);
 
-int nvme_wait_freeze_timeout(struct nvme_ctrl *ctrl, long timeout)
+int nvme_wait_freeze_timeout(struct nvme_ctrl *ctrl)
 {
 	struct nvme_ns *ns;
 	int srcu_idx;
+	long timeout = ctrl->tagset->timeout;
 
 	srcu_idx = srcu_read_lock(&ctrl->srcu);
 	list_for_each_entry_srcu(ns, &ctrl->namespaces, list,
