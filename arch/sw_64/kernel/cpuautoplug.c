@@ -213,7 +213,7 @@ static cputime64_t calc_busy_time(unsigned int cpu)
 	return busy_time;
 }
 
-static inline cputime64_t get_idle_time_jiffy(cputime64_t *wall)
+static inline cputime64_t sw64_get_idle_time_jiffy(cputime64_t *wall)
 {
 	unsigned int cpu;
 	cputime64_t idle_time = 0;
@@ -242,7 +242,7 @@ static inline cputime64_t sw64_get_idle_time(cputime64_t *wall)
 	for_each_online_cpu(cpu) {
 		idle_time += get_cpu_idle_time_us(cpu, wall);
 		if (idle_time == -1ULL)
-			return get_idle_time_jiffy(wall);
+			return sw64_get_idle_time_jiffy(wall);
 	}
 
 	return idle_time;
