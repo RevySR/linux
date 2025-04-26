@@ -232,7 +232,7 @@ int sophgo_pmx_set_mux(struct pinctrl_dev *pctldev,
 
 	configs = group->data;
 
-	for (i = 0; i < group->grp.npins; i++) {
+	for (i = 0; i < group->num_pins; i++) {
 		const struct sophgo_pin *pin = configs[i].pin;
 		u32 value = configs[i].config;
 
@@ -296,8 +296,8 @@ int sophgo_pconf_group_set(struct pinctrl_dev *pctldev, unsigned int gsel,
 							 &value, &mask))
 		return -ENOTSUPP;
 
-	for (i = 0; i < group->grp.npins; i++)
-		sophgo_pin_set_config(pctrl,  group->grp.pins[i], value, mask);
+	for (i = 0; i < group->num_pins; i++)
+		sophgo_pin_set_config(pctrl,  group->pins[i], value, mask);
 
 	return 0;
 }
