@@ -49,9 +49,16 @@
  * @clk_rate_hz:	rate of base clock in HZ
  */
 struct sg2042_pwm_ddata {
+	struct pwm_chip chip;
 	void __iomem *base;
 	unsigned long clk_rate_hz;
+	struct clk *clk;
 };
+
+static struct sg2042_pwm_ddata *pwmchip_to_ddata(struct pwm_chip *chip)
+{
+	return container_of(chip, struct sg2042_pwm_ddata, chip);
+}
 
 /*
  * period_ticks: PERIOD
@@ -69,7 +76,7 @@ static void pwm_sg2042_config(struct sg2042_pwm_ddata *ddata, unsigned int chan,
 static int pwm_sg2042_apply(struct pwm_chip *chip, struct pwm_device *pwm,
 			    const struct pwm_state *state)
 {
-	struct sg2042_pwm_ddata *ddata = pwmchip_get_drvdata(chip);
+	struct sg2042_pwm_ddata *ddata = pwmchip_to_ddata(chip);
 	u32 hlperiod_ticks;
 	u32 period_ticks;
 
@@ -88,7 +95,7 @@ static int pwm_sg2042_apply(struct pwm_chip *chip, struct pwm_device *pwm,
 	period_ticks = min(mul_u64_u64_div_u64(ddata->clk_rate_hz, state->period, NSEC_PER_SEC), U32_MAX);
 	hlperiod_ticks = min(mul_u64_u64_div_u64(ddata->clk_rate_hz, state->duty_cycle, NSEC_PER_SEC), U32_MAX);
 
-	dev_dbg(pwmchip_parent(chip), "chan[%u]: PERIOD=%u, HLPERIOD=%u\n",
+	dev_dbg(chip->dev, "chan[%u]: PERIOD=%u, HLPERIOD=%u\n",
 		pwm->hwpwm, period_ticks, hlperiod_ticks);
 
 	pwm_sg2042_config(ddata, pwm->hwpwm, period_ticks, hlperiod_ticks);
@@ -99,7 +106,7 @@ static int pwm_sg2042_apply(struct pwm_chip *chip, struct pwm_device *pwm,
 static int pwm_sg2042_get_state(struct pwm_chip *chip, struct pwm_device *pwm,
 				struct pwm_state *state)
 {
-	struct sg2042_pwm_ddata *ddata = pwmchip_get_drvdata(chip);
+	struct sg2042_pwm_ddata *ddata = pwmchip_to_ddata(chip);
 	unsigned int chan = pwm->hwpwm;
 	u32 hlperiod_ticks;
 	u32 period_ticks;
@@ -140,44 +147,61 @@ static int pwm_sg2042_probe(struct platform_device *pdev)
 	struct sg2042_pwm_ddata *ddata;
 	struct reset_control *rst;
 	struct pwm_chip *chip;
-	struct clk *clk;
 	int ret;
 
-	chip = devm_pwmchip_alloc(dev, SG2042_PWM_CHANNELNUM, sizeof(*ddata));
-	if (IS_ERR(chip))
-		return PTR_ERR(chip);
-	ddata = pwmchip_get_drvdata(chip);
+	ddata = devm_kzalloc(dev, sizeof(*ddata), GFP_KERNEL);
+	if (IS_ERR(ddata))
+		return PTR_ERR(ddata);
+
+	chip = &ddata->chip;
 
 	ddata->base = devm_platform_ioremap_resource(pdev, 0);
 	if (IS_ERR(ddata->base))
 		return PTR_ERR(ddata->base);
 
-	clk = devm_clk_get_enabled(dev, "apb");
-	if (IS_ERR(clk))
-		return dev_err_probe(dev, PTR_ERR(clk), "Failed to get base clk\n");
+	ddata->clk = devm_clk_get_enabled(dev, "apb");
+	if (IS_ERR(ddata->clk))
+		return dev_err_probe(dev, PTR_ERR(ddata->clk),
+				     "Failed to get base clk\n");
 
-	ret = devm_clk_rate_exclusive_get(dev, clk);
+	ret = clk_rate_exclusive_get(ddata->clk);
 	if (ret)
 		return dev_err_probe(dev, ret, "Failed to get exclusive rate\n");
 
-	ddata->clk_rate_hz = clk_get_rate(clk);
+	ddata->clk_rate_hz = clk_get_rate(ddata->clk);
 	/* period = PERIOD * NSEC_PER_SEC / clk_rate_hz */
 	if (!ddata->clk_rate_hz || ddata->clk_rate_hz > NSEC_PER_SEC)
 		return dev_err_probe(dev, -EINVAL,
 				     "Invalid clock rate: %lu\n", ddata->clk_rate_hz);
 
-	rst = devm_reset_control_get_optional_shared_deasserted(dev, NULL);
+	rst = devm_reset_control_get_optional_shared(dev, NULL);
 	if (IS_ERR(rst))
 		return dev_err_probe(dev, PTR_ERR(rst), "Failed to get reset\n");
 
+	ret = reset_control_deassert(rst);
+	if (ret)
+		return dev_err_probe(dev, ret, "Failed to deassert reset\n");
+
+	chip->dev = dev;
 	chip->ops = &pwm_sg2042_ops;
-	chip->atomic = true;
+	chip->npwm = SG2042_PWM_CHANNELNUM;
 
 	ret = devm_pwmchip_add(dev, chip);
 	if (ret < 0) {
 		reset_control_assert(rst);
 		return dev_err_probe(dev, ret, "Failed to register PWM chip\n");
 	}
+
+	platform_set_drvdata(pdev, ddata);
+
+	return 0;
+}
+
+static int pwm_sg2042_remove(struct platform_device *pdev)
+{
+	struct sg2042_pwm_ddata *ddata = platform_get_drvdata(pdev);
+
+	clk_rate_exclusive_put(ddata->clk);
 
 	return 0;
 }
@@ -188,6 +212,7 @@ static struct platform_driver pwm_sg2042_driver = {
 		.of_match_table = sg2042_pwm_ids,
 	},
 	.probe = pwm_sg2042_probe,
+	.remove = pwm_sg2042_remove,
 };
 module_platform_driver(pwm_sg2042_driver);
 
