@@ -6,6 +6,7 @@
  *  Author:  wangjiahao <wangjiahao@ultrarisc.com>
  */
 
+#include <linux/of.h>
 #include <linux/of_device.h>
 #include "stmmac_platform.h"
 
@@ -26,29 +27,25 @@ static int ultrarisc_eth_plat_probe(struct platform_device *pdev)
 	if (err)
 		return err;
 
-	plat_dat = stmmac_probe_config_dt(pdev, stmmac_res.mac);
+	plat_dat = devm_stmmac_probe_config_dt(pdev, stmmac_res.mac);
 	if (IS_ERR(plat_dat)) {
 		dev_err(&pdev->dev, "dt configuration failed\n");
 		return PTR_ERR(plat_dat);
 	}
 
 	if (!is_of_node(dev->fwnode))
-		goto err;
+		return err;
 
 	err = stmmac_dvr_probe(&pdev->dev, plat_dat, &stmmac_res);
 	if (err)
 		return err;
 
 	return 0;
-err:
-	stmmac_remove_config_dt(pdev, plat_dat);
-	return err;
 }
 
-static int ultrarisc_eth_plat_remove(struct platform_device *pdev)
+static void ultrarisc_eth_plat_remove(struct platform_device *pdev)
 {
 	stmmac_dvr_remove(&pdev->dev);
-	return 0;
 }
 
 static struct platform_driver ultrarisc_eth_plat_driver = {
