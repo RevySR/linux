@@ -303,14 +303,14 @@ static int ur_set_mux(struct pinctrl_dev *pctldev, unsigned int func_selector,
 		return -EINVAL;
 	}
 
-	dev_dbg(pctldev->dev, "get group %s, num_pins=%d\n", ur_group->name, ur_group->num_pins);
+	dev_dbg(pctldev->dev, "get group %s, num_pins=%zu\n", ur_group->grp.name, ur_group->grp.npins);
 	pin_vals = ur_group->data;
 	if (!pin_vals) {
-		dev_err(pctldev->dev, "data of %s is invalid\n", ur_group->name);
+		dev_err(pctldev->dev, "data of %s is invalid\n", ur_group->grp.name);
 		return -EINVAL;
 	}
 
-	for (int i = 0; i < ur_group->num_pins; i++)
+	for (int i = 0; i < ur_group->grp.npins; i++)
 		ur_set_pin_mux(ur_pinctrl, &pin_vals[i]);
 
 	return 0;
@@ -390,7 +390,7 @@ static int ur_pin_config_group_get(struct pinctrl_dev *pctldev,
 	return -EOPNOTSUPP;
 }
 
-int ur_pin_config_group_set(struct pinctrl_dev *pctldev,
+static int ur_pin_config_group_set(struct pinctrl_dev *pctldev,
 			unsigned int selector,
 			unsigned long *configs,
 			unsigned int num_configs)
@@ -407,7 +407,7 @@ int ur_pin_config_group_set(struct pinctrl_dev *pctldev,
 		return -EINVAL;
 	}
 
-	dev_dbg(pctldev->dev, "get pinconf group %s\n", ur_group->name);
+	dev_dbg(pctldev->dev, "get pinconf group %s\n", ur_group->grp.name);
 	pin_conf = (struct ur_pin_val *)configs;
 	for (int i = 0; i < num_configs; i++) {
 		dev_dbg(pctldev->dev, "pinconf[%d], port=%d, pin=%d, conf=0x%x\n",
@@ -494,12 +494,10 @@ free_pinctrl_desc:
 }
 
 
-int ur_pinctrl_remove(struct platform_device *pdev)
+void ur_pinctrl_remove(struct platform_device *pdev)
 {
 	struct ur_pinctrl *ur_pinctrl = platform_get_drvdata(pdev);
 
 	if (ur_pinctrl->pctl_dev)
 		devm_pinctrl_unregister(&pdev->dev, ur_pinctrl->pctl_dev);
-
-	return 0;
 }

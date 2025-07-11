@@ -73,6 +73,6 @@ struct ur_pinctrl {
 };
 
 int ur_pinctrl_probe(struct platform_device *pdev);
-int ur_pinctrl_remove(struct platform_device *pdev);
+void ur_pinctrl_remove(struct platform_device *pdev);
 
 #endif
