@@ -50,7 +50,7 @@ static int ultrarisc_pcie_host_init(struct dw_pcie_rp *pp)
 }
 
 static const struct dw_pcie_host_ops ultrarisc_pcie_host_ops = {
-	.host_init = ultrarisc_pcie_host_init,
+	.init = ultrarisc_pcie_host_init,
 };
 
 static int ultrarisc_pcie_establish_link(struct dw_pcie *pci)
