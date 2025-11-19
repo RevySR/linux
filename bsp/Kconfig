@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: GPL-2.0
+
+menu "Allwinner BSP"
+
+source "platform/Kconfig"
+source "platform/Kconfig.debug"
+source "bsp/drivers/Kconfig"
+source "modules/nand/Kconfig"
+source "modules/gpu/Kconfig"
+
+endmenu
