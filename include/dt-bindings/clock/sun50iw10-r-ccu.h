@@ -1,14 +1,16 @@
-/* SPDX-License-Identifier: GPL-2.0-or-later */
+/* SPDX-License-Identifier: GPL-2.0 */
 /* Copyright(c) 2020 - 2023 Allwinner Technology Co.,Ltd. All rights reserved. */
 /*
- * Copyright (c) 2020 Yangtao Li <frank@allwinnertech.com>
+ * Copyright (c) 2020 frank@allwinnertech.com
  */
 
-#ifndef _DT_BINDINGS_CLK_SUN50I_A100_R_CCU_H_
-#define _DT_BINDINGS_CLK_SUN50I_A100_R_CCU_H_
+#ifndef _DT_BINDINGS_CLK_SUN50IW10_R_CCU_H_
+#define _DT_BINDINGS_CLK_SUN50IW10_R_CCU_H_
 
+#define CLK_CPUS		0
+#define CLK_R_AHB		1
 #define CLK_R_APB1		2
-
+#define CLK_R_APB2		3
 #define CLK_R_APB1_TIMER	4
 #define CLK_R_APB1_TWD		5
 #define CLK_R_APB1_PWM		6
@@ -21,4 +23,4 @@
 #define CLK_R_APB1_BUS_IR	13
 #define CLK_R_AHB_BUS_RTC	14
 
-#endif /* _DT_BINDINGS_CLK_SUN50I_A100_R_CCU_H_ */
+#endif /* _DT_BINDINGS_CLK_SUN50IW10_R_CCU_H_ */
