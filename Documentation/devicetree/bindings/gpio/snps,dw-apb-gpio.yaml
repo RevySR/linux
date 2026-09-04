@@ -20,7 +20,11 @@ properties:
     pattern: "^gpio@[0-9a-f]+$"
 
   compatible:
-    const: snps,dw-apb-gpio
+    oneOf:
+      - const: snps,dw-apb-gpio
+      - items:
+          - const: zhihe,a210-gpio
+          - const: snps,dw-apb-gpio
 
   "#address-cells":
     const: 1
@@ -44,6 +48,12 @@ properties:
       - const: db
 
   resets:
+    minItems: 1
+    items:
+      - description: APB interface reset
+      - description: Debounce logic reset
+
+  power-domains:
     maxItems: 1
 
 patternProperties:
@@ -111,6 +121,21 @@ patternProperties:
       interrupt-controller: [ interrupts ]
 
     additionalProperties: false
+
+allOf:
+  - if:
+      properties:
+        compatible:
+          contains:
+            const: zhihe,a210-gpio
+    then:
+      properties:
+        resets:
+          minItems: 2
+    else:
+      properties:
+        resets:
+          maxItems: 1
 
 additionalProperties: false
 
