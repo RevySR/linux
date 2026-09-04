@@ -122,6 +122,7 @@ properties:
         - tesla,fsd-ethqos
         - thead,th1520-gmac
         - ultrarisc,dp1000-gmac
+        - zhihe,a210-dwmac
 
   reg:
     minItems: 1
