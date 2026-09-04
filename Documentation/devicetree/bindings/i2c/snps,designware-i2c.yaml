@@ -35,6 +35,19 @@ allOf:
       required:
         - clocks
         - clock-names
+  - if:
+      properties:
+        compatible:
+          contains:
+            const: zhihe,a210-i2c
+    then:
+      properties:
+        resets:
+          minItems: 2
+    else:
+      properties:
+        resets:
+          maxItems: 1
 
 properties:
   compatible:
@@ -60,6 +73,7 @@ properties:
               - syna,sl2610-i2c
               - thead,th1520-i2c
               - ultrarisc,dp1000-i2c
+              - zhihe,a210-i2c
           - const: snps,designware-i2c
 
   reg:
@@ -86,6 +100,12 @@ properties:
       - const: pclk
 
   resets:
+    minItems: 1
+    items:
+      - description: I2C controller reset
+      - description: APB interface reset
+
+  power-domains:
     maxItems: 1
 
   clock-frequency:
