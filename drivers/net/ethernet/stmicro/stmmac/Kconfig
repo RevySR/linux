@@ -331,6 +331,18 @@ config DWMAC_ULTRARISC
 	  for the stmmac device driver. This driver is used for the DP1000
 	  GMAC Ethernet controller.
 
+config DWMAC_ZHIHE
+	tristate "Zhihe dwmac support"
+	depends on OF && (ARCH_ZHIHE || COMPILE_TEST)
+	default STMMAC_ETH if ARCH_ZHIHE
+	select MFD_SYSCON
+	help
+	  Support for the Synopsys DesignWare MAC Ethernet controller
+	  found on Zhihe SoCs, through a platform glue layer for the
+	  stmmac driver. It handles the clock and reset configuration
+	  specific to the Zhihe A210 platform. Say Y or M here if you
+	  are building a kernel for a Zhihe A210 based board.
+
 config DWMAC_IMX8
 	tristate "NXP IMX8 DWMAC support"
 	default ARCH_MXC
