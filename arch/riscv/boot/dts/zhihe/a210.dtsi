@@ -1014,6 +1014,98 @@
 			status = "disabled";
 		};
 
+		e16phy: phy@a180000 {
+			compatible = "zhihe,a210-e16-phy";
+			reg = <0 0x0a180000 0 0x1000>,
+			      <0 0x0a100000 0 0x40000>,
+			      <0 0x0a140000 0 0x40000>;
+			reg-names = "sysreg", "phy0", "phy1";
+			#phy-cells = <0>;
+			resets = <&scmi_reset A210_RESET_PCIE_E16PHY_APBS_PRST>,
+				 <&scmi_reset A210_RESET_PCIE_E16PHY_PHY_RST>;
+			reset-names = "apb", "phy";
+
+			status = "disabled";
+		};
+
+		pcie0: pcie@b000000 {
+			device_type = "pci";
+			compatible = "zhihe,a210-pcie";
+			reg = <0 0x0b000000 0 0x800000>,
+			      <0x18 0 0 0x200000>, <0 0x0a004000 0 0x1000>;
+			reg-names = "dbi", "config", "app";
+			ranges = <0x01000000 0 0 0x18 0x200000 0 0x10000>,
+				 <0x02000000 0 0x40100000 0 0x40100000 0 0x800000>,
+				 <0x43000000 0x18 0x300000 0x18 0x300000
+				 0 0x800000>;
+			#address-cells = <3>;
+			bus-range = <0 255>;
+			clocks = <&scmi_clk A210_CLK_PCIE_DM_GEN3X4_AUX_CLK_EN>,
+				 <&scmi_clk A210_CLK_PCIE_DM_GEN3X4_SLV_ACLK_EN>,
+				 <&scmi_clk A210_CLK_PCIE_DM_GEN3X4_MST_ACLK_EN>,
+				 <&scmi_clk A210_CLK_PCIE_DM_GEN3X4_PCLK_EN>;
+			clock-names = "aux", "slv", "mstr", "dbi";
+			#interrupt-cells = <1>;
+			interrupt-map = <0 0 0 1 &intc 140 IRQ_TYPE_LEVEL_HIGH>,
+					<0 0 0 2 &intc 141 IRQ_TYPE_LEVEL_HIGH>,
+					<0 0 0 3 &intc 142 IRQ_TYPE_LEVEL_HIGH>,
+					<0 0 0 4 &intc 143 IRQ_TYPE_LEVEL_HIGH>;
+			interrupt-map-mask = <0 0 0 7>;
+			interrupt-parent = <&intc>;
+			interrupts = <139 IRQ_TYPE_LEVEL_HIGH>;
+			interrupt-names = "msi";
+			max-link-speed = <3>;
+			num-lanes = <4>;
+			phys = <&e16phy>;
+			phy-names = "pcie";
+			power-domains = <&scmi_power A210_PD_PCIE0>;
+			resets = <&scmi_reset A210_RESET_PCIE_DM_GEN3X4_APBS_PRST>,
+				 <&scmi_reset A210_RESET_PCIE_DM_GEN3X4_POWER_UP_RST>;
+			reset-names = "dbi", "pwr";
+			#size-cells = <2>;
+
+			status = "disabled";
+		};
+
+		pcie1: pcie@b800000 {
+			device_type = "pci";
+			compatible = "zhihe,a210-pcie";
+			reg = <0 0x0b800000 0 0x800000>,
+			      <0x1e 0 0 0x20000>, <0 0x0a005000 0 0x1000>;
+			reg-names = "dbi", "config", "app";
+			ranges = <0x01000000 0 0 0x1e 0x200000 0 0x10000>,
+				 <0x02000000 0 0x50100000 0 0x50100000 0 0x800000>,
+				 <0x43000000 0x1e 0x300000 0x1e 0x300000
+				 0 0x800000>;
+			#address-cells = <3>;
+			bus-range = <0 255>;
+			clocks = <&scmi_clk A210_CLK_PCIE_RP_GEN3X1_AUX_CLK_EN>,
+				 <&scmi_clk A210_CLK_PCIE_RP_GEN3X1_SLV_ACLK_EN>,
+				 <&scmi_clk A210_CLK_PCIE_RP_GEN3X1_MST_ACLK_EN>,
+				 <&scmi_clk A210_CLK_PCIE_RP_GEN3X1_PCLK_EN>;
+			clock-names = "aux", "slv", "mstr", "dbi";
+			#interrupt-cells = <1>;
+			interrupt-map = <0 0 0 1 &intc 159 IRQ_TYPE_LEVEL_HIGH>,
+					<0 0 0 2 &intc 160 IRQ_TYPE_LEVEL_HIGH>,
+					<0 0 0 3 &intc 161 IRQ_TYPE_LEVEL_HIGH>,
+					<0 0 0 4 &intc 162 IRQ_TYPE_LEVEL_HIGH>;
+			interrupt-map-mask = <0 0 0 7>;
+			interrupt-parent = <&intc>;
+			interrupts = <158 IRQ_TYPE_LEVEL_HIGH>;
+			interrupt-names = "msi";
+			max-link-speed = <3>;
+			num-lanes = <1>;
+			phys = <&e16phy>;
+			phy-names = "pcie";
+			power-domains = <&scmi_power A210_PD_PCIE1>;
+			resets = <&scmi_reset A210_RESET_PCIE_RP_GEN3X1_APBS_PRST>,
+				 <&scmi_reset A210_RESET_PCIE_RP_GEN3X1_POWER_UP_RST>;
+			reset-names = "dbi", "pwr";
+			#size-cells = <2>;
+
+			status = "disabled";
+		};
+
 		intc: interrupt-controller@18000000 {
 			compatible = "zhihe,a210-plic", "thead,c900-plic";
 			reg = <0x0 0x18000000 0x0 0x04000000>;
