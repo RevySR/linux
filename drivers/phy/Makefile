@@ -55,3 +55,4 @@ obj-$(CONFIG_GENERIC_PHY)		+= allwinner/	\
 					   tegra/	\
 					   ti/		\
 					   xilinx/
+obj-y += zhihe/
