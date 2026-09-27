@@ -44,6 +44,7 @@ properties:
           - enum:
               - spacemit,k3-gpu
               - thead,th1520-gpu
+              - zhihe,a210-gpu
           - const: img,img-bxm-4-64
           - const: img,img-rogue
       - items:
