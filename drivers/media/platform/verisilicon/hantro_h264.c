@@ -208,7 +208,7 @@ assemble_scaling_list(struct hantro_ctx *ctx)
 	const size_t list_len_4x4 = ARRAY_SIZE(scaling->scaling_list_4x4[0]);
 	const size_t list_len_8x8 = ARRAY_SIZE(scaling->scaling_list_8x8[0]);
 	struct hantro_h264_dec_priv_tbl *tbl = ctx->h264_dec.priv.cpu;
-	u32 *dst = (u32 *)tbl->scaling_list;
+	u32 *dst = (u32 *)(tbl->scaling_list + ctx->h264_dec.scaling_list_offset);
 	const u32 *src;
 	int i, j;
 
@@ -435,13 +435,11 @@ done:
 		reflist[write_idx].index = 15;
 }
 
-int hantro_h264_dec_prepare_run(struct hantro_ctx *ctx)
+int hantro_h264_dec_prepare(struct hantro_ctx *ctx)
 {
 	struct hantro_h264_dec_hw_ctx *h264_ctx = &ctx->h264_dec;
 	struct hantro_h264_dec_ctrls *ctrls = &h264_ctx->ctrls;
 	struct v4l2_h264_reflist_builder reflist_builder;
-
-	hantro_start_prepare_run(ctx);
 
 	ctrls->scaling =
 		hantro_get_ctrl(ctx, V4L2_CID_STATELESS_H264_SCALING_MATRIX);
@@ -492,6 +490,12 @@ int hantro_h264_dec_prepare_run(struct hantro_ctx *ctx)
 	return 0;
 }
 
+int hantro_h264_dec_prepare_run(struct hantro_ctx *ctx)
+{
+	hantro_start_prepare_run(ctx);
+	return hantro_h264_dec_prepare(ctx);
+}
+
 void hantro_h264_dec_exit(struct hantro_ctx *ctx)
 {
 	struct hantro_dev *vpu = ctx->dev;
@@ -508,12 +512,12 @@ int hantro_h264_dec_init(struct hantro_ctx *ctx)
 	struct hantro_aux_buf *priv = &h264_dec->priv;
 	struct hantro_h264_dec_priv_tbl *tbl;
 
-	priv->cpu = dma_alloc_coherent(vpu->dev, sizeof(*tbl), &priv->dma,
+	priv->size = sizeof(*tbl) + h264_dec->scaling_list_offset;
+	priv->cpu = dma_alloc_coherent(vpu->dev, priv->size, &priv->dma,
 				       GFP_KERNEL);
 	if (!priv->cpu)
 		return -ENOMEM;
 
-	priv->size = sizeof(*tbl);
 	tbl = priv->cpu;
 	memcpy(tbl->cabac_table, h264_cabac_table, sizeof(tbl->cabac_table));
 

@@ -110,6 +110,7 @@ struct hantro_h264_dec_reflists {
  * @dpb_longterm: DPB long-term
  * @dpb_valid:	  DPB valid
  * @cur_poc:	Current picture order count
+ * @scaling_list_offset: Padding between POC and scaling tables.
  */
 struct hantro_h264_dec_hw_ctx {
 	struct hantro_aux_buf priv;
@@ -119,6 +120,7 @@ struct hantro_h264_dec_hw_ctx {
 	u32 dpb_longterm;
 	u32 dpb_valid;
 	s32 cur_poc;
+	unsigned int scaling_list_offset;
 };
 
 /**
@@ -452,6 +454,7 @@ dma_addr_t hantro_h264_get_ref_buf(struct hantro_ctx *ctx,
 				   unsigned int dpb_idx);
 u16 hantro_h264_get_ref_nbr(struct hantro_ctx *ctx,
 			    unsigned int dpb_idx);
+int hantro_h264_dec_prepare(struct hantro_ctx *ctx);
 int hantro_h264_dec_prepare_run(struct hantro_ctx *ctx);
 int rockchip_vpu2_h264_dec_run(struct hantro_ctx *ctx);
 int hantro_g1_h264_dec_run(struct hantro_ctx *ctx);
