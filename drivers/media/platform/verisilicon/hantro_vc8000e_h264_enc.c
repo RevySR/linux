@@ -15,6 +15,9 @@
 #include "hantro_hw.h"
 #include "hantro_vc8000e_regs.h"
 
+#define VC8000E_RECON_BLOCK_SIZE	64
+#define VC8000E_RECON_DOWNSAMPLE	4
+
 static int
 hantro_vc8000e_h264_enc_state_constrain(struct v4l2_h264_enc *enc,
 					struct v4l2_h264_enc_state *state)
@@ -91,7 +94,9 @@ hantro_vc8000e_h264_enc_rec_buffer_alloc(struct v4l2_h264_enc *enc,
 	if (!rec_buf)
 		goto error;
 
-	rec_buf->luma.size = ctx->src_fmt.width * ctx->src_fmt.height;
+	/* Reference surfaces use 64-pixel blocks even for H.264. */
+	rec_buf->luma.size = ALIGN(ctx->src_fmt.width, VC8000E_RECON_BLOCK_SIZE) *
+			     ALIGN(ctx->src_fmt.height, VC8000E_RECON_BLOCK_SIZE);
 	rec_buf->luma.cpu = dma_alloc_coherent(dev, rec_buf->luma.size,
 					       &rec_buf->luma.dma, GFP_KERNEL);
 	if (!rec_buf->luma.cpu)
@@ -104,7 +109,8 @@ hantro_vc8000e_h264_enc_rec_buffer_alloc(struct v4l2_h264_enc *enc,
 	if (!rec_buf->chroma.cpu)
 		goto error;
 
-	rec_buf->luma_4n.size = width_mbs * 4 * height_mbs * 4;
+	rec_buf->luma_4n.size = rec_buf->luma.size /
+		(VC8000E_RECON_DOWNSAMPLE * VC8000E_RECON_DOWNSAMPLE);
 	rec_buf->luma_4n.cpu = dma_alloc_coherent(dev, rec_buf->luma_4n.size,
 						  &rec_buf->luma_4n.dma,
 						  GFP_KERNEL);
@@ -702,9 +708,14 @@ int hantro_vc8000e_h264_enc_run(struct hantro_ctx *ctx)
 
 	/* Reconstruction */
 
-	regs->swreg212.ref_lu_stride = src_fmt->width * 4;
-	regs->swreg237.ref_ch_stride = src_fmt->width * 4;
-	regs->swreg213.ref_ds_lu_stride = src_fmt->width;
+	if (regs->swreg287.hwreconwritedisablesupport)
+		regs->swreg281.write_recon = 1;
+
+	regs->swreg212.ref_lu_stride =
+		ALIGN(src_fmt->width, VC8000E_RECON_BLOCK_SIZE) * 4;
+	regs->swreg237.ref_ch_stride = regs->swreg212.ref_lu_stride;
+	regs->swreg213.ref_ds_lu_stride =
+		ALIGN(src_fmt->width, VC8000E_RECON_BLOCK_SIZE);
 
 	rec_buf = enc->ref.buffer_current.private_data;
 

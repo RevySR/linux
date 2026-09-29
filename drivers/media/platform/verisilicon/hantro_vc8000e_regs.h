@@ -1922,7 +1922,8 @@ struct hantro_vc8000e_regs {
 	} swreg280;
 
 	struct {
-		u32 reserved			: 2;
+		u32 reserved			: 1;
+		u32 write_recon			: 1;
 		u32 chroma_format_idc		: 2;
 		u32 num_ctb_rows_per_sync_msb	: 6;
 		u32 strm_segment_wr_ptr		: 10;
@@ -1952,7 +1953,9 @@ struct hantro_vc8000e_regs {
 	} swreg286;
 
 	struct {
-		u32 reserved0			: 21;
+		u32 reserved0			: 17;
+		u32 hwreconwritedisablesupport	: 1;
+		u32 reserved2			: 3;
 		u32 hwmonochromesupport		: 1;
 		u32 hwmevertrangeprogramable	: 1;
 		u32 hwctbrcmoremode		: 1;
