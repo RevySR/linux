@@ -100,3 +100,9 @@ struct symbol_counts {
 
 	u32 count_eobs[4][2][2][6][6];
 };
+
+void hantro_vp9_init_counts(struct v4l2_vp9_frame_symbol_counts *counts,
+			    struct symbol_counts *cnts);
+void hantro_vp9_pack_probs(struct hantro_g2_all_probs *all_probs,
+			  const struct v4l2_vp9_frame_context *probs,
+			  const struct v4l2_vp9_segmentation *seg);

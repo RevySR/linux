@@ -618,123 +618,14 @@ config_compound_reference(struct hantro_ctx *ctx,
 	hantro_reg_write(ctx->dev, &vp9_comp_pred_var_ref1, comp_var_ref[1]);
 }
 
-#define INNER_LOOP \
-do {									\
-	for (m = 0; m < ARRAY_SIZE(adaptive->coef[0][0][0][0]); ++m) {	\
-		memcpy(adaptive->coef[i][j][k][l][m],			\
-		       probs->coef[i][j][k][l][m],			\
-		       sizeof(probs->coef[i][j][k][l][m]));		\
-									\
-		adaptive->coef[i][j][k][l][m][3] = 0;			\
-	}								\
-} while (0)
-
-static void config_probs(struct hantro_ctx *ctx, const struct v4l2_ctrl_vp9_frame *dec_params)
+static void config_probs(struct hantro_ctx *ctx,
+			 const struct v4l2_ctrl_vp9_frame *dec_params)
 {
-	struct hantro_vp9_dec_hw_ctx *vp9_ctx = &ctx->vp9_dec;
-	struct hantro_aux_buf *misc = &vp9_ctx->misc;
-	struct hantro_g2_all_probs *all_probs = misc->cpu;
-	struct hantro_g2_probs *adaptive;
-	struct hantro_g2_mv_probs *mv;
-	const struct v4l2_vp9_segmentation *seg = &dec_params->seg;
-	const struct v4l2_vp9_frame_context *probs = &vp9_ctx->probability_tables;
-	int i, j, k, l, m;
+	struct hantro_vp9_dec_hw_ctx *vp9 = &ctx->vp9_dec;
 
-	for (i = 0; i < ARRAY_SIZE(all_probs->kf_y_mode_prob); ++i)
-		for (j = 0; j < ARRAY_SIZE(all_probs->kf_y_mode_prob[0]); ++j) {
-			memcpy(all_probs->kf_y_mode_prob[i][j],
-			       v4l2_vp9_kf_y_mode_prob[i][j],
-			       ARRAY_SIZE(all_probs->kf_y_mode_prob[i][j]));
-
-			all_probs->kf_y_mode_prob_tail[i][j][0] =
-				v4l2_vp9_kf_y_mode_prob[i][j][8];
-		}
-
-	memcpy(all_probs->mb_segment_tree_probs, seg->tree_probs,
-	       sizeof(all_probs->mb_segment_tree_probs));
-
-	memcpy(all_probs->segment_pred_probs, seg->pred_probs,
-	       sizeof(all_probs->segment_pred_probs));
-
-	for (i = 0; i < ARRAY_SIZE(all_probs->kf_uv_mode_prob); ++i) {
-		memcpy(all_probs->kf_uv_mode_prob[i], v4l2_vp9_kf_uv_mode_prob[i],
-		       ARRAY_SIZE(all_probs->kf_uv_mode_prob[i]));
-
-		all_probs->kf_uv_mode_prob_tail[i][0] = v4l2_vp9_kf_uv_mode_prob[i][8];
-	}
-
-	adaptive = &all_probs->probs;
-
-	for (i = 0; i < ARRAY_SIZE(adaptive->inter_mode); ++i) {
-		memcpy(adaptive->inter_mode[i], probs->inter_mode[i],
-		       ARRAY_SIZE(probs->inter_mode[i]));
-
-		adaptive->inter_mode[i][3] = 0;
-	}
-
-	memcpy(adaptive->is_inter, probs->is_inter, sizeof(adaptive->is_inter));
-
-	for (i = 0; i < ARRAY_SIZE(adaptive->uv_mode); ++i) {
-		memcpy(adaptive->uv_mode[i], probs->uv_mode[i],
-		       sizeof(adaptive->uv_mode[i]));
-		adaptive->uv_mode_tail[i][0] = probs->uv_mode[i][8];
-	}
-
-	memcpy(adaptive->tx8, probs->tx8, sizeof(adaptive->tx8));
-	memcpy(adaptive->tx16, probs->tx16, sizeof(adaptive->tx16));
-	memcpy(adaptive->tx32, probs->tx32, sizeof(adaptive->tx32));
-
-	for (i = 0; i < ARRAY_SIZE(adaptive->y_mode); ++i) {
-		memcpy(adaptive->y_mode[i], probs->y_mode[i],
-		       ARRAY_SIZE(adaptive->y_mode[i]));
-
-		adaptive->y_mode_tail[i][0] = probs->y_mode[i][8];
-	}
-
-	for (i = 0; i < ARRAY_SIZE(adaptive->partition[0]); ++i) {
-		memcpy(adaptive->partition[0][i], v4l2_vp9_kf_partition_probs[i],
-		       sizeof(v4l2_vp9_kf_partition_probs[i]));
-
-		adaptive->partition[0][i][3] = 0;
-	}
-
-	for (i = 0; i < ARRAY_SIZE(adaptive->partition[1]); ++i) {
-		memcpy(adaptive->partition[1][i], probs->partition[i],
-		       sizeof(probs->partition[i]));
-
-		adaptive->partition[1][i][3] = 0;
-	}
-
-	memcpy(adaptive->interp_filter, probs->interp_filter,
-	       sizeof(adaptive->interp_filter));
-
-	memcpy(adaptive->comp_mode, probs->comp_mode, sizeof(adaptive->comp_mode));
-
-	memcpy(adaptive->skip, probs->skip, sizeof(adaptive->skip));
-
-	mv = &adaptive->mv;
-
-	memcpy(mv->joint, probs->mv.joint, sizeof(mv->joint));
-	memcpy(mv->sign, probs->mv.sign, sizeof(mv->sign));
-	memcpy(mv->class0_bit, probs->mv.class0_bit, sizeof(mv->class0_bit));
-	memcpy(mv->fr, probs->mv.fr, sizeof(mv->fr));
-	memcpy(mv->class0_hp, probs->mv.class0_hp, sizeof(mv->class0_hp));
-	memcpy(mv->hp, probs->mv.hp, sizeof(mv->hp));
-	memcpy(mv->classes, probs->mv.classes, sizeof(mv->classes));
-	memcpy(mv->class0_fr, probs->mv.class0_fr, sizeof(mv->class0_fr));
-	memcpy(mv->bits, probs->mv.bits, sizeof(mv->bits));
-
-	memcpy(adaptive->single_ref, probs->single_ref, sizeof(adaptive->single_ref));
-
-	memcpy(adaptive->comp_ref, probs->comp_ref, sizeof(adaptive->comp_ref));
-
-	for (i = 0; i < ARRAY_SIZE(adaptive->coef); ++i)
-		for (j = 0; j < ARRAY_SIZE(adaptive->coef[0]); ++j)
-			for (k = 0; k < ARRAY_SIZE(adaptive->coef[0][0]); ++k)
-				for (l = 0; l < ARRAY_SIZE(adaptive->coef[0][0][0]); ++l)
-					INNER_LOOP;
-
-	hantro_write_addr(ctx->dev, G2_VP9_PROBS_ADDR, misc->dma);
+	hantro_vp9_pack_probs(vp9->misc.cpu, &vp9->probability_tables,
+			      &dec_params->seg);
+	hantro_write_addr(ctx->dev, G2_VP9_PROBS_ADDR, vp9->misc.dma);
 }
 
 static void config_counts(struct hantro_ctx *ctx)

@@ -104,56 +104,57 @@ static void *get_eobs1(struct symbol_counts *cnts, int i, int j, int k, int l, i
 
 #define INNER_LOOP \
 	do {										\
-		for (m = 0; m < ARRAY_SIZE(vp9_ctx->cnts.coeff[i][0][0][0]); ++m) {	\
-			vp9_ctx->cnts.coeff[i][j][k][l][m] =				\
+		for (m = 0; m < ARRAY_SIZE(counts->coeff[i][0][0][0]); ++m) {	\
+			counts->coeff[i][j][k][l][m] =				\
 				get_coeffs_arr(cnts, i, j, k, l, m);			\
-			vp9_ctx->cnts.eob[i][j][k][l][m][0] =				\
+			counts->eob[i][j][k][l][m][0] =				\
 				&cnts->count_eobs[i][j][k][l][m];			\
-			vp9_ctx->cnts.eob[i][j][k][l][m][1] =				\
+			counts->eob[i][j][k][l][m][1] =				\
 				get_eobs1(cnts, i, j, k, l, m);				\
 		}									\
 	} while (0)
 
-static void init_v4l2_vp9_count_tbl(struct hantro_ctx *ctx)
+void hantro_vp9_init_counts(struct v4l2_vp9_frame_symbol_counts *counts,
+			    struct symbol_counts *cnts)
 {
-	struct hantro_vp9_dec_hw_ctx *vp9_ctx = &ctx->vp9_dec;
-	struct symbol_counts *cnts = vp9_ctx->misc.cpu + vp9_ctx->ctx_counters_offset;
 	int i, j, k, l, m;
 
-	vp9_ctx->cnts.partition = &cnts->partition_counts;
-	vp9_ctx->cnts.skip = &cnts->mbskip_count;
-	vp9_ctx->cnts.intra_inter = &cnts->intra_inter_count;
-	vp9_ctx->cnts.tx32p = &cnts->tx32x32_count;
+	counts->partition = &cnts->partition_counts;
+	counts->skip = &cnts->mbskip_count;
+	counts->intra_inter = &cnts->intra_inter_count;
+	counts->tx32p = &cnts->tx32x32_count;
 	/*
 	 * g2 hardware uses tx16x16_count[2][3], while the api
 	 * expects tx16p[2][4], so this must be explicitly copied
-	 * into vp9_ctx->cnts.tx16p when passing the data to the
+	 * into counts->tx16p when passing the data to the
 	 * vp9 library function
 	 */
-	vp9_ctx->cnts.tx8p = &cnts->tx8x8_count;
+	counts->tx8p = &cnts->tx8x8_count;
 
-	vp9_ctx->cnts.y_mode = &cnts->sb_ymode_counts;
-	vp9_ctx->cnts.uv_mode = &cnts->uv_mode_counts;
-	vp9_ctx->cnts.comp = &cnts->comp_inter_count;
-	vp9_ctx->cnts.comp_ref = &cnts->comp_ref_count;
-	vp9_ctx->cnts.single_ref = &cnts->single_ref_count;
-	vp9_ctx->cnts.filter = &cnts->switchable_interp_counts;
-	vp9_ctx->cnts.mv_joint = &cnts->mv_counts.joints;
-	vp9_ctx->cnts.sign = &cnts->mv_counts.sign;
-	vp9_ctx->cnts.classes = &cnts->mv_counts.classes;
-	vp9_ctx->cnts.class0 = &cnts->mv_counts.class0;
-	vp9_ctx->cnts.bits = &cnts->mv_counts.bits;
-	vp9_ctx->cnts.class0_fp = &cnts->mv_counts.class0_fp;
-	vp9_ctx->cnts.fp = &cnts->mv_counts.fp;
-	vp9_ctx->cnts.class0_hp = &cnts->mv_counts.class0_hp;
-	vp9_ctx->cnts.hp = &cnts->mv_counts.hp;
+	counts->y_mode = &cnts->sb_ymode_counts;
+	counts->uv_mode = &cnts->uv_mode_counts;
+	counts->comp = &cnts->comp_inter_count;
+	counts->comp_ref = &cnts->comp_ref_count;
+	counts->single_ref = &cnts->single_ref_count;
+	counts->filter = &cnts->switchable_interp_counts;
+	counts->mv_joint = &cnts->mv_counts.joints;
+	counts->sign = &cnts->mv_counts.sign;
+	counts->classes = &cnts->mv_counts.classes;
+	counts->class0 = &cnts->mv_counts.class0;
+	counts->bits = &cnts->mv_counts.bits;
+	counts->class0_fp = &cnts->mv_counts.class0_fp;
+	counts->fp = &cnts->mv_counts.fp;
+	counts->class0_hp = &cnts->mv_counts.class0_hp;
+	counts->hp = &cnts->mv_counts.hp;
 
-	for (i = 0; i < ARRAY_SIZE(vp9_ctx->cnts.coeff); ++i)
-		for (j = 0; j < ARRAY_SIZE(vp9_ctx->cnts.coeff[i]); ++j)
-			for (k = 0; k < ARRAY_SIZE(vp9_ctx->cnts.coeff[i][0]); ++k)
-				for (l = 0; l < ARRAY_SIZE(vp9_ctx->cnts.coeff[i][0][0]); ++l)
+	for (i = 0; i < ARRAY_SIZE(counts->coeff); ++i)
+		for (j = 0; j < ARRAY_SIZE(counts->coeff[i]); ++j)
+			for (k = 0; k < ARRAY_SIZE(counts->coeff[i][0]); ++k)
+				for (l = 0; l < ARRAY_SIZE(counts->coeff[i][0][0]); ++l)
 					INNER_LOOP;
 }
+
+#undef INNER_LOOP
 
 int hantro_vp9_dec_init(struct hantro_ctx *ctx)
 {
@@ -213,7 +214,8 @@ int hantro_vp9_dec_init(struct hantro_ctx *ctx)
 	misc->size = size;
 	memset(misc->cpu, 0, size);
 
-	init_v4l2_vp9_count_tbl(ctx);
+	hantro_vp9_init_counts(&vp9_dec->cnts,
+			       misc->cpu + vp9_dec->ctx_counters_offset);
 
 	return 0;
 
@@ -238,3 +240,120 @@ void hantro_vp9_dec_exit(struct hantro_ctx *ctx)
 	dma_free_coherent(vpu->dev, segment_map->size, segment_map->cpu, segment_map->dma);
 	dma_free_coherent(vpu->dev, tile_edge->size, tile_edge->cpu, tile_edge->dma);
 }
+
+#define INNER_LOOP \
+do {									\
+	for (m = 0; m < ARRAY_SIZE(adaptive->coef[0][0][0][0]); ++m) {	\
+		memcpy(adaptive->coef[i][j][k][l][m],			\
+		       probs->coef[i][j][k][l][m],			\
+		       sizeof(probs->coef[i][j][k][l][m]));		\
+									\
+		adaptive->coef[i][j][k][l][m][3] = 0;			\
+	}								\
+} while (0)
+
+void hantro_vp9_pack_probs(struct hantro_g2_all_probs *all_probs,
+			  const struct v4l2_vp9_frame_context *probs,
+			  const struct v4l2_vp9_segmentation *seg)
+{
+	struct hantro_g2_probs *adaptive;
+	struct hantro_g2_mv_probs *mv;
+	int i, j, k, l, m;
+
+	for (i = 0; i < ARRAY_SIZE(all_probs->kf_y_mode_prob); ++i)
+		for (j = 0; j < ARRAY_SIZE(all_probs->kf_y_mode_prob[0]); ++j) {
+			memcpy(all_probs->kf_y_mode_prob[i][j],
+			       v4l2_vp9_kf_y_mode_prob[i][j],
+			       ARRAY_SIZE(all_probs->kf_y_mode_prob[i][j]));
+
+			all_probs->kf_y_mode_prob_tail[i][j][0] =
+				v4l2_vp9_kf_y_mode_prob[i][j][8];
+		}
+
+	memcpy(all_probs->mb_segment_tree_probs, seg->tree_probs,
+	       sizeof(all_probs->mb_segment_tree_probs));
+
+	memcpy(all_probs->segment_pred_probs, seg->pred_probs,
+	       sizeof(all_probs->segment_pred_probs));
+
+	for (i = 0; i < ARRAY_SIZE(all_probs->kf_uv_mode_prob); ++i) {
+		memcpy(all_probs->kf_uv_mode_prob[i], v4l2_vp9_kf_uv_mode_prob[i],
+		       ARRAY_SIZE(all_probs->kf_uv_mode_prob[i]));
+
+		all_probs->kf_uv_mode_prob_tail[i][0] = v4l2_vp9_kf_uv_mode_prob[i][8];
+	}
+
+	adaptive = &all_probs->probs;
+
+	for (i = 0; i < ARRAY_SIZE(adaptive->inter_mode); ++i) {
+		memcpy(adaptive->inter_mode[i], probs->inter_mode[i],
+		       ARRAY_SIZE(probs->inter_mode[i]));
+
+		adaptive->inter_mode[i][3] = 0;
+	}
+
+	memcpy(adaptive->is_inter, probs->is_inter, sizeof(adaptive->is_inter));
+
+	for (i = 0; i < ARRAY_SIZE(adaptive->uv_mode); ++i) {
+		memcpy(adaptive->uv_mode[i], probs->uv_mode[i],
+		       sizeof(adaptive->uv_mode[i]));
+		adaptive->uv_mode_tail[i][0] = probs->uv_mode[i][8];
+	}
+
+	memcpy(adaptive->tx8, probs->tx8, sizeof(adaptive->tx8));
+	memcpy(adaptive->tx16, probs->tx16, sizeof(adaptive->tx16));
+	memcpy(adaptive->tx32, probs->tx32, sizeof(adaptive->tx32));
+
+	for (i = 0; i < ARRAY_SIZE(adaptive->y_mode); ++i) {
+		memcpy(adaptive->y_mode[i], probs->y_mode[i],
+		       ARRAY_SIZE(adaptive->y_mode[i]));
+
+		adaptive->y_mode_tail[i][0] = probs->y_mode[i][8];
+	}
+
+	for (i = 0; i < ARRAY_SIZE(adaptive->partition[0]); ++i) {
+		memcpy(adaptive->partition[0][i], v4l2_vp9_kf_partition_probs[i],
+		       sizeof(v4l2_vp9_kf_partition_probs[i]));
+
+		adaptive->partition[0][i][3] = 0;
+	}
+
+	for (i = 0; i < ARRAY_SIZE(adaptive->partition[1]); ++i) {
+		memcpy(adaptive->partition[1][i], probs->partition[i],
+		       sizeof(probs->partition[i]));
+
+		adaptive->partition[1][i][3] = 0;
+	}
+
+	memcpy(adaptive->interp_filter, probs->interp_filter,
+	       sizeof(adaptive->interp_filter));
+
+	memcpy(adaptive->comp_mode, probs->comp_mode, sizeof(adaptive->comp_mode));
+
+	memcpy(adaptive->skip, probs->skip, sizeof(adaptive->skip));
+
+	mv = &adaptive->mv;
+
+	memcpy(mv->joint, probs->mv.joint, sizeof(mv->joint));
+	memcpy(mv->sign, probs->mv.sign, sizeof(mv->sign));
+	memcpy(mv->class0_bit, probs->mv.class0_bit, sizeof(mv->class0_bit));
+	memcpy(mv->fr, probs->mv.fr, sizeof(mv->fr));
+	memcpy(mv->class0_hp, probs->mv.class0_hp, sizeof(mv->class0_hp));
+	memcpy(mv->hp, probs->mv.hp, sizeof(mv->hp));
+	memcpy(mv->classes, probs->mv.classes, sizeof(mv->classes));
+	memcpy(mv->class0_fr, probs->mv.class0_fr, sizeof(mv->class0_fr));
+	memcpy(mv->bits, probs->mv.bits, sizeof(mv->bits));
+
+	memcpy(adaptive->single_ref, probs->single_ref, sizeof(adaptive->single_ref));
+
+	memcpy(adaptive->comp_ref, probs->comp_ref, sizeof(adaptive->comp_ref));
+
+	for (i = 0; i < ARRAY_SIZE(adaptive->coef); ++i)
+		for (j = 0; j < ARRAY_SIZE(adaptive->coef[0]); ++j)
+			for (k = 0; k < ARRAY_SIZE(adaptive->coef[0][0]); ++k)
+				for (l = 0; l < ARRAY_SIZE(adaptive->coef[0][0][0]); ++l)
+					INNER_LOOP;
+
+}
+
+#undef INNER_LOOP
