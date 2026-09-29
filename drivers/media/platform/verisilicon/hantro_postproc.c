@@ -200,6 +200,10 @@ static unsigned int hantro_postproc_buffer_size(struct hantro_ctx *ctx)
 {
 	unsigned int buf_size;
 
+	if (ctx->dev->variant->postproc_ops &&
+	    ctx->dev->variant->postproc_ops->buffer_size)
+		return ctx->dev->variant->postproc_ops->buffer_size(ctx);
+
 	buf_size = ctx->ref_fmt.plane_fmt[0].sizeimage;
 	if (ctx->vpu_src_fmt->fourcc == V4L2_PIX_FMT_H264_SLICE)
 		buf_size += hantro_h264_mv_size(ctx->ref_fmt.width,
@@ -234,7 +238,8 @@ static int hantro_postproc_alloc(struct hantro_ctx *ctx, int index)
 	 * The buffers on this queue are meant as intermediate
 	 * buffers for the decoder, so no mapping is needed.
 	 */
-	priv->attrs = DMA_ATTR_NO_KERNEL_MAPPING;
+	priv->attrs = ctx->dev->variant->postproc_ops->cpu_access ?
+		      0 : DMA_ATTR_NO_KERNEL_MAPPING;
 	priv->cpu = dma_alloc_attrs(vpu->dev, buf_size, &priv->dma,
 				    GFP_KERNEL, priv->attrs);
 	if (!priv->cpu)
