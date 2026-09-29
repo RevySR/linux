@@ -1151,7 +1151,7 @@ static int hantro_probe(struct platform_device *pdev)
 	 * Until then we assume the MSB portion of buffers' base addresses is
 	 * always 0 due to this masking operation.
 	 */
-	ret = dma_set_coherent_mask(vpu->dev, DMA_BIT_MASK(32));
+	ret = dma_set_mask_and_coherent(vpu->dev, DMA_BIT_MASK(32));
 	if (ret) {
 		dev_err(vpu->dev, "Could not set DMA coherent mask.\n");
 		return ret;
