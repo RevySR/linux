@@ -737,6 +737,9 @@ static const struct of_device_id of_hantro_match[] = {
 	{ .compatible = "st,stm32mp25-vdec", .data = &stm32mp25_vdec_variant, },
 	{ .compatible = "st,stm32mp25-venc", .data = &stm32mp25_venc_variant, },
 #endif
+#ifdef CONFIG_VIDEO_HANTRO_TH1520
+	{ .compatible = "thead,th1520-vc8000d", .data = &th1520_vdec_variant },
+#endif
 	{ /* sentinel */ }
 };
 MODULE_DEVICE_TABLE(of, of_hantro_match);

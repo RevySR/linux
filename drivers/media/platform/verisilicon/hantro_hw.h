@@ -596,4 +596,6 @@ void hantro_g2_check_idle(struct hantro_dev *vpu);
 void hantro_g2_reset(struct hantro_ctx *ctx);
 irqreturn_t hantro_g2_irq(int irq, void *dev_id);
 
+extern const struct hantro_variant th1520_vdec_variant;
+
 #endif /* HANTRO_HW_H_ */

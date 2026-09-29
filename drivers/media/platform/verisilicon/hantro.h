@@ -30,6 +30,7 @@
 struct hantro_ctx;
 struct hantro_codec_ops;
 struct hantro_postproc_ops;
+struct hantro_vc8000_ctx;
 
 #define HANTRO_JPEG_ENCODER	BIT(0)
 #define HANTRO_ENCODERS		0x0000ffff
@@ -244,6 +245,7 @@ struct hantro_dev {
  * @vp8_dec:		VP8-decoding context.
  * @hevc_dec:		HEVC-decoding context.
  * @vp9_dec:		VP9-decoding context.
+ * @vc8000_dec:		VC8000D backend context.
  * @av1_dec:		AV1-decoding context.
  */
 struct hantro_ctx {
@@ -265,6 +267,7 @@ struct hantro_ctx {
 	int bit_depth;
 
 	const struct hantro_codec_ops *codec_ops;
+	struct hantro_vc8000_ctx *vc8000_dec;
 	struct hantro_postproc_ctx postproc;
 	bool need_postproc;
 
@@ -351,6 +354,14 @@ struct hantro_decoded_buffer {
 	union {
 		struct hantro_vp9_decoded_buffer_info vp9;
 		struct hantro_av1_decoded_buffer_info av1;
+		struct {
+			u32 width;
+			u32 height;
+			u32 chroma_offset;
+			u32 mv_offset;
+			u32 stride;
+			bool valid;
+		} vc8000_vp9;
 	};
 };
 
