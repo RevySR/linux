@@ -376,14 +376,18 @@ struct hantro_postproc_ops {
  *		to indicate that a pair of buffers is ready and the hardware
  *		should be programmed and started. Returns zero if OK, a
  *		negative value in error cases.
+ * @check_result: Validate output before publishing a successful job.
  * @done:	Read back processing results and additional data from hardware.
+ * @abort:	Discard codec state after a failed job, optional.
  * @reset:	Reset the hardware in case of a timeout.
  */
 struct hantro_codec_ops {
 	int (*init)(struct hantro_ctx *ctx);
 	void (*exit)(struct hantro_ctx *ctx);
 	int (*run)(struct hantro_ctx *ctx);
+	int (*check_result)(struct hantro_ctx *ctx);
 	void (*done)(struct hantro_ctx *ctx);
+	void (*abort)(struct hantro_ctx *ctx);
 	void (*reset)(struct hantro_ctx *ctx);
 };
 

@@ -72,6 +72,9 @@ static void hantro_job_finish_no_pm(struct hantro_ctx *ctx,
 	if (WARN_ON(!dst))
 		return;
 
+	if (result == VB2_BUF_STATE_ERROR && ctx->codec_ops->abort)
+		ctx->codec_ops->abort(ctx);
+
 	src->sequence = ctx->sequence_out++;
 	dst->sequence = ctx->sequence_cap++;
 
@@ -106,6 +109,9 @@ void hantro_irq_done(struct hantro_dev *vpu,
 	 * and will take care of finishing the job.
 	 */
 	if (cancel_delayed_work(&vpu->watchdog_work)) {
+		if (result == VB2_BUF_STATE_DONE && ctx->codec_ops->check_result &&
+		    ctx->codec_ops->check_result(ctx))
+			result = VB2_BUF_STATE_ERROR;
 		if (result == VB2_BUF_STATE_DONE && ctx->codec_ops->done)
 			ctx->codec_ops->done(ctx);
 		hantro_job_finish(ctx, result);
