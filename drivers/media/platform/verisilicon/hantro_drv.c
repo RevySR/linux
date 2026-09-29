@@ -884,6 +884,7 @@ static const struct of_device_id of_hantro_match[] = {
 #endif
 #ifdef CONFIG_VIDEO_HANTRO_TH1520
 	{ .compatible = "thead,th1520-vc8000d", .data = &th1520_vdec_variant },
+	{ .compatible = "thead,th1520-vc8000e", .data = &th1520_venc_variant },
 #endif
 	{ /* sentinel */ }
 };

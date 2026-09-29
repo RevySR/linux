@@ -76,4 +76,5 @@ config VIDEO_HANTRO_TH1520
 	depends on ARCH_THEAD || COMPILE_TEST
 	default y
 	help
-	  Enable support for the VC8000D video decoder on TH1520 SoCs.
+	  Enable support for the VC8000D decoder and VC8000E encoder on
+	  TH1520 SoCs.

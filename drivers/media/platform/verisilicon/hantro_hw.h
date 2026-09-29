@@ -624,5 +624,6 @@ void hantro_g2_reset(struct hantro_ctx *ctx);
 irqreturn_t hantro_g2_irq(int irq, void *dev_id);
 
 extern const struct hantro_variant th1520_vdec_variant;
+extern const struct hantro_variant th1520_venc_variant;
 
 #endif /* HANTRO_HW_H_ */

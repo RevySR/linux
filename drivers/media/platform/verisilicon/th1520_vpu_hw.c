@@ -4,6 +4,7 @@
 #include <linux/slab.h>
 
 #include "hantro_vc8000.h"
+#include "hantro_vc8000e_regs.h"
 
 #define VC8000_ASIC_ID		0x8001
 #define VC8000_BUILD_ID		0x1f88
@@ -157,4 +158,90 @@ const struct hantro_variant th1520_vdec_variant = {
 	.reg_names = th1520_vdec_reg_names,
 	.num_regs = ARRAY_SIZE(th1520_vdec_reg_names),
 	.late_postproc = true,
+};
+
+#define VC8000E_ASIC_ID		0x8000
+#define VC8000E_FRAMESIZE \
+	{ .min_width = FMT_MIN_WIDTH, .max_width = 3840, \
+	  .step_width = MB_DIM, .min_height = FMT_MIN_HEIGHT, \
+	  .max_height = 2160, .step_height = MB_DIM }
+
+static const struct hantro_fmt th1520_venc_fmts[] = {
+	{
+		.fourcc = V4L2_PIX_FMT_NV12,
+		.codec_mode = HANTRO_MODE_NONE,
+		.enc_fmt = ROCKCHIP_VPU_ENC_FMT_YUV420SP,
+		.frmsize = VC8000E_FRAMESIZE,
+	}, {
+		.fourcc = V4L2_PIX_FMT_H264_SLICE,
+		.codec_mode = HANTRO_MODE_H264_ENC,
+		.max_depth = 2,
+		.frmsize = VC8000E_FRAMESIZE,
+	},
+};
+
+static int th1520_venc_runtime_resume(struct hantro_dev *vpu)
+{
+	u32 asic;
+	int ret;
+
+	ret = clk_bulk_enable(vpu->variant->num_clocks, vpu->clocks);
+	if (ret)
+		return ret;
+	ret = reset_control_deassert(vpu->resets);
+	if (ret)
+		goto out;
+
+	asic = vepu_read(vpu, 0);
+	if (asic >> 16 != VC8000E_ASIC_ID) {
+		dev_err(vpu->dev, "unsupported encoder: ASIC %#x\n", asic);
+		ret = -ENODEV;
+		goto out;
+	}
+
+	/* Restore physical DMA addressing after the encoder domain powers on. */
+	writel(0, vpu->reg_bases[1] + VC8000_MMU_CONTROL);
+out:
+	clk_bulk_disable(vpu->variant->num_clocks, vpu->clocks);
+	return ret;
+}
+
+static void th1520_venc_reset(struct hantro_ctx *ctx)
+{
+	struct hantro_dev *vpu = ctx->dev;
+
+	/* Stop the encoder before its buffers can be released. */
+	vepu_write(vpu, 0, HANTRO_VC8000E_SWREG_OFFSET(swreg5));
+	reset_control_reset(vpu->resets);
+	writel(0, vpu->reg_bases[1] + VC8000_MMU_CONTROL);
+}
+
+static const struct hantro_codec_ops th1520_venc_codec_ops[] = {
+	[HANTRO_MODE_H264_ENC] = {
+		.init = hantro_vc8000e_h264_enc_init,
+		.exit = hantro_vc8000e_h264_enc_exit,
+		.run = hantro_vc8000e_h264_enc_run,
+		.done = hantro_vc8000e_h264_enc_done,
+		.reset = th1520_venc_reset,
+	},
+};
+
+static const struct hantro_irq th1520_venc_irqs[] = {
+	{ NULL, hantro_vc8000e_irq },
+};
+
+static const char * const th1520_venc_reg_names[] = { "encoder", "mmu" };
+
+const struct hantro_variant th1520_venc_variant = {
+	.enc_fmts = th1520_venc_fmts,
+	.num_enc_fmts = ARRAY_SIZE(th1520_venc_fmts),
+	.codec = HANTRO_H264_ENCODER,
+	.codec_ops = th1520_venc_codec_ops,
+	.runtime_resume = th1520_venc_runtime_resume,
+	.irqs = th1520_venc_irqs,
+	.num_irqs = ARRAY_SIZE(th1520_venc_irqs),
+	.clk_names = th1520_vdec_clk_names,
+	.num_clocks = ARRAY_SIZE(th1520_vdec_clk_names),
+	.reg_names = th1520_venc_reg_names,
+	.num_regs = ARRAY_SIZE(th1520_venc_reg_names),
 };
