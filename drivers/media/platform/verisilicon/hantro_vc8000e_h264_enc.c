@@ -57,8 +57,8 @@ hantro_vc8000e_h264_enc_state_constrain(struct v4l2_h264_enc *enc,
 		encode->idr_pic_id &= 1;
 
 	/* The hardware doesn't allow overriding the active list numbers. */
-	if (encode->flags & V4L2_H264_SLICE_FLAG_NUM_REF_IDX_ACTIVE_OVERRIDE) {
-		encode->flags &= ~V4L2_H264_SLICE_FLAG_NUM_REF_IDX_ACTIVE_OVERRIDE;
+	if (encode->flags & V4L2_H264_ENCODE_FLAG_NUM_REF_IDX_ACTIVE_OVERRIDE) {
+		encode->flags &= ~V4L2_H264_ENCODE_FLAG_NUM_REF_IDX_ACTIVE_OVERRIDE;
 
 		encode->num_ref_idx_l0_active_minus1 = 0;
 		encode->num_ref_idx_l1_active_minus1 = 0;
@@ -123,8 +123,21 @@ hantro_vc8000e_h264_enc_rec_buffer_alloc(struct v4l2_h264_enc *enc,
 	return 0;
 
 error:
-	if (rec_buf)
+	if (rec_buf) {
+		if (rec_buf->colctbs.cpu)
+			dma_free_coherent(dev, rec_buf->colctbs.size,
+					  rec_buf->colctbs.cpu, rec_buf->colctbs.dma);
+		if (rec_buf->luma_4n.cpu)
+			dma_free_coherent(dev, rec_buf->luma_4n.size,
+					  rec_buf->luma_4n.cpu, rec_buf->luma_4n.dma);
+		if (rec_buf->chroma.cpu)
+			dma_free_coherent(dev, rec_buf->chroma.size,
+					  rec_buf->chroma.cpu, rec_buf->chroma.dma);
+		if (rec_buf->luma.cpu)
+			dma_free_coherent(dev, rec_buf->luma.size,
+					  rec_buf->luma.cpu, rec_buf->luma.dma);
 		kfree(rec_buf);
+	}
 
 	return -ENOMEM;
 }
@@ -850,7 +863,10 @@ int hantro_vc8000e_h264_enc_run(struct hantro_ctx *ctx)
 
 	/* Register write */
 
-	hantro_io_copy(vpu->enc_base, regs, sizeof(*regs));
+	/* The register interface requires ordered 32-bit accesses. */
+	for (unsigned int offset = 0; offset < sizeof(*regs); offset += 4)
+		vepu_write(vpu, get_unaligned((u32 *)((u8 *)regs + offset)),
+			   offset);
 
 	hantro_end_prepare_run(ctx);
 

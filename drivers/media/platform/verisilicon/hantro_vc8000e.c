@@ -17,6 +17,8 @@ irqreturn_t hantro_vc8000e_irq(int irq, void *dev_id)
 	enum vb2_buffer_state state;
 
 	hantro_vc8000e_swreg_read(vpu, regs, swreg1);
+	if (!regs->swreg1.irq)
+		return IRQ_NONE;
 
 	pr_debug("+ hantro-vc8000e-irq: %#x\n",
 		 regs_buffer[HANTRO_VC8000E_SWREG_OFFSET(swreg1) / 4]);
@@ -43,7 +45,7 @@ irqreturn_t hantro_vc8000e_irq(int irq, void *dev_id)
 	hantro_vc8000e_swreg_read(vpu, regs, swreg4);
 	hantro_vc8000e_swreg_read(vpu, regs, swreg5);
 
-	/* Make sure to disble the encoder on error for safety. */
+	/* Make sure to disable the encoder on error for safety. */
 	if ((regs->swreg1.bus_error_status ||
 	     regs->swreg1.buffer_full ||
 	     regs->swreg1.timeout ||
