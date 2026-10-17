@@ -405,6 +405,66 @@
 			#reset-cells = <1>;
 		};
 
+		uart0: serial@2014000 {
+			compatible = "snps,dw-apb-uart";
+			reg = <0x0 0x02014000 0x0 0x400>;
+			clocks = <&clk_peri PERI1_UART0_SCLK_EN>,
+				 <&clk_peri PERI1_UART0_PCLK_EN>;
+			clock-names = "baudclk", "apb_pclk";
+			interrupt-parent = <&intc>;
+			interrupts = <321 IRQ_TYPE_LEVEL_HIGH>;
+			reg-io-width = <4>;
+			reg-shift = <2>;
+			resets = <&rst_peri1 PERI1_UART0_PRST>;
+
+			status = "disabled";
+		};
+
+		uart1: serial@2015000 {
+			compatible = "snps,dw-apb-uart";
+			reg = <0x0 0x02015000 0x0 0x1000>;
+			clocks = <&clk_peri PERI1_UART1_SCLK_EN>,
+				 <&clk_peri PERI1_UART1_PCLK_EN>;
+			clock-names = "baudclk", "apb_pclk";
+			interrupt-parent = <&intc>;
+			interrupts = <322 IRQ_TYPE_LEVEL_HIGH>;
+			reg-io-width = <4>;
+			reg-shift = <2>;
+			resets = <&rst_peri1 PERI1_UART1_PRST>;
+
+			status = "disabled";
+		};
+
+		uart2: serial@2016000 {
+			compatible = "snps,dw-apb-uart";
+			reg = <0x0 0x02016000 0x0 0x1000>;
+			clocks = <&clk_peri PERI1_UART2_SCLK_EN>,
+				 <&clk_peri PERI1_UART2_PCLK_EN>;
+			clock-names = "baudclk", "apb_pclk";
+			interrupt-parent = <&intc>;
+			interrupts = <323 IRQ_TYPE_LEVEL_HIGH>;
+			reg-io-width = <4>;
+			reg-shift = <2>;
+			resets = <&rst_peri1 PERI1_UART2_PRST>;
+
+			status = "disabled";
+		};
+
+		uart3: serial@2017000 {
+			compatible = "snps,dw-apb-uart";
+			reg = <0x0 0x02017000 0x0 0x1000>;
+			clocks = <&clk_peri PERI1_UART3_SCLK_EN>,
+				 <&clk_peri PERI1_UART3_PCLK_EN>;
+			clock-names = "baudclk", "apb_pclk";
+			interrupt-parent = <&intc>;
+			interrupts = <324 IRQ_TYPE_LEVEL_HIGH>;
+			reg-io-width = <4>;
+			reg-shift = <2>;
+			resets = <&rst_peri1 PERI1_UART3_PRST>;
+
+			status = "disabled";
+		};
+
 		peri1_padctrl: pinctrl@2026000 {
 			compatible = "zhihe,a210-peri1-pinctrl";
 			reg = <0x0 0x02026000 0x0 0x1000>;
@@ -418,6 +478,96 @@
 			compatible = "zhihe,a210-peri2-reset";
 			reg = <0x0 0x08400400 0x0 0x200>;
 			#reset-cells = <1>;
+		};
+
+		uart4: serial@8401000 {
+			compatible = "snps,dw-apb-uart";
+			reg = <0x0 0x08401000 0x0 0x400>;
+			clocks = <&clk_peri PERI2_UART4_SCLK_EN>,
+				 <&clk_peri PERI2_UART4_PCLK_EN>;
+			clock-names = "baudclk", "apb_pclk";
+			interrupt-parent = <&intc>;
+			interrupts = <325 IRQ_TYPE_LEVEL_HIGH>;
+			reg-io-width = <4>;
+			reg-shift = <2>;
+			resets = <&rst_peri2 PERI2_UART4_PRST>;
+
+			status = "disabled";
+		};
+
+		uart5: serial@8402000 {
+			compatible = "snps,dw-apb-uart";
+			reg = <0x0 0x08402000 0x0 0x1000>;
+			clocks = <&clk_peri PERI2_UART5_SCLK_EN>,
+				 <&clk_peri PERI2_UART5_PCLK_EN>;
+			clock-names = "baudclk", "apb_pclk";
+			interrupt-parent = <&intc>;
+			interrupts = <326 IRQ_TYPE_LEVEL_HIGH>;
+			reg-io-width = <4>;
+			reg-shift = <2>;
+			resets = <&rst_peri2 PERI2_UART5_PRST>;
+
+			status = "disabled";
+		};
+
+		uart6: serial@8403000 {
+			compatible = "snps,dw-apb-uart";
+			reg = <0x0 0x08403000 0x0 0x1000>;
+			clocks = <&clk_peri PERI2_UART6_SCLK_EN>,
+				 <&clk_peri PERI2_UART6_PCLK_EN>;
+			clock-names = "baudclk", "apb_pclk";
+			interrupt-parent = <&intc>;
+			interrupts = <327 IRQ_TYPE_LEVEL_HIGH>;
+			reg-io-width = <4>;
+			reg-shift = <2>;
+			resets = <&rst_peri2 PERI2_UART6_PRST>;
+
+			status = "disabled";
+		};
+
+		uart7: serial@8404000 {
+			compatible = "snps,dw-apb-uart";
+			reg = <0x0 0x08404000 0x0 0x1000>;
+			clocks = <&clk_peri PERI2_UART7_SCLK_EN>,
+				 <&clk_peri PERI2_UART7_PCLK_EN>;
+			clock-names = "baudclk", "apb_pclk";
+			interrupt-parent = <&intc>;
+			interrupts = <328 IRQ_TYPE_LEVEL_HIGH>;
+			reg-io-width = <4>;
+			reg-shift = <2>;
+			resets = <&rst_peri2 PERI2_UART7_PRST>;
+
+			status = "disabled";
+		};
+
+		uart8: serial@8405000 {
+			compatible = "snps,dw-apb-uart";
+			reg = <0x0 0x08405000 0x0 0x1000>;
+			clocks = <&clk_peri PERI2_UART8_SCLK_EN>,
+				 <&clk_peri PERI2_UART8_PCLK_EN>;
+			clock-names = "baudclk", "apb_pclk";
+			interrupt-parent = <&intc>;
+			interrupts = <329 IRQ_TYPE_LEVEL_HIGH>;
+			reg-io-width = <4>;
+			reg-shift = <2>;
+			resets = <&rst_peri2 PERI2_UART8_PRST>;
+
+			status = "disabled";
+		};
+
+		uart9: serial@8406000 {
+			compatible = "snps,dw-apb-uart";
+			reg = <0x0 0x08406000 0x0 0x1000>;
+			clocks = <&clk_peri PERI2_UART9_SCLK_EN>,
+				 <&clk_peri PERI2_UART9_PCLK_EN>;
+			clock-names = "baudclk", "apb_pclk";
+			interrupt-parent = <&intc>;
+			interrupts = <330 IRQ_TYPE_LEVEL_HIGH>;
+			reg-io-width = <4>;
+			reg-shift = <2>;
+			resets = <&rst_peri2 PERI2_UART9_PRST>;
+
+			status = "disabled";
 		};
 
 		peri2_padctrl: pinctrl@8411000 {
