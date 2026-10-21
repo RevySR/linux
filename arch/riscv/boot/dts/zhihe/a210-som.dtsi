@@ -327,6 +327,8 @@
 &clk {
 	assigned-clock-rates = <2359296000>, <2528870400>;
 	assigned-clocks = <&clk AUDIO0_PLL_FOUTVCO>, <&clk AUDIO1_PLL_FOUTVCO>;
+	protected-clocks = <C908_PLL_FOUTVCO C920_PLL_FOUTVCO
+			   C908_CPU_TO_CDE_CLK_MUX C920_CPU_TO_CDE_CLK_MUX>;
 };
 
 &adc {
