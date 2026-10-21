@@ -464,6 +464,60 @@
 			};
 		};
 
+		power_usb: power-domain-usb {
+			compatible = "zhihe,a210-pd-usb";
+			ranges;
+			#address-cells = <2>;
+			clocks = <&clk_usb USB_SS_AXI_MST_PCLK_EN>,
+				 <&clk_usb USB_SS_AXI_MST_ACLK_EN>,
+				 <&clk_usb USB_SS_DFMU_IOMMU_PTW_ACLK_EN>,
+				 <&clk_usb USB_SS_DFMU_ACLK_EN>,
+				 <&clk_usb USB_SS_DFMU_PCLK_EN>,
+				 <&clk_usb USB31_SLV_AFENCE_ACLK_EN>,
+				 <&clk_usb USB20_X2H_HCLK>,
+				 <&clk_usb USB20_X2H_ACLK>,
+				 <&clk_usb USB20_SLV_AFENCE_ACLK>,
+				 <&clk_usb USB20_H2P_HCLK>,
+				 <&clk_usb USB20_AHB_SLV_HCLK>,
+				 <&clk_usb USB20_SYSREG_PCLK>,
+				 <&clk_usb USB20_A2X0_HCLK>,
+				 <&clk_usb USB20_A2X0_ACLK>,
+				 <&clk_usb USB20_A2X1_HCLK>,
+				 <&clk_usb USB20_A2X1_ACLK>,
+				 <&clk_usb USB20_BUS_CLK>;
+			#power-domain-cells = <0>;
+			power-domains = <&power_top>;
+			resets = <&rst_usb USB_DFMU_PRST>,
+				 <&rst_usb USB_DFMU_ARST>,
+				 <&rst_usb USB_AXI4_MST_ARST>,
+				 <&rst_usb USB_AXI4_MST_PRST>,
+				 <&rst_usb USB_USB31_SLV_AFENCE_ARST>,
+				 <&rst_usb USB_USB31_APBS_PRST>,
+				 <&rst_usb USB_USB20_BLK_X2H_HRST>,
+				 <&rst_usb USB_USB20_BLK_X2H_ARST>,
+				 <&rst_usb USB_USB20_SLV_AFENCE_ARST>,
+				 <&rst_usb USB_USB20_BLK_H2P_HRST>,
+				 <&rst_usb USB_USB20_BLK_AHB_SLV_HRST>,
+				 <&rst_usb USB_USB20_BLK_AXI_MST_ARST>,
+				 <&rst_usb USB_USB20_BLK_USB2_SYSREG_PRST>,
+				 <&rst_usb USB_USB20_BLK_USB2_WRAP0_PRST>,
+				 <&rst_usb USB_USB20_BLK_USB2_WRAP1_PRST>,
+				 <&rst_usb USB_USB20_BLK_A2X0_HRST>,
+				 <&rst_usb USB_USB20_BLK_A2X0_ARST>,
+				 <&rst_usb USB_USB20_BLK_A2X1_HRST>,
+				 <&rst_usb USB_USB20_BLK_A2X1_ARST>;
+			#size-cells = <2>;
+
+			usb_ccu: clock-controller@0 {
+				compatible = "zhihe,a210-ccu";
+				reg = <0x00 0x08004400 0x0 0x2c>,
+				      <0x00 0x08006000 0x0 0x2c>,
+				      <0x00 0x08006400 0x0 0x2c>;
+				zhihe,ccu-dly-time = <0x5e 0x5e 0x5e>;
+				zhihe,ccu-dly-time-step = <0x3 0x3 0x3>;
+			};
+		};
+
 		power_pcie0: power-domain-pcie0@a006200 {
 			compatible = "zhihe,a210-pd-pcie0";
 			reg = <0 0x0a006200 0 0x200>,
@@ -917,6 +971,85 @@
 		gmac1_sys: syscon@211f000 {
 			compatible = "zhihe,a210-gmac-syscon", "syscon";
 			reg = <0x00 0x0211f000 0x0 0x20>;
+		};
+
+		clk_usb: clock-controller@8000000 {
+			compatible = "zhihe,a210-usb-clk";
+			reg = <0 0x08000000 0 0x24>;
+			reg-names = "usb-clk-en";
+			#clock-cells = <1>;
+		};
+
+		rst_usb: reset-controller@8000100 {
+			compatible = "zhihe,a210-usb-reset";
+			reg = <0x00 0x08000100 0x0 0x100>;
+			#reset-cells = <1>;
+		};
+
+		usb2_0: usb@8200000 {
+			compatible = "zhihe,a210-usb", "snps,dwc2";
+			reg = <0 0x08200000 0 0x40000>;
+			clocks = <&clk_usb USB20_WRAP0_HCLK>;
+			clock-names = "otg";
+			g-np-tx-fifo-size = <16>;
+			g-rx-fifo-size = <275>;
+			g-tx-fifo-size = <256 128 128 64 64 32>;
+			interrupt-parent = <&intc>;
+			interrupts = <181 IRQ_TYPE_LEVEL_HIGH>;
+			maximum-speed = "high-speed";
+			phys = <&usb2_phy0>;
+			phy-names = "usb2-phy";
+			power-domains = <&power_usb>;
+			resets = <&rst_usb USB_USB20_BLK_USB2_WRAP0_HRST>;
+			reset-names = "dwc2";
+
+			status = "disabled";
+		};
+
+		usb2_1: usb@8240000 {
+			compatible = "zhihe,a210-usb", "snps,dwc2";
+			reg = <0 0x08240000 0 0x40000>;
+			clocks = <&clk_usb USB20_WRAP1_HCLK>;
+			clock-names = "otg";
+			g-np-tx-fifo-size = <16>;
+			g-rx-fifo-size = <275>;
+			g-tx-fifo-size = <256 128 128 64 64 32>;
+			interrupt-parent = <&intc>;
+			interrupts = <182 IRQ_TYPE_LEVEL_HIGH>;
+			maximum-speed = "high-speed";
+			phys = <&usb2_phy1>;
+			phy-names = "usb2-phy";
+			power-domains = <&power_usb>;
+			resets = <&rst_usb USB_USB20_BLK_USB2_WRAP1_HRST>;
+			reset-names = "dwc2";
+
+			status = "disabled";
+		};
+
+		usb2_phy0: phy@8300000 {
+			compatible = "zhihe,a210-usb2-phy";
+			reg = <0 0x08300000 0 0x20>;
+			clocks = <&clk_usb USB20_SYSREG_PCLK>;
+			clock-names = "apb";
+			#phy-cells = <0>;
+			power-domains = <&power_usb>;
+			resets = <&rst_usb USB_USB20_BLK_USB0_PHY_PON_RESET>;
+			reset-names = "phy";
+
+			status = "disabled";
+		};
+
+		usb2_phy1: phy@8301000 {
+			compatible = "zhihe,a210-usb2-phy1";
+			reg = <0 0x08301000 0 0x20>;
+			clocks = <&clk_usb USB20_SYSREG_PCLK>;
+			clock-names = "apb";
+			#phy-cells = <0>;
+			power-domains = <&power_usb>;
+			resets = <&rst_usb USB_USB20_BLK_USB1_PHY_PON_RESET>;
+			reset-names = "phy";
+
+			status = "disabled";
 		};
 
 		rst_peri2: reset-controller@8400400 {
