@@ -22,6 +22,17 @@
 		stdout-path = "serial4:115200n8";
 	};
 
+	hdmi-connector {
+		compatible = "hdmi-connector";
+		type = "a";
+
+		port {
+			hdmi_con_in: endpoint {
+				remote-endpoint = <&hdmi_out>;
+			};
+		};
+	};
+
 	vdd_1v8: regulator-1v8 {
 		compatible = "regulator-fixed";
 		regulator-always-on;
@@ -55,6 +66,18 @@
 
 &peri2_padctrl {
 	status = "okay";
+
+	hdmi_pins: hdmi-0 {
+		hdmi-pins {
+			bias-disable;
+			drive-strength = <3>;
+			function = "hdmi";
+			input-enable;
+			input-schmitt-disable;
+			pins = "GPIO2_25", "GPIO2_30", "GPIO2_31";
+			slew-rate = <0>;
+		};
+	};
 
 	i2c4_pins: i2c4-0 {
 		bus-pins {
@@ -242,4 +265,19 @@
 &uart5 {
 	pinctrl-0 = <&uart5_pins>;
 	pinctrl-names = "default";
+};
+
+&dc8200 {
+	status = "okay";
+};
+
+&hdmi {
+	pinctrl-0 = <&hdmi_pins>;
+	pinctrl-names = "default";
+
+	status = "okay";
+};
+
+&hdmi_out {
+	remote-endpoint = <&hdmi_con_in>;
 };
