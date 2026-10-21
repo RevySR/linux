@@ -1276,6 +1276,11 @@
 			status = "disabled";
 		};
 
+		peri2_ctrl: syscon@8400000 {
+			compatible = "zhihe,a210-peri2-ctrl", "syscon";
+			reg = <0 0x08400000 0 0x8>;
+		};
+
 		rst_peri2: reset-controller@8400400 {
 			compatible = "zhihe,a210-peri2-reset";
 			reg = <0x0 0x08400400 0x0 0x200>;
@@ -1368,6 +1373,24 @@
 			reg-io-width = <4>;
 			reg-shift = <2>;
 			resets = <&rst_peri2 PERI2_UART9_PRST>;
+
+			status = "disabled";
+		};
+
+		i2s1: i2s@840a000 {
+			compatible = "zhihe,a210-i2s";
+			reg = <0 0x0840a000 0 0x1000>;
+			clocks = <&clk_peri PERI2_I2S1_PCLK_EN>,
+				 <&clk_peri PERI2_I2S1_SRC_CLK_EN>;
+			clock-names = "pclk", "mclk";
+			dmas = <&dmac0 38>, <&dmac0 37>;
+			dma-names = "tx", "rx";
+			interrupt-parent = <&intc>;
+			interrupts = <302 IRQ_TYPE_LEVEL_HIGH>;
+			power-domains = <&power_top>;
+			resets = <&rst_peri2 PERI2_I2S1_PRST>;
+			#sound-dai-cells = <0>;
+			zhihe,syscon = <&peri2_ctrl 0 0x1>;
 
 			status = "disabled";
 		};
