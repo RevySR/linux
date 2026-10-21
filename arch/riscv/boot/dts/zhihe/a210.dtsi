@@ -375,6 +375,14 @@
 		#power-domain-cells = <0>;
 		#size-cells = <2>;
 
+		power_dmac: power-domain-dmac {
+			compatible = "zhihe,a210-pd-dmac";
+			clocks = <&clk_peri AXI_PERI3_MST_ACLK_EN>,
+				 <&clk_peri AXI_PERI3_MST_PCLK_EN>;
+			#power-domain-cells = <0>;
+			power-domains = <&power_top>;
+		};
+
 		power_emmc: power-domain-emmc {
 			compatible = "zhihe,a210-pd-emmc";
 			clocks = <&clk_peri AXI_PERI3_MST_ACLK_EN>,
@@ -512,6 +520,35 @@
 			power-domains = <&power_emmc>;
 
 			status = "disabled";
+		};
+
+		dmac0: dma-controller@520000 {
+			compatible = "zhihe,a210-axi-dma", "snps,axi-dma-1.01a";
+			reg = <0x00 0x00520000 0x0 0x4000>;
+			clocks = <&clk_peri PERI3_DMAC_ACLK_EN>,
+				 <&clk_peri PERI3_DMAC_HCLK_EN>;
+			clock-names = "core-clk", "cfgr-clk";
+			#dma-cells = <1>;
+			dma-channels = <16>;
+			interrupt-parent = <&intc>;
+			interrupts = <264 IRQ_TYPE_LEVEL_HIGH>;
+			power-domains = <&power_dmac>;
+			resets = <&rst_peri3 PERI3_DMAC_ARST>,
+				 <&rst_peri3 PERI3_DMAC_HRST>;
+			snps,axi-max-burst-len = <4>;
+			snps,block-size = <65536 65536 65536 65536
+					  65536 65536 65536 65536
+					  65536 65536 65536 65536
+					  65536 65536 65536 65536>;
+			snps,data-width = <4>;
+			snps,dma-masters = <1>;
+			snps,priority = <0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0>;
+		};
+
+		rst_peri3: reset-controller@540400 {
+			compatible = "zhihe,a210-peri3-reset";
+			reg = <0x00 0x00540400 0x0 0x200>;
+			#reset-cells = <1>;
 		};
 
 		peri3_padctrl: pinctrl@542000 {
@@ -665,6 +702,8 @@
 			clocks = <&clk_peri PERI1_I2C0_IC_CLK_EN>,
 				 <&clk_peri PERI1_I2C0_PCLK_EN>;
 			clock-names = "ref", "pclk";
+			dmas = <&dmac0 21>, <&dmac0 20>;
+			dma-names = "tx", "rx";
 			interrupt-parent = <&intc>;
 			interrupts = <293 IRQ_TYPE_LEVEL_HIGH>;
 			resets = <&rst_peri1 PERI1_I2C0_RST>;
@@ -1056,6 +1095,33 @@
 					      <&cpu6_intc 7>,
 					      <&cpu7_intc 3>,
 					      <&cpu7_intc 7>;
+		};
+
+		rst_tee: reset-controller@27420400 {
+			compatible = "zhihe,a210-tee-reset";
+			reg = <0x00 0x27420400 0x0 0x200>;
+			#reset-cells = <1>;
+		};
+
+		dmac1: dma-controller@27540000 {
+			compatible = "zhihe,a210-axi-dma", "snps,axi-dma-1.01a";
+			reg = <0x00 0x27540000 0x0 0x4000>;
+			clocks = <&clk_peri TEE_DMAC_CLKEN>,
+				 <&clk_peri TEE_DMAC_CLKEN>;
+			clock-names = "core-clk", "cfgr-clk";
+			#dma-cells = <1>;
+			dma-channels = <4>;
+			interrupt-parent = <&intc>;
+			interrupts = <259 IRQ_TYPE_LEVEL_HIGH>;
+			resets = <&rst_tee TEE_DMAC_ARST>,
+				 <&rst_tee TEE_DMAC_HRST>;
+			snps,axi-max-burst-len = <16>;
+			snps,block-size = <65536 65536 65536 65536>;
+			snps,data-width = <4>;
+			snps,dma-masters = <1>;
+			snps,priority = <0 0 0 0>;
+
+			status = "disabled";
 		};
 
 		aon_gpio0: gpio@30841000 {
