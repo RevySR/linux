@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause)
 
 #include "a210-som.dtsi"
+#include <dt-bindings/gpio/gpio.h>
 
 / {
 	aliases {
@@ -19,10 +20,42 @@
 	chosen {
 		stdout-path = "serial4:115200n8";
 	};
+
+	vdd_1v8: regulator-1v8 {
+		compatible = "regulator-fixed";
+		regulator-always-on;
+		regulator-max-microvolt = <1800000>;
+		regulator-min-microvolt = <1800000>;
+		regulator-name = "vdd-1v8";
+		vin-supply = <&vdd_3v3>;
+	};
+
+	vdd_3v3: regulator-3v3 {
+		compatible = "regulator-fixed";
+		enable-active-high;
+		gpio = <&ao_gpio0 26 GPIO_ACTIVE_HIGH>;
+		regulator-always-on;
+		regulator-boot-on;
+		regulator-max-microvolt = <3300000>;
+		regulator-min-microvolt = <3300000>;
+		regulator-name = "vdd-3v3";
+	};
 };
 
 &peri2_padctrl {
 	status = "okay";
+
+	i2c4_pins: i2c4-0 {
+		bus-pins {
+			pins = "GPIO2_26", "GPIO2_27";
+			function = "i2c4";
+			bias-disable;
+			drive-strength = <25>;
+			input-enable;
+			input-schmitt-enable;
+			slew-rate = <1>;
+		};
+	};
 
 	uart4_pins: uart4-0 {
 		rx-pins {
@@ -51,5 +84,85 @@
 	pinctrl-0 = <&uart4_pins>;
 	pinctrl-names = "default";
 
+	status = "okay";
+};
+
+&ao_gpio0 {
+	power-5v-en-hog {
+		gpio-hog;
+		gpios = <29 GPIO_ACTIVE_HIGH>;
+		line-name = "power_5v_en";
+		output-high;
+	};
+};
+
+&aon_padctrl {
+	status = "okay";
+
+	aoi2c1_pins: aoi2c1-0 {
+		bus-pins {
+			pins = "AOI2C1_SCL", "AOI2C1_SDA";
+			function = "aoi2c1";
+			bias-disable;
+			drive-strength = <25>;
+			input-enable;
+			input-schmitt-enable;
+			slew-rate = <1>;
+		};
+	};
+};
+
+&aoi2c1 {
+	clock-frequency = <100000>;
+	pinctrl-0 = <&aoi2c1_pins>;
+	pinctrl-names = "default";
+
+	status = "okay";
+
+	aw9535_0: gpio@20 {
+		compatible = "awinic,aw9535";
+		reg = <0x20>;
+		#gpio-cells = <2>;
+		gpio-controller;
+		vcc-supply = <&vdd_1v8>;
+	};
+
+	aw9535_1: gpio@21 {
+		compatible = "awinic,aw9535";
+		reg = <0x21>;
+		#gpio-cells = <2>;
+		gpio-controller;
+		vcc-supply = <&vdd_1v8>;
+	};
+};
+
+&aw9535_1 {
+	download-vbus-off-hog {
+		gpio-hog;
+		gpios = <9 GPIO_ACTIVE_HIGH>;
+		line-name = "download-vbus-off";
+		output-low;
+	};
+};
+
+&i2c4 {
+	clock-frequency = <400000>;
+	pinctrl-0 = <&i2c4_pins>;
+	pinctrl-names = "default";
+
+	status = "okay";
+
+	rtc: rtc@51 {
+		compatible = "nxp,pcf8563";
+		reg = <0x51>;
+		#clock-cells = <0>;
+	};
+};
+
+&peri1_padctrl {
+	status = "okay";
+};
+
+&peri3_padctrl {
 	status = "okay";
 };
