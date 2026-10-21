@@ -92,9 +92,50 @@
 		regulator-min-microvolt = <5000000>;
 		regulator-name = "usb-c-vbus";
 	};
+
+	reg_wifi_1v8: regulator-wifi-1v8 {
+		compatible = "regulator-fixed";
+		enable-active-high;
+		gpio = <&aw9535_1 12 GPIO_ACTIVE_HIGH>;
+		regulator-always-on;
+		regulator-max-microvolt = <1800000>;
+		regulator-min-microvolt = <1800000>;
+		regulator-name = "wifi-bt-1v8";
+		startup-delay-us = <1000>;
+	};
+
+	reg_wifi_3v3: regulator-wifi-3v3 {
+		compatible = "regulator-fixed";
+		enable-active-high;
+		gpio = <&aw9535_1 11 GPIO_ACTIVE_HIGH>;
+		regulator-always-on;
+		regulator-max-microvolt = <3300000>;
+		regulator-min-microvolt = <3300000>;
+		regulator-name = "wifi-bt-3v3";
+		startup-delay-us = <1000>;
+	};
+
+	wifi_pwrseq: wifi-pwrseq {
+		compatible = "mmc-pwrseq-simple";
+		clocks = <&rtc>;
+		clock-names = "ext_clock";
+		pinctrl-0 = <&wifi_enable_pins>;
+		pinctrl-names = "default";
+		post-power-on-delay-ms = <200>;
+		reset-gpios = <&gpio0 14 GPIO_ACTIVE_LOW>;
+	};
 };
 
 &peri1_padctrl {
+	bt_wake_pins: bt-wake-0 {
+		gpio-pins {
+			pins = "GPIO0_17";
+			bias-disable;
+			drive-strength = <7>;
+			input-disable;
+		};
+	};
+
 	fan_enable_pins: fan-enable-0 {
 		gpio-pins {
 			pins = "GPIO0_30";
@@ -125,6 +166,15 @@
 			input-enable;
 			input-schmitt-enable;
 			slew-rate = <0>;
+		};
+	};
+
+	wifi_enable_pins: wifi-enable-0 {
+		gpio-pins {
+			pins = "GPIO0_14";
+			bias-disable;
+			drive-strength = <7>;
+			input-disable;
 		};
 	};
 };
@@ -262,6 +312,15 @@
 };
 
 &aon_padctrl {
+	bt_enable_pins: bt-enable-0 {
+		gpio-pins {
+			pins = "AOGPIO1_4";
+			bias-disable;
+			drive-strength = <7>;
+			input-disable;
+		};
+	};
+
 	usb_c_irq_pins: usb-c-irq-0 {
 		irq-pins {
 			pins = "AOGPIO0_28";
@@ -269,5 +328,39 @@
 			input-enable;
 			input-schmitt-enable;
 		};
+	};
+};
+
+&sdio {
+	bus-width = <4>;
+	cap-sd-highspeed;
+	cap-sdio-irq;
+	keep-power-in-suspend;
+	max-frequency = <196608000>;
+	mmc-pwrseq = <&wifi_pwrseq>;
+	no-mmc;
+	no-sd;
+	non-removable;
+	pinctrl-0 = <&sdio_pins>;
+	pinctrl-names = "default";
+	sd-uhs-sdr104;
+	vmmc-supply = <&reg_wifi_3v3>;
+	vqmmc-supply = <&reg_wifi_1v8>;
+
+	status = "okay";
+};
+
+&uart5 {
+	uart-has-rtscts;
+
+	status = "okay";
+
+	bluetooth {
+		compatible = "realtek,rtl8822cs-bt";
+		device-wake-gpios = <&gpio0 17 GPIO_ACTIVE_HIGH>;
+		enable-gpios = <&ao_gpio1 4 GPIO_ACTIVE_HIGH>;
+		host-wake-gpios = <&ao_gpio0 30 GPIO_ACTIVE_HIGH>;
+		pinctrl-0 = <&bt_enable_pins>, <&bt_wake_pins>;
+		pinctrl-names = "default";
 	};
 };

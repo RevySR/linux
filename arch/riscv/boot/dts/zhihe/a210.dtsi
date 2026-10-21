@@ -403,6 +403,19 @@
 			status = "disabled";
 		};
 
+		sdio: mmc@510000 {
+			compatible = "zhihe,a210-dwcmshc";
+			reg = <0 0x00510000 0 0x10000>;
+			clocks = <&scmi_clk A210_CLK_PERI3_EMMC_SDIO_REF_CLK_CG_EN>,
+				 <&scmi_clk A210_CLK_PERI3_SDIO_HCLK_EN>;
+			clock-names = "core", "bus";
+			interrupt-parent = <&intc>;
+			interrupts = <337 IRQ_TYPE_LEVEL_HIGH>;
+			power-domains = <&scmi_power A210_PD_SDIO>;
+
+			status = "disabled";
+		};
+
 		dmac0: dma-controller@520000 {
 			compatible = "zhihe,a210-axi-dma", "snps,axi-dma-1.01a";
 			reg = <0x00 0x00520000 0x0 0x4000>;
