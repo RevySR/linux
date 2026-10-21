@@ -5,6 +5,7 @@
 
 / {
 	aliases {
+		mmc1 = &sdio;
 		serial0 = &uart0;
 		serial1 = &uart1;
 		serial2 = &uart2;
@@ -85,6 +86,28 @@
 			input-disable;
 			input-schmitt-disable;
 			pins = "GPIO2_0";
+			slew-rate = <0>;
+		};
+	};
+
+	uart5_pins: uart5-1 {
+		rx-pins {
+			bias-disable;
+			drive-strength = <1>;
+			function = "uart5";
+			input-enable;
+			input-schmitt-enable;
+			pins = "GPIO2_19", "GPIO3_9";
+			slew-rate = <0>;
+		};
+
+		tx-pins {
+			bias-disable;
+			drive-strength = <3>;
+			function = "uart5";
+			input-disable;
+			input-schmitt-disable;
+			pins = "GPIO2_18", "GPIO3_10";
 			slew-rate = <0>;
 		};
 	};
@@ -175,6 +198,24 @@
 
 &peri3_padctrl {
 	status = "okay";
+
+	sdio_pins: sdio-0 {
+		clock-pins {
+			bias-disable;
+			pins = "SDIO_CLK";
+		};
+
+		data-pins {
+			bias-pull-up;
+			pins = "SDIO_CMD", "SDIO_DAT0", "SDIO_DAT1",
+			       "SDIO_DAT2", "SDIO_DAT3";
+		};
+
+		sdio-pins {
+			function = "sdio";
+			groups = "sdio";
+		};
+	};
 };
 
 &usb2_phy0 {
@@ -196,4 +237,9 @@
 	vbus-supply = <&reg_usb_host>;
 
 	status = "okay";
+};
+
+&uart5 {
+	pinctrl-0 = <&uart5_pins>;
+	pinctrl-names = "default";
 };

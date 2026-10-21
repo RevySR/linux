@@ -164,3 +164,11 @@
 
 	status = "okay";
 };
+
+&sdio {
+	bus-width = <4>;
+	pinctrl-0 = <&sdio_pins>;
+	pinctrl-names = "default";
+
+	status = "disabled";
+};
