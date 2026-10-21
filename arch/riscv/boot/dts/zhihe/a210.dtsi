@@ -754,6 +754,81 @@
 			reg = <0x00 0x0211f000 0x0 0x20>;
 		};
 
+		dc8200: display@6400000 {
+			compatible = "zhihe,a210-dc8200", "verisilicon,dc";
+			reg = <0 0x06400000 0 0x10000>;
+			clocks = <&scmi_clk A210_CLK_VO_DPUC_CLK_EN>,
+				 <&scmi_clk A210_CLK_VO_DPU_ACLK_EN>,
+				 <&scmi_clk A210_CLK_VO_DPU_HCLK_EN>,
+				 <&scmi_clk A210_CLK_VO_CH0_PIXCLK_EN>,
+				 <&scmi_clk A210_CLK_VO_CH1_PIXCLK_EN>;
+			clock-names = "core", "axi", "ahb", "pix0", "pix1";
+			interrupt-parent = <&intc>;
+			interrupts = <218 IRQ_TYPE_LEVEL_HIGH>;
+			power-domains = <&scmi_power A210_PD_VO>;
+			resets = <&scmi_reset A210_RESET_VO_DPU_CRST>,
+				 <&scmi_reset A210_RESET_VO_DPU_ARST>,
+				 <&scmi_reset A210_RESET_VO_DPU_HRST>;
+			reset-names = "core", "axi", "ahb";
+
+			status = "disabled";
+
+			ports {
+				#address-cells = <1>;
+				#size-cells = <0>;
+
+				port@1 {
+					reg = <1>;
+					#address-cells = <1>;
+					#size-cells = <0>;
+
+					dc_out: endpoint@1 {
+						reg = <1>;
+						remote-endpoint = <&hdmi_in>;
+					};
+				};
+			};
+		};
+
+		hdmi: hdmi@6600000 {
+			compatible = "zhihe,a210-dw-hdmi";
+			reg = <0 0x06600000 0 0x40000>;
+			clocks = <&scmi_clk A210_CLK_VO_HDMI_PCLK_EN>,
+				 <&scmi_clk A210_CLK_VO_HDMI_SFRCLK_EN>,
+				 <&scmi_clk A210_CLK_VO_CEC_CLK_EN>,
+				 <&scmi_clk A210_CLK_VO_HDMI_PIXCLK>;
+			clock-names = "iahb", "isfr", "cec", "pix";
+			interrupt-parent = <&intc>;
+			interrupts = <216 IRQ_TYPE_LEVEL_HIGH>;
+			power-domains = <&scmi_power A210_PD_VO>;
+			reg-io-width = <4>;
+			resets = <&scmi_reset A210_RESET_VO_HDMI_MAIN_RST>,
+				 <&scmi_reset A210_RESET_VO_HDMI_PRST>;
+			reset-names = "main", "apb";
+
+			status = "disabled";
+
+			ports {
+				#address-cells = <1>;
+				#size-cells = <0>;
+
+				port@0 {
+					reg = <0>;
+
+					hdmi_in: endpoint {
+						remote-endpoint = <&dc_out>;
+					};
+				};
+
+				port@1 {
+					reg = <1>;
+
+					hdmi_out: endpoint {
+					};
+				};
+			};
+		};
+
 		usb31_usb2_phy: phy@8001080 {
 			compatible = "zhihe,a210-usb31-usb2-phy";
 			reg = <0 0x08001080 0 0x28>;
