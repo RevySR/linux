@@ -3,6 +3,7 @@
  * Copyright (C) 2021 Alibaba Group Holding Limited.
  */
 
+#include <dt-bindings/ata/ahci.h>
 #include <dt-bindings/clock/zhihe,a210-scmi.h>
 #include <dt-bindings/interrupt-controller/irq.h>
 #include <dt-bindings/reset/zhihe,a210-scmi.h>
@@ -1026,6 +1027,36 @@
 			reset-names = "apb", "phy";
 
 			status = "disabled";
+		};
+
+		sata: sata@a200000 {
+			compatible = "snps,dwc-ahci";
+			reg = <0 0x0a200000 0 0x100000>;
+			#address-cells = <1>;
+			clocks = <&scmi_clk A210_CLK_SATA_GEN3X2_ACLK_EN>,
+				 <&scmi_clk A210_CLK_SATA_PMALIVE_CLK_EN>;
+			clock-names = "aclk", "pmalive";
+			interrupt-parent = <&intc>;
+			interrupts = <170 IRQ_TYPE_LEVEL_HIGH>;
+			power-domains = <&scmi_power A210_PD_SATA>;
+			resets = <&scmi_reset A210_RESET_PCIE_SATA_ARESET>,
+				 <&scmi_reset A210_RESET_PCIE_SATA_RST_PMALIVE>;
+			reset-names = "arst", "pmalive";
+			#size-cells = <0>;
+
+			status = "disabled";
+
+			sata0: sata-port@0 {
+				reg = <0>;
+				phys = <&e16phy>;
+				phy-names = "sata-phy";
+			};
+
+			sata1: sata-port@1 {
+				reg = <1>;
+				phys = <&e16phy>;
+				phy-names = "sata-phy";
+			};
 		};
 
 		pcie0: pcie@b000000 {
