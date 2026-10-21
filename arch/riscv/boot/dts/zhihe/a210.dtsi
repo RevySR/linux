@@ -13,6 +13,13 @@
 	#address-cells = <2>;
 	#size-cells = <2>;
 
+	osc_32k: clock-osc-32k {
+		compatible = "fixed-clock";
+		#clock-cells = <0>;
+		clock-frequency = <32768>;
+		clock-output-names = "osc-32k";
+	};
+
 	cpus: cpus {
 		#address-cells = <1>;
 		#size-cells = <0>;
@@ -392,6 +399,81 @@
 			status = "disabled";
 		};
 
+		peri3_gpio: gpio@550000 {
+			compatible = "zhihe,a210-gpio", "snps,dw-apb-gpio";
+			reg = <0x00 0x00550000 0x0 0x10000>;
+			#address-cells = <1>;
+			clocks = <&scmi_clk A210_CLK_PERI3_GPIO4_PCLK_EN>,
+				 <&scmi_clk A210_CLK_PERI3_GPIO4_DBCLK_EN>;
+			clock-names = "bus", "db";
+			resets = <&scmi_reset A210_RESET_PERI3_GPIO4_PRST>,
+				 <&scmi_reset A210_RESET_PERI3_GPIO4_DBRST>;
+			#size-cells = <0>;
+
+			gpio4: gpio-controller@0 {
+				compatible = "snps,dw-apb-gpio-port";
+				reg = <0>;
+				#gpio-cells = <2>;
+				gpio-controller;
+				gpio-ranges = <&peri3_padctrl 0 0 6>;
+				#interrupt-cells = <2>;
+				interrupt-controller;
+				interrupt-parent = <&intc>;
+				interrupts = <52 IRQ_TYPE_LEVEL_HIGH>;
+				ngpios = <6>;
+			};
+		};
+
+		peri1_gpio0: gpio@2012000 {
+			compatible = "zhihe,a210-gpio", "snps,dw-apb-gpio";
+			reg = <0x00 0x02012000 0x0 0x1000>;
+			#address-cells = <1>;
+			clocks = <&scmi_clk A210_CLK_PERI1_GPIO0_PCLK_EN>,
+				 <&scmi_clk A210_CLK_PERI1_GPIO0_DBCLK_EN>;
+			clock-names = "bus", "db";
+			resets = <&scmi_reset A210_RESET_PERI1_GPIO0_PRST>,
+				 <&scmi_reset A210_RESET_PERI1_GPIO0_DBRST>;
+			#size-cells = <0>;
+
+			gpio0: gpio-controller@0 {
+				compatible = "snps,dw-apb-gpio-port";
+				reg = <0>;
+				#gpio-cells = <2>;
+				gpio-controller;
+				gpio-ranges = <&peri1_padctrl 0 0 32>;
+				#interrupt-cells = <2>;
+				interrupt-controller;
+				interrupt-parent = <&intc>;
+				interrupts = <289 IRQ_TYPE_LEVEL_HIGH>;
+				ngpios = <32>;
+			};
+		};
+
+		peri1_gpio1: gpio@2013000 {
+			compatible = "zhihe,a210-gpio", "snps,dw-apb-gpio";
+			reg = <0x00 0x02013000 0x0 0x1000>;
+			#address-cells = <1>;
+			clocks = <&scmi_clk A210_CLK_PERI1_GPIO1_PCLK_EN>,
+				 <&scmi_clk A210_CLK_PERI1_GPIO1_DBCLK_EN>;
+			clock-names = "bus", "db";
+			resets = <&scmi_reset A210_RESET_PERI1_GPIO1_PRST>,
+				 <&scmi_reset A210_RESET_PERI1_GPIO1_DBRST>;
+			#size-cells = <0>;
+
+			gpio1: gpio-controller@0 {
+				compatible = "snps,dw-apb-gpio-port";
+				reg = <0>;
+				#gpio-cells = <2>;
+				gpio-controller;
+				gpio-ranges = <&peri1_padctrl 0 32 18>;
+				#interrupt-cells = <2>;
+				interrupt-controller;
+				interrupt-parent = <&intc>;
+				interrupts = <290 IRQ_TYPE_LEVEL_HIGH>;
+				ngpios = <18>;
+			};
+		};
+
 		uart0: serial@2014000 {
 			compatible = "zhihe,a210-uart", "snps,dw-apb-uart";
 			reg = <0x0 0x02014000 0x0 0x400>;
@@ -452,6 +534,54 @@
 			reg-shift = <2>;
 			resets = <&scmi_reset A210_RESET_UART_PRST(3)>,
 				 <&scmi_reset A210_RESET_UART_SRST(3)>;
+
+			status = "disabled";
+		};
+
+		i2c0: i2c@2020000 {
+			compatible = "zhihe,a210-i2c", "snps,designware-i2c";
+			reg = <0x00 0x02020000 0x0 0x1000>;
+			#address-cells = <1>;
+			clocks = <&scmi_clk A210_CLK_PERI1_I2C0_IC_CLK_EN>,
+				 <&scmi_clk A210_CLK_PERI1_I2C0_PCLK_EN>;
+			clock-names = "ref", "pclk";
+			interrupt-parent = <&intc>;
+			interrupts = <293 IRQ_TYPE_LEVEL_HIGH>;
+			resets = <&scmi_reset A210_RESET_PERI1_I2C0_IC_RST>,
+				 <&scmi_reset A210_RESET_PERI1_I2C0_PRST>;
+			#size-cells = <0>;
+
+			status = "disabled";
+		};
+
+		i2c1: i2c@2021000 {
+			compatible = "zhihe,a210-i2c", "snps,designware-i2c";
+			reg = <0x00 0x02021000 0x0 0x1000>;
+			#address-cells = <1>;
+			clocks = <&scmi_clk A210_CLK_PERI1_I2C1_IC_CLK_EN>,
+				 <&scmi_clk A210_CLK_PERI1_I2C1_PCLK_EN>;
+			clock-names = "ref", "pclk";
+			interrupt-parent = <&intc>;
+			interrupts = <294 IRQ_TYPE_LEVEL_HIGH>;
+			resets = <&scmi_reset A210_RESET_PERI1_I2C1_IC_RST>,
+				 <&scmi_reset A210_RESET_PERI1_I2C1_PRST>;
+			#size-cells = <0>;
+
+			status = "disabled";
+		};
+
+		i2c2: i2c@2022000 {
+			compatible = "zhihe,a210-i2c", "snps,designware-i2c";
+			reg = <0x00 0x02022000 0x0 0x1000>;
+			#address-cells = <1>;
+			clocks = <&scmi_clk A210_CLK_PERI1_I2C2_IC_CLK_EN>,
+				 <&scmi_clk A210_CLK_PERI1_I2C2_PCLK_EN>;
+			clock-names = "ref", "pclk";
+			interrupt-parent = <&intc>;
+			interrupts = <295 IRQ_TYPE_LEVEL_HIGH>;
+			resets = <&scmi_reset A210_RESET_PERI1_I2C2_IC_RST>,
+				 <&scmi_reset A210_RESET_PERI1_I2C2_PRST>;
+			#size-cells = <0>;
 
 			status = "disabled";
 		};
@@ -562,12 +692,142 @@
 			status = "disabled";
 		};
 
+		peri2_gpio2: gpio@8410000 {
+			compatible = "zhihe,a210-gpio", "snps,dw-apb-gpio";
+			reg = <0x00 0x08410000 0x0 0x1000>;
+			#address-cells = <1>;
+			clocks = <&scmi_clk A210_CLK_PERI2_GPIO2_PCLK_EN>,
+				 <&scmi_clk A210_CLK_PERI2_GPIO2_DBCLK_EN>;
+			clock-names = "bus", "db";
+			resets = <&scmi_reset A210_RESET_PERI2_GPIO2_PRST>,
+				 <&scmi_reset A210_RESET_PERI2_GPIO2_DBRST>;
+			#size-cells = <0>;
+
+			gpio2: gpio-controller@0 {
+				compatible = "snps,dw-apb-gpio-port";
+				reg = <0>;
+				#gpio-cells = <2>;
+				gpio-controller;
+				gpio-ranges = <&peri2_padctrl 0 0 32>;
+				#interrupt-cells = <2>;
+				interrupt-controller;
+				interrupt-parent = <&intc>;
+				interrupts = <291 IRQ_TYPE_LEVEL_HIGH>;
+				ngpios = <32>;
+			};
+		};
+
 		peri2_padctrl: pinctrl@8411000 {
 			compatible = "zhihe,a210-peri2-pinctrl";
 			reg = <0x0 0x08411000 0x0 0x1000>;
 			clocks = <&scmi_clk A210_CLK_PERI2_PAD>;
 			clock-names = "pclk";
 			resets = <&scmi_reset A210_RESET_PERI2_PAD>;
+
+			status = "disabled";
+		};
+
+		peri2_gpio3: gpio@8412000 {
+			compatible = "zhihe,a210-gpio", "snps,dw-apb-gpio";
+			reg = <0x00 0x08412000 0x0 0x1000>;
+			#address-cells = <1>;
+			clocks = <&scmi_clk A210_CLK_PERI2_GPIO3_PCLK_EN>,
+				 <&scmi_clk A210_CLK_PERI2_GPIO3_DBCLK_EN>;
+			clock-names = "bus", "db";
+			resets = <&scmi_reset A210_RESET_PERI2_GPIO3_PRST>,
+				 <&scmi_reset A210_RESET_PERI2_GPIO3_DBRST>;
+			#size-cells = <0>;
+
+			gpio3: gpio-controller@0 {
+				compatible = "snps,dw-apb-gpio-port";
+				reg = <0>;
+				#gpio-cells = <2>;
+				gpio-controller;
+				gpio-ranges = <&peri2_padctrl 0 32 11>;
+				#interrupt-cells = <2>;
+				interrupt-controller;
+				interrupt-parent = <&intc>;
+				interrupts = <292 IRQ_TYPE_LEVEL_HIGH>;
+				ngpios = <11>;
+			};
+		};
+
+		i2c3: i2c@8415000 {
+			compatible = "zhihe,a210-i2c", "snps,designware-i2c";
+			reg = <0x00 0x08415000 0x0 0x1000>;
+			#address-cells = <1>;
+			clocks = <&scmi_clk A210_CLK_PERI2_I2C3_IC_CLK_EN>,
+				 <&scmi_clk A210_CLK_PERI2_I2C3_PCLK_EN>;
+			clock-names = "ref", "pclk";
+			interrupt-parent = <&intc>;
+			interrupts = <296 IRQ_TYPE_LEVEL_HIGH>;
+			resets = <&scmi_reset A210_RESET_PERI2_I2C3_IC_RST>,
+				 <&scmi_reset A210_RESET_PERI2_I2C3_PRST>;
+			#size-cells = <0>;
+
+			status = "disabled";
+		};
+
+		i2c4: i2c@8416000 {
+			compatible = "zhihe,a210-i2c", "snps,designware-i2c";
+			reg = <0x00 0x08416000 0x0 0x1000>;
+			#address-cells = <1>;
+			clocks = <&scmi_clk A210_CLK_PERI2_I2C4_IC_CLK_EN>,
+				 <&scmi_clk A210_CLK_PERI2_I2C4_PCLK_EN>;
+			clock-names = "ref", "pclk";
+			interrupt-parent = <&intc>;
+			interrupts = <297 IRQ_TYPE_LEVEL_HIGH>;
+			resets = <&scmi_reset A210_RESET_PERI2_I2C4_IC_RST>,
+				 <&scmi_reset A210_RESET_PERI2_I2C4_PRST>;
+			#size-cells = <0>;
+
+			status = "disabled";
+		};
+
+		i2c5: i2c@8417000 {
+			compatible = "zhihe,a210-i2c", "snps,designware-i2c";
+			reg = <0x00 0x08417000 0x0 0x1000>;
+			#address-cells = <1>;
+			clocks = <&scmi_clk A210_CLK_PERI2_I2C5_IC_CLK_EN>,
+				 <&scmi_clk A210_CLK_PERI2_I2C5_PCLK_EN>;
+			clock-names = "ref", "pclk";
+			interrupt-parent = <&intc>;
+			interrupts = <298 IRQ_TYPE_LEVEL_HIGH>;
+			resets = <&scmi_reset A210_RESET_PERI2_I2C5_IC_RST>,
+				 <&scmi_reset A210_RESET_PERI2_I2C5_PRST>;
+			#size-cells = <0>;
+
+			status = "disabled";
+		};
+
+		i2c6: i2c@8418000 {
+			compatible = "zhihe,a210-i2c", "snps,designware-i2c";
+			reg = <0x00 0x08418000 0x0 0x1000>;
+			#address-cells = <1>;
+			clocks = <&scmi_clk A210_CLK_PERI2_I2C6_IC_CLK_EN>,
+				 <&scmi_clk A210_CLK_PERI2_I2C6_PCLK_EN>;
+			clock-names = "ref", "pclk";
+			interrupt-parent = <&intc>;
+			interrupts = <299 IRQ_TYPE_LEVEL_HIGH>;
+			resets = <&scmi_reset A210_RESET_PERI2_I2C6_IC_RST>,
+				 <&scmi_reset A210_RESET_PERI2_I2C6_PRST>;
+			#size-cells = <0>;
+
+			status = "disabled";
+		};
+
+		i2c7: i2c@8419000 {
+			compatible = "zhihe,a210-i2c", "snps,designware-i2c";
+			reg = <0x00 0x08419000 0x0 0x1000>;
+			#address-cells = <1>;
+			clocks = <&scmi_clk A210_CLK_PERI2_I2C7_IC_CLK_EN>,
+				 <&scmi_clk A210_CLK_PERI2_I2C7_PCLK_EN>;
+			clock-names = "ref", "pclk";
+			interrupt-parent = <&intc>;
+			interrupts = <300 IRQ_TYPE_LEVEL_HIGH>;
+			resets = <&scmi_reset A210_RESET_PERI2_I2C7_IC_RST>,
+				 <&scmi_reset A210_RESET_PERI2_I2C7_PRST>;
+			#size-cells = <0>;
 
 			status = "disabled";
 		};
@@ -618,6 +878,29 @@
 					      <&cpu7_intc 7>;
 		};
 
+		aon_gpio0: gpio@30841000 {
+			compatible = "snps,dw-apb-gpio";
+			reg = <0x00 0x30841000 0x0 0x1000>;
+			#address-cells = <1>;
+			clocks = <&scmi_clk A210_CLK_AON_SYS>, <&osc_32k>;
+			clock-names = "bus", "db";
+			#size-cells = <0>;
+
+			ao_gpio0: gpio-controller@0 {
+				compatible = "snps,dw-apb-gpio-port";
+				reg = <0>;
+				#gpio-cells = <2>;
+				gpio-controller;
+				gpio-ranges = <&aon_padctrl 0 7 15>,
+					      <&aon_padctrl 21 22 11>;
+				#interrupt-cells = <2>;
+				interrupt-controller;
+				interrupt-parent = <&intc>;
+				interrupts = <17 IRQ_TYPE_LEVEL_HIGH>;
+				ngpios = <32>;
+			};
+		};
+
 		aon_padctrl: pinctrl@30848000 {
 			compatible = "zhihe,a210-aon-pinctrl";
 			reg = <0x0 0x30848000 0x0 0x2000>;
@@ -625,6 +908,43 @@
 			clock-names = "pclk";
 
 			status = "disabled";
+		};
+
+		aoi2c1: i2c@30891000 {
+			compatible = "snps,designware-i2c";
+			reg = <0x00 0x30891000 0x0 0x1000>;
+			#address-cells = <1>;
+			clocks = <&scmi_clk A210_CLK_AON_I2C1_IC>,
+				 <&scmi_clk A210_CLK_AON_I2C1_PCLK>;
+			clock-names = "ref", "pclk";
+			resets = <&scmi_reset A210_RESET_AON_I2C1>;
+			interrupt-parent = <&intc>;
+			interrupts = <20 IRQ_TYPE_LEVEL_HIGH>;
+			#size-cells = <0>;
+
+			status = "disabled";
+		};
+
+		aon_gpio1: gpio@30897000 {
+			compatible = "snps,dw-apb-gpio";
+			reg = <0x00 0x30897000 0x0 0x1000>;
+			#address-cells = <1>;
+			clocks = <&scmi_clk A210_CLK_AON_SYS>, <&osc_32k>;
+			clock-names = "bus", "db";
+			#size-cells = <0>;
+
+			ao_gpio1: gpio-controller@0 {
+				compatible = "snps,dw-apb-gpio-port";
+				reg = <0>;
+				#gpio-cells = <2>;
+				gpio-controller;
+				gpio-ranges = <&aon_padctrl 0 33 10>;
+				#interrupt-cells = <2>;
+				interrupt-controller;
+				interrupt-parent = <&intc>;
+				interrupts = <10 IRQ_TYPE_LEVEL_HIGH>;
+				ngpios = <10>;
+			};
 		};
 
 		sram@30907c00 {
