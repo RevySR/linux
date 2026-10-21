@@ -609,6 +609,74 @@
 			status = "disabled";
 		};
 
+		gmac0: ethernet@2100000 {
+			compatible = "zhihe,a210-dwmac", "snps,dwmac-5.40a";
+			reg = <0x00 0x02100000 0x0 0x10000>;
+			reg-names = "gmac";
+			clocks = <&scmi_clk A210_CLK_PERI1_GMAC0_ACLK_EN>,
+				 <&scmi_clk A210_CLK_PERI1_GMAC0_HCLK_EN>;
+			clock-names = "stmmaceth", "pclk";
+			interrupt-parent = <&intc>;
+			interrupts = <277 IRQ_TYPE_LEVEL_HIGH>;
+			interrupt-names = "macirq";
+			power-domains = <&scmi_power A210_PD_GMAC0>;
+			resets = <&scmi_reset A210_RESET_PERI1_GMAC0_ARST>,
+				 <&scmi_reset A210_RESET_PERI1_GMAC0_HRST>;
+			reset-names = "stmmaceth", "ahb";
+			snps,axi-config = <&stmmac_axi_setup>;
+			snps,fixed-burst;
+			snps,pbl = <32>;
+			snps,tso;
+			zhihe,gmacsys = <&gmac0_sys>;
+
+			status = "disabled";
+
+			mdio0: mdio {
+				compatible = "snps,dwmac-mdio";
+				#address-cells = <1>;
+				#size-cells = <0>;
+			};
+		};
+
+		gmac0_sys: syscon@210f000 {
+			compatible = "zhihe,a210-gmac-syscon", "syscon";
+			reg = <0x00 0x0210f000 0x0 0x20>;
+		};
+
+		gmac1: ethernet@2110000 {
+			compatible = "zhihe,a210-dwmac", "snps,dwmac-5.40a";
+			reg = <0x00 0x02110000 0x0 0x10000>;
+			reg-names = "gmac";
+			clocks = <&scmi_clk A210_CLK_PERI1_GMAC1_ACLK_EN>,
+				 <&scmi_clk A210_CLK_PERI1_GMAC1_HCLK_EN>;
+			clock-names = "stmmaceth", "pclk";
+			interrupt-parent = <&intc>;
+			interrupts = <288 IRQ_TYPE_LEVEL_HIGH>;
+			interrupt-names = "macirq";
+			power-domains = <&scmi_power A210_PD_GMAC1>;
+			resets = <&scmi_reset A210_RESET_PERI1_GMAC1_ARST>,
+				 <&scmi_reset A210_RESET_PERI1_GMAC1_HRST>;
+			reset-names = "stmmaceth", "ahb";
+			snps,axi-config = <&stmmac_axi_setup>;
+			snps,fixed-burst;
+			snps,pbl = <32>;
+			snps,tso;
+			zhihe,gmacsys = <&gmac1_sys>;
+
+			status = "disabled";
+
+			mdio1: mdio {
+				compatible = "snps,dwmac-mdio";
+				#address-cells = <1>;
+				#size-cells = <0>;
+			};
+		};
+
+		gmac1_sys: syscon@211f000 {
+			compatible = "zhihe,a210-gmac-syscon", "syscon";
+			reg = <0x00 0x0211f000 0x0 0x20>;
+		};
+
 		uart4: serial@8401000 {
 			compatible = "zhihe,a210-uart", "snps,dw-apb-uart";
 			reg = <0x0 0x08401000 0x0 0x400>;
@@ -977,5 +1045,11 @@
 				reg = <0x100 0x100>;
 			};
 		};
+	};
+
+	stmmac_axi_setup: stmmac-axi-config {
+		snps,blen = <16 8 4 0 0 0 0>;
+		snps,rd_osr_lmt = <7>;
+		snps,wr_osr_lmt = <7>;
 	};
 };
