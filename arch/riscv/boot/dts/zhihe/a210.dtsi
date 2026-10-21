@@ -87,6 +87,7 @@
 			device_type = "cpu";
 			compatible = "thead,c908", "riscv";
 			reg = <0>;
+			#cooling-cells = <2>;
 			d-cache-block-size = <64>;
 			d-cache-sets = <256>;
 			d-cache-size = <32768>;
@@ -95,6 +96,8 @@
 			i-cache-size = <32768>;
 			mmu-type = "riscv,sv39";
 			next-level-cache = <&c0_l2_cache>;
+			power-domains = <&scmi_perf 0>;
+			power-domain-names = "perf";
 			riscv,cbom-block-size = <64>;
 			riscv,cbop-block-size = <64>;
 			riscv,cboz-block-size = <64>;
@@ -117,6 +120,7 @@
 			device_type = "cpu";
 			compatible = "thead,c908", "riscv";
 			reg = <1>;
+			#cooling-cells = <2>;
 			d-cache-block-size = <64>;
 			d-cache-sets = <256>;
 			d-cache-size = <32768>;
@@ -125,6 +129,8 @@
 			i-cache-size = <32768>;
 			mmu-type = "riscv,sv39";
 			next-level-cache = <&c0_l2_cache>;
+			power-domains = <&scmi_perf 0>;
+			power-domain-names = "perf";
 			riscv,cbom-block-size = <64>;
 			riscv,cbop-block-size = <64>;
 			riscv,cboz-block-size = <64>;
@@ -147,6 +153,7 @@
 			device_type = "cpu";
 			compatible = "thead,c908", "riscv";
 			reg = <2>;
+			#cooling-cells = <2>;
 			d-cache-block-size = <64>;
 			d-cache-sets = <256>;
 			d-cache-size = <32768>;
@@ -155,6 +162,8 @@
 			i-cache-size = <32768>;
 			mmu-type = "riscv,sv39";
 			next-level-cache = <&c0_l2_cache>;
+			power-domains = <&scmi_perf 0>;
+			power-domain-names = "perf";
 			riscv,cbom-block-size = <64>;
 			riscv,cbop-block-size = <64>;
 			riscv,cboz-block-size = <64>;
@@ -177,6 +186,7 @@
 			device_type = "cpu";
 			compatible = "thead,c908", "riscv";
 			reg = <3>;
+			#cooling-cells = <2>;
 			d-cache-block-size = <64>;
 			d-cache-sets = <256>;
 			d-cache-size = <32768>;
@@ -185,6 +195,8 @@
 			i-cache-size = <32768>;
 			mmu-type = "riscv,sv39";
 			next-level-cache = <&c0_l2_cache>;
+			power-domains = <&scmi_perf 0>;
+			power-domain-names = "perf";
 			riscv,cbom-block-size = <64>;
 			riscv,cbop-block-size = <64>;
 			riscv,cboz-block-size = <64>;
@@ -207,6 +219,7 @@
 			device_type = "cpu";
 			compatible = "thead,c920", "riscv";
 			reg = <4>;
+			#cooling-cells = <2>;
 			d-cache-block-size = <64>;
 			d-cache-sets = <512>;
 			d-cache-size = <65536>;
@@ -215,6 +228,8 @@
 			i-cache-size = <65536>;
 			mmu-type = "riscv,sv39";
 			next-level-cache = <&c1_l2_cache>;
+			power-domains = <&scmi_perf 1>;
+			power-domain-names = "perf";
 			riscv,cbom-block-size = <64>;
 			riscv,cbop-block-size = <64>;
 			riscv,cboz-block-size = <64>;
@@ -237,6 +252,7 @@
 			device_type = "cpu";
 			compatible = "thead,c920", "riscv";
 			reg = <5>;
+			#cooling-cells = <2>;
 			d-cache-block-size = <64>;
 			d-cache-sets = <512>;
 			d-cache-size = <65536>;
@@ -245,6 +261,8 @@
 			i-cache-size = <65536>;
 			mmu-type = "riscv,sv39";
 			next-level-cache = <&c1_l2_cache>;
+			power-domains = <&scmi_perf 1>;
+			power-domain-names = "perf";
 			riscv,cbom-block-size = <64>;
 			riscv,cbop-block-size = <64>;
 			riscv,cboz-block-size = <64>;
@@ -267,6 +285,7 @@
 			device_type = "cpu";
 			compatible = "thead,c920", "riscv";
 			reg = <6>;
+			#cooling-cells = <2>;
 			d-cache-block-size = <64>;
 			d-cache-sets = <512>;
 			d-cache-size = <65536>;
@@ -275,6 +294,8 @@
 			i-cache-size = <65536>;
 			mmu-type = "riscv,sv39";
 			next-level-cache = <&c1_l2_cache>;
+			power-domains = <&scmi_perf 1>;
+			power-domain-names = "perf";
 			riscv,cbom-block-size = <64>;
 			riscv,cbop-block-size = <64>;
 			riscv,cboz-block-size = <64>;
@@ -297,6 +318,7 @@
 			device_type = "cpu";
 			compatible = "thead,c920", "riscv";
 			reg = <7>;
+			#cooling-cells = <2>;
 			d-cache-block-size = <64>;
 			d-cache-sets = <512>;
 			d-cache-size = <65536>;
@@ -305,6 +327,8 @@
 			i-cache-size = <65536>;
 			mmu-type = "riscv,sv39";
 			next-level-cache = <&c1_l2_cache>;
+			power-domains = <&scmi_perf 1>;
+			power-domain-names = "perf";
 			riscv,cbom-block-size = <64>;
 			riscv,cbop-block-size = <64>;
 			riscv,cboz-block-size = <64>;
