@@ -474,6 +474,19 @@
 			};
 		};
 
+		adc: adc@5a0000 {
+			compatible = "zhihe,a210-adc";
+			reg = <0 0x005a0000 0 0x1000>;
+			clocks = <&scmi_clk A210_CLK_PERI3_ADC_PCLK_EN>;
+			interrupt-parent = <&intc>;
+			interrupts = <260 IRQ_TYPE_LEVEL_HIGH>;
+			#io-channel-cells = <1>;
+			power-domains = <&scmi_power A210_PD_TOP>;
+			resets = <&scmi_reset A210_RESET_PERI3_ADC_PRST>;
+
+			status = "disabled";
+		};
+
 		qspi0: spi@1000000 {
 			compatible = "zhihe,a210-qspi", "snps,dwc-ssi-1.01a";
 			reg = <0x00 0x01000000 0x0 0x4000>;
