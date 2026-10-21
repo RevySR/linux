@@ -12,6 +12,7 @@
 #include <linux/iopoll.h>
 #include <linux/math.h>
 #include <linux/module.h>
+#include <linux/of.h>
 #include <linux/platform_device.h>
 #include <linux/pm_runtime.h>
 #include <linux/property.h>
@@ -795,10 +796,14 @@ static const struct clk_ops a210_div_ops = {
 	.set_rate = a210_div_set_rate,
 };
 
+static const struct clk_ops a210_div_ro_ops = {
+	.recalc_rate = a210_div_recalc_rate,
+};
+
 static struct clk_hw *a210_register_divider(struct device *dev, const char *name,
 					    const char *parent, void __iomem *reg, u8 shift,
 					    u8 width, u8 sync, enum a210_div_type div_type, u16 min,
-					    u16 max, bool closest)
+					    u16 max, bool closest, bool read_only)
 {
 	struct a210_div *div;
 	struct clk_hw *hw;
@@ -816,8 +821,8 @@ static struct clk_hw *a210_register_divider(struct device *dev, const char *name
 		return ERR_PTR(-ENOMEM);
 
 	init.name = name;
-	init.ops = &a210_div_ops;
-	init.flags = CLK_SET_RATE_PARENT;
+	init.ops = read_only ? &a210_div_ro_ops : &a210_div_ops;
+	init.flags = read_only ? CLK_GET_RATE_NOCACHE : CLK_SET_RATE_PARENT;
 	init.parent_names = parent ? &parent : NULL;
 	init.num_parents = parent ? 1 : 0;
 
@@ -954,11 +959,23 @@ static int a210_map_registers(struct platform_device *pdev)
 	return ret;
 }
 
+static bool a210_clock_protected(struct device *dev, u32 id)
+{
+	u32 clock;
+
+	of_property_for_each_u32(dev->of_node, "protected-clocks", clock) {
+		if (clock == id)
+			return true;
+	}
+	return false;
+}
+
 static int a210_register_clocks(struct platform_device *pdev)
 {
 	struct device *dev = &pdev->dev;
 	struct a210_ccu *priv = dev_get_drvdata(dev);
 	struct clk_hw **hws = priv->clk_data->hws;
+	bool firmware_cpu = a210_clock_protected(dev, C908_PLL_FOUTVCO);
 	int i;
 
 	for (i = 0; i < priv->num_info; i++) {
@@ -968,6 +985,8 @@ static int a210_register_clocks(struct platform_device *pdev)
 		struct clk_hw *hw;
 		void __iomem *base;
 		u32 id = info->id;
+		bool backup_mux, read_only;
+		unsigned long flags;
 		int j;
 
 		for (j = 0; j < priv->num_inputs; j++)
@@ -983,6 +1002,22 @@ static int a210_register_clocks(struct platform_device *pdev)
 			return dev_err_probe(dev, -EINVAL, "invalid register index %u for %s\n",
 					     info->reg, info->name);
 
+		if (a210_clock_protected(dev, id)) {
+			hws[id] = ERR_PTR(-EACCES);
+			continue;
+		}
+		backup_mux = firmware_cpu && (id == TOP_CPU_BAK_PLL0_CLK_MUX ||
+					      id == TOP_CPU_BAK_PLL1_CLK_MUX);
+		/*
+		 * Firmware updates CPU fabric dividers as part of DVFS. Make all
+		 * clocks sharing those register words read-only, avoiding RMW races.
+		 */
+		read_only = firmware_cpu &&
+			((!strcmp(priv->regs[info->reg].name, "top-crg") &&
+			  (info->shift == 4 || info->shift == 8)) ||
+			 (!strcmp(priv->regs[info->reg].name, "cpu-ss-ccu") &&
+			  (info->shift == 0x1c || info->shift == 0x21c ||
+			   info->shift == 0x41c)));
 		base = priv->regs[info->reg].base + info->shift;
 
 		switch (info->type) {
@@ -1004,7 +1039,8 @@ static int a210_register_clocks(struct platform_device *pdev)
 						   info->width, info->divider.sync,
 						   info->divider.div_type, info->divider.min,
 						   info->divider.max,
-						   info->type == A210_CLK_DIVIDER_CLOSEST);
+						   info->type == A210_CLK_DIVIDER_CLOSEST,
+						   read_only);
 			break;
 		case A210_CLK_GATE:
 			hw = devm_clk_hw_register_gate(dev, name, parent,
@@ -1018,9 +1054,15 @@ static int a210_register_clocks(struct platform_device *pdev)
 						       info->gate_shared.share_count);
 			break;
 		case A210_CLK_MUX:
+			flags = info->mux.flags;
+			if (read_only)
+				flags = (flags & ~CLK_SET_RATE_PARENT) | CLK_GET_RATE_NOCACHE;
+			if (backup_mux)
+				flags |= CLK_IS_CRITICAL;
 			hw = devm_clk_hw_register_mux(dev, name, info->mux.parents,
-						      info->mux.num_parents, info->mux.flags, base,
-						      info->bit_idx, info->width, 0,
+						      info->mux.num_parents, flags, base,
+						      info->bit_idx, info->width,
+						      read_only ? CLK_MUX_READ_ONLY : 0,
 						      &a210_clk_lock);
 			break;
 		default:
@@ -2236,6 +2278,15 @@ static int a210_clocks_probe(struct platform_device *pdev)
 		devm_kmemdup(dev, data->regs, sizeof(*data->regs) * data->num_regs, GFP_KERNEL);
 	if (!priv->regs)
 		return -ENOMEM;
+	if (device_property_present(dev, "protected-clocks") &&
+	    (!of_device_is_compatible(dev->of_node, "zhihe,a210-clk") ||
+	     of_property_count_u32_elems(dev->of_node, "protected-clocks") != 4 ||
+	     !a210_clock_protected(dev, C908_PLL_FOUTVCO) ||
+	     !a210_clock_protected(dev, C920_PLL_FOUTVCO) ||
+	     !a210_clock_protected(dev, C908_CPU_TO_CDE_CLK_MUX) ||
+	     !a210_clock_protected(dev, C920_CPU_TO_CDE_CLK_MUX)))
+		return dev_err_probe(dev, -EINVAL, "invalid protected CPU clock group\n");
+
 	priv->num_inputs = devm_clk_bulk_get_all(dev, &priv->inputs);
 	if (priv->num_inputs < 0)
 		return dev_err_probe(dev, priv->num_inputs, "failed to get input clocks\n");
