@@ -40,6 +40,16 @@
 		regulator-name = "fan-5v";
 	};
 
+	reg_m2_sata: regulator-m2-sata {
+		compatible = "regulator-fixed";
+		enable-active-high;
+		gpio = <&aw9535_0 14 GPIO_ACTIVE_HIGH>;
+		regulator-max-microvolt = <3300000>;
+		regulator-min-microvolt = <3300000>;
+		regulator-name = "m2-sata-3v3";
+		startup-delay-us = <10000>;
+	};
+
 	reg_minipcie_1v5: regulator-minipcie-1v5 {
 		compatible = "regulator-fixed";
 		enable-active-high;
@@ -110,6 +120,13 @@
 };
 
 &aw9535_0 {
+	m2-sata-enable-hog {
+		gpio-hog;
+		gpios = <9 GPIO_ACTIVE_HIGH>;
+		line-name = "m2-sata-enable";
+		output-high;
+	};
+
 	minipcie-wireless-enable-hog {
 		gpio-hog;
 		gpios = <8 GPIO_ACTIVE_HIGH>;
@@ -144,4 +161,18 @@
 	vpcie3v3-supply = <&reg_minipcie_3v3>;
 
 	status = "okay";
+};
+
+&sata {
+	ports-implemented = <1>;
+
+	status = "okay";
+};
+
+&sata0 {
+	target-supply = <&reg_m2_sata>;
+};
+
+&sata1 {
+	status = "disabled";
 };
