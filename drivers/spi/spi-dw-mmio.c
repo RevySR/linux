@@ -405,7 +405,12 @@ static int dw_spi_mmio_probe(struct platform_device *pdev)
 		return PTR_ERR(dwsmmio->pclk);
 
 	/* find an optional reset controller */
-	dwsmmio->rstc = devm_reset_control_get_optional_exclusive(&pdev->dev, "spi");
+	if (dev_of_node(&pdev->dev))
+		dwsmmio->rstc =
+			devm_reset_control_array_get_optional_exclusive(&pdev->dev);
+	else
+		dwsmmio->rstc =
+			devm_reset_control_get_optional_exclusive(&pdev->dev, "spi");
 	if (IS_ERR(dwsmmio->rstc))
 		return PTR_ERR(dwsmmio->rstc);
 
