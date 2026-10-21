@@ -28,6 +28,16 @@ properties:
       - zhihe,a210-vo-clk
       - zhihe,a210-npu-clk
 
+  protected-clocks:
+    description:
+      CPU clocks controlled by platform firmware. The complete CPU clock
+      group must be reserved together to prevent competing PLL and mux writes.
+    minItems: 4
+    maxItems: 4
+    uniqueItems: true
+    items:
+      enum: [121, 122, 123, 124]
+
   reg:
     minItems: 1
     maxItems: 9
@@ -95,6 +105,9 @@ allOf:
       required:
         - clocks
         - clock-names
+    else:
+      properties:
+        protected-clocks: false
 
   - if:
       properties:
