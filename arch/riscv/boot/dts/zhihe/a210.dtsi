@@ -699,6 +699,16 @@
 			status = "disabled";
 		};
 
+		pwm0: pwm@202a000 {
+			compatible = "zhihe,a210-pwm", "thead,th1520-pwm";
+			reg = <0 0x0202a000 0 0x1000>;
+			clocks = <&scmi_clk A210_CLK_PERI1_PWM0_CCLK_EN>;
+			power-domains = <&scmi_power A210_PD_PWM>;
+			#pwm-cells = <3>;
+
+			status = "disabled";
+		};
+
 		gmac0: ethernet@2100000 {
 			compatible = "zhihe,a210-dwmac", "snps,dwmac-5.40a";
 			reg = <0x00 0x02100000 0x0 0x10000>;
@@ -1245,6 +1255,26 @@
 			resets = <&scmi_reset A210_RESET_PERI2_I2C7_IC_RST>,
 				 <&scmi_reset A210_RESET_PERI2_I2C7_PRST>;
 			#size-cells = <0>;
+
+			status = "disabled";
+		};
+
+		pwm1: pwm@841a000 {
+			compatible = "zhihe,a210-pwm", "thead,th1520-pwm";
+			reg = <0 0x0841a000 0 0x1000>;
+			clocks = <&scmi_clk A210_CLK_PERI2_PWM1_CCLK_EN>;
+			power-domains = <&scmi_power A210_PD_PWM>;
+			#pwm-cells = <3>;
+
+			status = "disabled";
+		};
+
+		pwm2: pwm@841b000 {
+			compatible = "zhihe,a210-pwm", "thead,th1520-pwm";
+			reg = <0 0x0841b000 0 0x1000>;
+			clocks = <&scmi_clk A210_CLK_PERI2_PWM2_CCLK_EN>;
+			power-domains = <&scmi_power A210_PD_PWM>;
+			#pwm-cells = <3>;
 
 			status = "disabled";
 		};
