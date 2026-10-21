@@ -281,3 +281,7 @@
 &hdmi_out {
 	remote-endpoint = <&hdmi_con_in>;
 };
+
+&gpu {
+	status = "okay";
+};

@@ -306,3 +306,7 @@
 		};
 	};
 };
+
+&power_gpu {
+	pmic-supply = <&dvdd_gpu_reg>;
+};

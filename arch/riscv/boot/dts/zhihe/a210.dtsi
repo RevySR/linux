@@ -551,6 +551,18 @@
 				 <&rst_vo VO_DFMU_PRST>, <&rst_vo VO_DFMU_ARST>;
 		};
 
+		power_gpu: power-domain-gpu@6e00600 {
+			compatible = "zhihe,a210-pd-gpu";
+			reg = <0 0x06e00600 0 0x200>,
+			      <0 0x06e00400 0 0x200>,
+			      <0 0x06e00000 0 0x200>,
+			      <0 0x26d12000 0 0x1000>;
+			reg-names = "pca", "bpc", "pcu", "iopmp";
+			clocks = <&clk TOP_GPU_CORE_CLK_DIV>;
+			#power-domain-cells = <0>;
+			power-domains = <&power_top>;
+		};
+
 		power_pcie0: power-domain-pcie0@a006200 {
 			compatible = "zhihe,a210-pd-pcie0";
 			reg = <0 0x0a006200 0 0x200>,
@@ -1106,6 +1118,37 @@
 			compatible = "zhihe,a210-vo-reset";
 			reg = <0x00 0x06720400 0x0 0x200>;
 			#reset-cells = <1>;
+		};
+
+		gpu: gpu@6c00000 {
+			compatible = "zhihe,a210-gpu", "img,img-bxm-4-64",
+				     "img,img-rogue";
+			reg = <0 0x06c00000 0 0x100000>;
+			clocks = <&clk_gpu SW_PWR_WRAP_GPU_CORE_CLK_EN>,
+				 <&clk_gpu SW_PWR_WRAP_DFMU_CORE_CLK_EN>,
+				 <&clk_gpu SW_PWR_WRAP_GPU_SYS_CLK_EN>;
+			clock-names = "core", "mem", "sys";
+			interrupt-parent = <&intc>;
+			interrupts = <72 IRQ_TYPE_LEVEL_HIGH>;
+			power-domains = <&power_gpu>;
+			resets = <&rst_gpu GPU_PWR_WRAP_RGX_HOOD_RST>;
+
+			status = "disabled";
+		};
+
+		rst_gpu: reset-controller@6d02000 {
+			compatible = "zhihe,a210-gpu-reset";
+			reg = <0x00 0x06d02000 0x0 0x200>;
+			#reset-cells = <1>;
+		};
+
+		clk_gpu: clock-controller@6d02200 {
+			compatible = "zhihe,a210-gpu-clk";
+			reg = <0 0x06d02200 0 0x200>,
+			      <0 0x06e06200 0 0x200>;
+			reg-names = "gpu-ss-pwrap-clk-en", "gpu-ss-top-clk-en";
+			#clock-cells = <1>;
+			power-domains = <&power_gpu>;
 		};
 
 		clk_usb: clock-controller@8000000 {
