@@ -375,6 +375,18 @@
 		#power-domain-cells = <0>;
 		#size-cells = <2>;
 
+		power_emmc: power-domain-emmc {
+			compatible = "zhihe,a210-pd-emmc";
+			clocks = <&clk_peri AXI_PERI3_MST_ACLK_EN>,
+				 <&clk_peri AXI_PERI3_MST_PCLK_EN>,
+				 <&clk_peri PERI3_EMMC_ACLK_EN>,
+				 <&clk_peri PERI3_EMMC_X2X_ACLK_S_EN>,
+				 <&clk_peri PERI3_EMMC_X2X_ACLK_M_EN>,
+				 <&clk_peri PERI3_EMMC_OSC_CLK_EN>;
+			#power-domain-cells = <0>;
+			power-domains = <&power_top>;
+		};
+
 		power_top: power-domain-top {
 			compatible = "zhihe,a210-pd-top";
 			ranges;
@@ -485,6 +497,19 @@
 			interrupt-parent = <&intc>;
 			interrupts = <336 IRQ_TYPE_LEVEL_HIGH>;
 			#mbox-cells = <1>;
+
+			status = "disabled";
+		};
+
+		emmc: mmc@500000 {
+			compatible = "zhihe,a210-dwcmshc";
+			reg = <0x0 0x00500000 0x0 0x10000>;
+			clocks = <&clk_peri PERI3_EMMC_SDIO_REF_CLK_CG_EN>,
+				 <&clk_peri PERI3_EMMC_HCLK_EN>;
+			clock-names = "core", "bus";
+			interrupt-parent = <&intc>;
+			interrupts = <265 IRQ_TYPE_LEVEL_HIGH>;
+			power-domains = <&power_emmc>;
 
 			status = "disabled";
 		};
