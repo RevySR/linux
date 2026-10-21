@@ -1186,6 +1186,12 @@
 			reg = <0x00 0x0211f000 0x0 0x20>;
 		};
 
+		rst_vi: reset-controller@63a0400 {
+			compatible = "zhihe,a210-vi-reset";
+			reg = <0x00 0x063a0400 0x0 0x200>;
+			#reset-cells = <1>;
+		};
+
 		dc8200: display@6400000 {
 			compatible = "zhihe,a210-dc8200", "verisilicon,dc";
 			reg = <0 0x06400000 0 0x10000>;
@@ -1275,6 +1281,12 @@
 			#reset-cells = <1>;
 		};
 
+		rst_vp: reset-controller@6b20400 {
+			compatible = "zhihe,a210-vp-reset";
+			reg = <0x00 0x06b20400 0x0 0x200>;
+			#reset-cells = <1>;
+		};
+
 		gpu: gpu@6c00000 {
 			compatible = "zhihe,a210-gpu", "img,img-bxm-4-64",
 				     "img,img-rogue";
@@ -1304,6 +1316,12 @@
 			reg-names = "gpu-ss-pwrap-clk-en", "gpu-ss-top-clk-en";
 			#clock-cells = <1>;
 			power-domains = <&power_gpu>;
+		};
+
+		rst_npu: reset-controller@7112200 {
+			compatible = "zhihe,a210-npu-reset";
+			reg = <0x00 0x07112200 0x0 0x10>;
+			#reset-cells = <1>;
 		};
 
 		clk_usb: clock-controller@8000000 {
