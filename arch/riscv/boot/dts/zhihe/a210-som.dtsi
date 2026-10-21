@@ -3,6 +3,10 @@
 #include "a210.dtsi"
 
 / {
+	aliases {
+		mmc0 = &emmc;
+	};
+
 	/* The loader replaces this reference capacity after DDR training. */
 	memory@80000000 {
 		device_type = "memory";
@@ -154,4 +158,20 @@
 			regulator-name = "dvdd06_ddr_vddqlp";
 		};
 	};
+};
+
+&emmc {
+	assigned-clock-rates = <786432000>;
+	assigned-clocks = <&scmi_clk A210_CLK_TOP_PERI_EMMC_REF_CLK_DIV>;
+	bus-width = <8>;
+	cap-mmc-highspeed;
+	max-frequency = <196608000>;
+	mmc-hs200-1_8v;
+	mmc-hs400-1_8v;
+	mmc-hs400-enhanced-strobe;
+	no-sd;
+	no-sdio;
+	non-removable;
+
+	status = "okay";
 };
