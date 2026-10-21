@@ -460,6 +460,24 @@
 			};
 		};
 
+		qspi0: spi@1000000 {
+			compatible = "zhihe,a210-qspi", "snps,dwc-ssi-1.01a";
+			reg = <0x00 0x01000000 0x0 0x4000>;
+			#address-cells = <1>;
+			clocks = <&scmi_clk A210_CLK_PERI1_QSPI0_SSI_CLK_EN>,
+				 <&scmi_clk A210_CLK_PERI1_QSPI0_PCLK_EN>;
+			clock-names = "ssi_clk", "pclk";
+			interrupt-parent = <&intc>;
+			interrupts = <308 IRQ_TYPE_LEVEL_HIGH>;
+			num-cs = <2>;
+			power-domains = <&scmi_power A210_PD_TOP>;
+			resets = <&scmi_reset A210_RESET_PERI1_QSPI0_SSI_RST>,
+				 <&scmi_reset A210_RESET_PERI1_QSPI0_PRST>;
+			#size-cells = <0>;
+
+			status = "disabled";
+		};
+
 		peri1_gpio0: gpio@2012000 {
 			compatible = "zhihe,a210-gpio", "snps,dw-apb-gpio";
 			reg = <0x00 0x02012000 0x0 0x1000>;
@@ -619,6 +637,26 @@
 			interrupts = <295 IRQ_TYPE_LEVEL_HIGH>;
 			resets = <&scmi_reset A210_RESET_PERI1_I2C2_IC_RST>,
 				 <&scmi_reset A210_RESET_PERI1_I2C2_PRST>;
+			#size-cells = <0>;
+
+			status = "disabled";
+		};
+
+		spi0: spi@2023000 {
+			compatible = "zhihe,a210-spi", "snps,dw-apb-ssi";
+			reg = <0x00 0x02023000 0x0 0x1000>;
+			#address-cells = <1>;
+			clocks = <&scmi_clk A210_CLK_PERI1_SPI0_SSI_CLK_EN>,
+				 <&scmi_clk A210_CLK_PERI1_SPI0_PCLK_EN>;
+			clock-names = "ssi_clk", "pclk";
+			dmas = <&dmac0 9>, <&dmac0 8>;
+			dma-names = "tx", "rx";
+			interrupt-parent = <&intc>;
+			interrupts = <310 IRQ_TYPE_LEVEL_HIGH>;
+			num-cs = <2>;
+			power-domains = <&scmi_power A210_PD_TOP>;
+			resets = <&scmi_reset A210_RESET_PERI1_SPI0_SSI_RST>,
+				 <&scmi_reset A210_RESET_PERI1_SPI0_PRST>;
 			#size-cells = <0>;
 
 			status = "disabled";
@@ -858,6 +896,26 @@
 			};
 		};
 
+		spi1: spi@8413000 {
+			compatible = "zhihe,a210-spi", "snps,dw-apb-ssi";
+			reg = <0x00 0x08413000 0x0 0x1000>;
+			#address-cells = <1>;
+			clocks = <&scmi_clk A210_CLK_PERI2_SPI1_SSI_CLK_EN>,
+				 <&scmi_clk A210_CLK_PERI2_SPI1_PCLK_EN>;
+			clock-names = "ssi_clk", "pclk";
+			dmas = <&dmac0 62>, <&dmac0 61>;
+			dma-names = "tx", "rx";
+			interrupt-parent = <&intc>;
+			interrupts = <311 IRQ_TYPE_LEVEL_HIGH>;
+			num-cs = <2>;
+			power-domains = <&scmi_power A210_PD_TOP>;
+			resets = <&scmi_reset A210_RESET_PERI2_SPI1_SSI_RST>,
+				 <&scmi_reset A210_RESET_PERI2_SPI1_PRST>;
+			#size-cells = <0>;
+
+			status = "disabled";
+		};
+
 		i2c3: i2c@8415000 {
 			compatible = "zhihe,a210-i2c", "snps,designware-i2c";
 			reg = <0x00 0x08415000 0x0 0x1000>;
@@ -933,6 +991,24 @@
 			interrupts = <300 IRQ_TYPE_LEVEL_HIGH>;
 			resets = <&scmi_reset A210_RESET_PERI2_I2C7_IC_RST>,
 				 <&scmi_reset A210_RESET_PERI2_I2C7_PRST>;
+			#size-cells = <0>;
+
+			status = "disabled";
+		};
+
+		qspi1: spi@8428000 {
+			compatible = "zhihe,a210-qspi", "snps,dwc-ssi-1.01a";
+			reg = <0x00 0x08428000 0x0 0x4000>;
+			#address-cells = <1>;
+			clocks = <&scmi_clk A210_CLK_PERI2_QSPI1_SSI_CLK_EN>,
+				 <&scmi_clk A210_CLK_PERI2_QSPI1_PCLK_EN>;
+			clock-names = "ssi_clk", "pclk";
+			interrupt-parent = <&intc>;
+			interrupts = <309 IRQ_TYPE_LEVEL_HIGH>;
+			num-cs = <2>;
+			power-domains = <&scmi_power A210_PD_TOP>;
+			resets = <&scmi_reset A210_RESET_PERI2_QSPI1_SSI_RST>,
+				 <&scmi_reset A210_RESET_PERI2_QSPI1_PRST>;
 			#size-cells = <0>;
 
 			status = "disabled";
