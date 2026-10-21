@@ -409,4 +409,13 @@ config AXIADO_MAILBOX
 	  Axiado SoCs.
 	  If unsure, say N.
 
+config ZHIHE_A210_MBOX
+	bool "Zhihe A210 AP to E902 mailbox"
+	depends on OF && (ARCH_ZHIHE || COMPILE_TEST)
+	help
+	  Enable the AP doorbell channel to running E902 firmware on A210.
+	  Clients exchange their payloads through shared memory and signal
+	  completion themselves. The controller does not carry vendor RPCs.
+	  Enable this for an SCMI server running on the A210 E902 processor.
+
 endif
