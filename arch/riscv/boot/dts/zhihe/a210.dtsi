@@ -741,6 +741,72 @@
 			reg = <0x00 0x0211f000 0x0 0x20>;
 		};
 
+		usb2_0: usb@8200000 {
+			compatible = "zhihe,a210-usb", "snps,dwc2";
+			reg = <0 0x08200000 0 0x40000>;
+			clocks = <&scmi_clk A210_CLK_USB20_WRAP0_HCLK>;
+			clock-names = "otg";
+			g-np-tx-fifo-size = <16>;
+			g-rx-fifo-size = <275>;
+			g-tx-fifo-size = <256 128 128 64 64 32>;
+			interrupt-parent = <&intc>;
+			interrupts = <181 IRQ_TYPE_LEVEL_HIGH>;
+			maximum-speed = "high-speed";
+			phys = <&usb2_phy0>;
+			phy-names = "usb2-phy";
+			power-domains = <&scmi_power A210_PD_USB>;
+			resets = <&scmi_reset A210_RESET_USB_USB20_BLK_USB2_WRAP0_HRST>;
+			reset-names = "dwc2";
+
+			status = "disabled";
+		};
+
+		usb2_1: usb@8240000 {
+			compatible = "zhihe,a210-usb", "snps,dwc2";
+			reg = <0 0x08240000 0 0x40000>;
+			clocks = <&scmi_clk A210_CLK_USB20_WRAP1_HCLK>;
+			clock-names = "otg";
+			g-np-tx-fifo-size = <16>;
+			g-rx-fifo-size = <275>;
+			g-tx-fifo-size = <256 128 128 64 64 32>;
+			interrupt-parent = <&intc>;
+			interrupts = <182 IRQ_TYPE_LEVEL_HIGH>;
+			maximum-speed = "high-speed";
+			phys = <&usb2_phy1>;
+			phy-names = "usb2-phy";
+			power-domains = <&scmi_power A210_PD_USB>;
+			resets = <&scmi_reset A210_RESET_USB_USB20_BLK_USB2_WRAP1_HRST>;
+			reset-names = "dwc2";
+
+			status = "disabled";
+		};
+
+		usb2_phy0: phy@8300000 {
+			compatible = "zhihe,a210-usb2-phy";
+			reg = <0 0x08300000 0 0x20>;
+			clocks = <&scmi_clk A210_CLK_USB20_SYSREG_PCLK>;
+			clock-names = "apb";
+			#phy-cells = <0>;
+			power-domains = <&scmi_power A210_PD_USB>;
+			resets = <&scmi_reset A210_RESET_USB_USB20_BLK_USB0_PHY_PON_RESET>;
+			reset-names = "phy";
+
+			status = "disabled";
+		};
+
+		usb2_phy1: phy@8301000 {
+			compatible = "zhihe,a210-usb2-phy1";
+			reg = <0 0x08301000 0 0x20>;
+			clocks = <&scmi_clk A210_CLK_USB20_SYSREG_PCLK>;
+			clock-names = "apb";
+			#phy-cells = <0>;
+			power-domains = <&scmi_power A210_PD_USB>;
+			resets = <&scmi_reset A210_RESET_USB_USB20_BLK_USB1_PHY_PON_RESET>;
+			reset-names = "phy";
+
+			status = "disabled";
+		};
+
 		uart4: serial@8401000 {
 			compatible = "zhihe,a210-uart", "snps,dw-apb-uart";
 			reg = <0x0 0x08401000 0x0 0x400>;
