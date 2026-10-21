@@ -6,4 +6,15 @@
 / {
 	compatible = "zhihe,a210-melonpi-v1", "zhihe,a210-som", "zhihe,a210";
 	model = "Melon Pi V1";
+
+	regulator-fan {
+		compatible = "regulator-fixed";
+		enable-active-high;
+		gpio = <&aw9535_0 2 GPIO_ACTIVE_HIGH>;
+		regulator-always-on;
+		regulator-boot-on;
+		regulator-max-microvolt = <5000000>;
+		regulator-min-microvolt = <5000000>;
+		regulator-name = "fan-5v";
+	};
 };
