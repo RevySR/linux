@@ -351,6 +351,23 @@
 		};
 	};
 
+	firmware {
+		scmi: scmi {
+			compatible = "arm,scmi";
+			#address-cells = <1>;
+			mbox-names = "tx";
+			mboxes = <&mbox_e902 0>;
+			shmem = <&scmi_shmem>;
+			#size-cells = <0>;
+
+			status = "disabled";
+
+			scmi_voltage: protocol@17 {
+				reg = <0x17>;
+			};
+		};
+	};
+
 	power: power-controller {
 		compatible = "zhihe,a210-power-domain";
 		ranges;
@@ -455,6 +472,21 @@
 			reg-names = "peri0-sysreg", "peri1-sysreg",
 				    "peri2-sysreg", "peri3-sysreg", "tee-crg";
 			#clock-cells = <1>;
+		};
+
+		mbox_e902: mailbox@321000 {
+			compatible = "zhihe,a210-ap-mailbox";
+			reg = <0 0x00321000 0 0x1000>,
+			      <0 0x00311000 0 0x1000>;
+			reg-names = "interrupt", "tx";
+			clocks = <&clk_peri PERI0_MBOX1_PCLK_EN>,
+				 <&clk_peri PERI0_MBOX0_PCLK_EN>;
+			clock-names = "local", "remote";
+			interrupt-parent = <&intc>;
+			interrupts = <336 IRQ_TYPE_LEVEL_HIGH>;
+			#mbox-cells = <1>;
+
+			status = "disabled";
 		};
 
 		peri3_padctrl: pinctrl@542000 {
@@ -1000,6 +1032,19 @@
 				interrupt-parent = <&intc>;
 				interrupts = <10 IRQ_TYPE_LEVEL_HIGH>;
 				ngpios = <10>;
+			};
+		};
+
+		sram@30907c00 {
+			compatible = "mmio-sram";
+			reg = <0 0x30907c00 0 0x100>;
+			ranges = <0 0 0x30907c00 0x100>;
+			#address-cells = <1>;
+			#size-cells = <1>;
+
+			scmi_shmem: scp-sram@0 {
+				compatible = "arm,scmi-shmem";
+				reg = <0 0x100>;
 			};
 		};
 	};
