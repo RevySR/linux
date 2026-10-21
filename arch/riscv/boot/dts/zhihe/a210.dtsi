@@ -402,6 +402,29 @@
 			status = "disabled";
 		};
 
+		dmac0: dma-controller@520000 {
+			compatible = "zhihe,a210-axi-dma", "snps,axi-dma-1.01a";
+			reg = <0x00 0x00520000 0x0 0x4000>;
+			clocks = <&scmi_clk A210_CLK_PERI3_DMAC_ACLK_EN>,
+				 <&scmi_clk A210_CLK_PERI3_DMAC_HCLK_EN>;
+			clock-names = "core-clk", "cfgr-clk";
+			#dma-cells = <1>;
+			dma-channels = <16>;
+			interrupt-parent = <&intc>;
+			interrupts = <264 IRQ_TYPE_LEVEL_HIGH>;
+			power-domains = <&scmi_power A210_PD_DMAC>;
+			resets = <&scmi_reset A210_RESET_PERI3_DMAC_ARST>,
+				 <&scmi_reset A210_RESET_PERI3_DMAC_HRST>;
+			snps,axi-max-burst-len = <4>;
+			snps,block-size = <65536 65536 65536 65536
+					  65536 65536 65536 65536
+					  65536 65536 65536 65536
+					  65536 65536 65536 65536>;
+			snps,data-width = <4>;
+			snps,dma-masters = <1>;
+			snps,priority = <0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0>;
+		};
+
 		peri3_padctrl: pinctrl@542000 {
 			compatible = "zhihe,a210-peri3-pinctrl";
 			reg = <0x0 0x00542000 0x0 0x1000>;
@@ -558,6 +581,8 @@
 			clocks = <&scmi_clk A210_CLK_PERI1_I2C0_IC_CLK_EN>,
 				 <&scmi_clk A210_CLK_PERI1_I2C0_PCLK_EN>;
 			clock-names = "ref", "pclk";
+			dmas = <&dmac0 21>, <&dmac0 20>;
+			dma-names = "tx", "rx";
 			interrupt-parent = <&intc>;
 			interrupts = <293 IRQ_TYPE_LEVEL_HIGH>;
 			resets = <&scmi_reset A210_RESET_PERI1_I2C0_IC_RST>,
@@ -957,6 +982,27 @@
 					      <&cpu6_intc 7>,
 					      <&cpu7_intc 3>,
 					      <&cpu7_intc 7>;
+		};
+
+		dmac1: dma-controller@27540000 {
+			compatible = "zhihe,a210-axi-dma", "snps,axi-dma-1.01a";
+			reg = <0x00 0x27540000 0x0 0x4000>;
+			clocks = <&scmi_clk A210_CLK_TEE_DMAC_CLKEN>,
+				 <&scmi_clk A210_CLK_TEE_DMAC_CLKEN>;
+			clock-names = "core-clk", "cfgr-clk";
+			#dma-cells = <1>;
+			dma-channels = <4>;
+			interrupt-parent = <&intc>;
+			interrupts = <259 IRQ_TYPE_LEVEL_HIGH>;
+			resets = <&scmi_reset A210_RESET_TEE_DMAC_ARST>,
+				 <&scmi_reset A210_RESET_TEE_DMAC_HRST>;
+			snps,axi-max-burst-len = <16>;
+			snps,block-size = <65536 65536 65536 65536>;
+			snps,data-width = <4>;
+			snps,dma-masters = <1>;
+			snps,priority = <0 0 0 0>;
+
+			status = "disabled";
 		};
 
 		aon_gpio0: gpio@30841000 {
