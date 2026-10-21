@@ -176,6 +176,10 @@
 };
 
 &emmc {
+	assigned-clock-parents = <&clk AUDIO0_PLL_FOUTVCO>, <0>;
+	assigned-clock-rates = <0>, <786432000>;
+	assigned-clocks = <&clk TOP_PERI_EMMC_REF_CLK_MUX>,
+			  <&clk TOP_PERI_EMMC_REF_CLK_DIV>;
 	bus-width = <8>;
 	cap-mmc-highspeed;
 	max-frequency = <196608000>;
@@ -309,4 +313,9 @@
 
 &power_gpu {
 	pmic-supply = <&dvdd_gpu_reg>;
+};
+
+&clk {
+	assigned-clock-rates = <2359296000>, <2528870400>;
+	assigned-clocks = <&clk AUDIO0_PLL_FOUTVCO>, <&clk AUDIO1_PLL_FOUTVCO>;
 };
