@@ -751,6 +751,19 @@
 			};
 		};
 
+		adc: adc@5a0000 {
+			compatible = "zhihe,a210-adc";
+			reg = <0 0x005a0000 0 0x1000>;
+			clocks = <&clk_peri PERI3_ADC_PCLK_EN>;
+			interrupt-parent = <&intc>;
+			interrupts = <260 IRQ_TYPE_LEVEL_HIGH>;
+			#io-channel-cells = <1>;
+			power-domains = <&power_top>;
+			resets = <&rst_peri3 PERI3_ADC_PRST>;
+
+			status = "disabled";
+		};
+
 		qspi0: spi@1000000 {
 			compatible = "zhihe,a210-qspi", "snps,dwc-ssi-1.01a";
 			reg = <0x00 0x01000000 0x0 0x4000>;
