@@ -17,3 +17,141 @@
 &scmi {
 	status = "okay";
 };
+
+&scmi_voltage {
+	regulators {
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		dvdd_cpu_reg: regulator@0 {
+			reg = <0>;
+			regulator-always-on;
+			regulator-max-microvolt = <1000000>;
+			regulator-min-microvolt = <600000>;
+			regulator-name = "dvdd_cpu";
+		};
+
+		dvddm_cpu_reg: regulator@1 {
+			reg = <1>;
+			regulator-always-on;
+			regulator-max-microvolt = <1000000>;
+			regulator-min-microvolt = <800000>;
+			regulator-name = "dvddm_cpu";
+		};
+
+		dvdd_cpu_p_reg: regulator@2 {
+			reg = <2>;
+			regulator-always-on;
+			regulator-max-microvolt = <1000000>;
+			regulator-min-microvolt = <800000>;
+			regulator-name = "dvdd_cpu_p";
+		};
+
+		dvdd08_ddr_reg: regulator@3 {
+			reg = <3>;
+			regulator-always-on;
+			regulator-max-microvolt = <800000>;
+			regulator-min-microvolt = <750000>;
+			regulator-name = "dvdd08_ddr";
+		};
+
+		dvdd_vp_reg: regulator@4 {
+			reg = <4>;
+			regulator-max-microvolt = <800000>;
+			regulator-min-microvolt = <750000>;
+			regulator-name = "dvdd_vp";
+		};
+
+		dvdd_npu_vip_reg: regulator@5 {
+			reg = <5>;
+			regulator-max-microvolt = <1000000>;
+			regulator-min-microvolt = <750000>;
+			regulator-name = "dvdd_npu_vip";
+		};
+
+		dvdd_gpu_reg: regulator@6 {
+			reg = <6>;
+			regulator-max-microvolt = <800000>;
+			regulator-min-microvolt = <750000>;
+			regulator-name = "dvdd_gpu";
+		};
+
+		avdd33_emmc_reg: regulator@7 {
+			reg = <7>;
+			regulator-always-on;
+			regulator-name = "avdd33_emmc";
+		};
+
+		avdd33_usb2_reg: regulator@8 {
+			reg = <8>;
+			regulator-always-on;
+			regulator-name = "avdd33_usb2";
+		};
+
+		dvdd08_aon_reg: regulator@9 {
+			reg = <9>;
+			regulator-always-on;
+			regulator-name = "dvdd08_aon";
+		};
+
+		avdd18_aon_reg: regulator@a {
+			reg = <10>;
+			regulator-always-on;
+			regulator-name = "avdd18_aon";
+		};
+
+		avdd18_emmc_usb2_reg: regulator@b {
+			reg = <11>;
+			regulator-always-on;
+			regulator-name = "avdd18_emmc_usb2";
+		};
+
+		avdd18_emmc_peri_reg: regulator@c {
+			reg = <12>;
+			regulator-always-on;
+			regulator-name = "avdd18_emmc_peri";
+		};
+
+		avdd18_top_reg: regulator@d {
+			reg = <13>;
+			regulator-always-on;
+			regulator-name = "avdd18_top";
+		};
+
+		avdd18_pll_reg: regulator@e {
+			reg = <14>;
+			regulator-always-on;
+			regulator-name = "avdd18_pll";
+		};
+
+		avdd18_reg: regulator@f {
+			reg = <15>;
+			regulator-always-on;
+			regulator-name = "avdd18";
+		};
+
+		dvdd18_ddr_vaa_reg: regulator@10 {
+			reg = <16>;
+			regulator-always-on;
+			regulator-name = "dvdd18_ddr_vaa";
+		};
+
+		p3v3_reg: regulator@11 {
+			reg = <17>;
+			regulator-always-on;
+			regulator-name = "p3v3";
+		};
+
+		dvdd08_top_reg: regulator@12 {
+			reg = <18>;
+			regulator-always-on;
+			regulator-name = "dvdd08_top";
+		};
+
+		dvdd06_ddr_vddqlp_reg: regulator@13 {
+			reg = <19>;
+			regulator-always-on;
+			regulator-name = "dvdd06_ddr_vddqlp";
+		};
+	};
+};
