@@ -389,6 +389,19 @@
 			status = "disabled";
 		};
 
+		emmc: mmc@500000 {
+			compatible = "zhihe,a210-dwcmshc";
+			reg = <0x0 0x00500000 0x0 0x10000>;
+			clocks = <&scmi_clk A210_CLK_PERI3_EMMC_SDIO_REF_CLK_CG_EN>,
+				 <&scmi_clk A210_CLK_PERI3_EMMC_HCLK_EN>;
+			clock-names = "core", "bus";
+			interrupt-parent = <&intc>;
+			interrupts = <265 IRQ_TYPE_LEVEL_HIGH>;
+			power-domains = <&scmi_power A210_PD_EMMC>;
+
+			status = "disabled";
+		};
+
 		peri3_padctrl: pinctrl@542000 {
 			compatible = "zhihe,a210-peri3-pinctrl";
 			reg = <0x0 0x00542000 0x0 0x1000>;
