@@ -40,6 +40,16 @@
 		regulator-min-microvolt = <3300000>;
 		regulator-name = "vdd-3v3";
 	};
+
+	reg_usb_host: regulator-usb-host {
+		compatible = "regulator-fixed";
+		enable-active-high;
+		gpio = <&aw9535_1 8 GPIO_ACTIVE_HIGH>;
+		regulator-max-microvolt = <5000000>;
+		regulator-min-microvolt = <5000000>;
+		regulator-name = "usb-host-vbus";
+		startup-delay-us = <10000>;
+	};
 };
 
 &peri2_padctrl {
@@ -164,5 +174,26 @@
 };
 
 &peri3_padctrl {
+	status = "okay";
+};
+
+&usb2_phy0 {
+	status = "okay";
+};
+
+&usb2_phy1 {
+	status = "okay";
+};
+
+&usb2_0 {
+	dr_mode = "peripheral";
+
+	status = "okay";
+};
+
+&usb2_1 {
+	dr_mode = "host";
+	vbus-supply = <&reg_usb_host>;
+
 	status = "okay";
 };
