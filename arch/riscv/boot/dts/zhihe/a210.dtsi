@@ -377,6 +377,128 @@
 		dma-noncoherent;
 		#size-cells = <2>;
 
+		timer0: timer@303000 {
+			compatible = "zhihe,a210-timer", "snps,dw-apb-timer";
+			reg = <0x00 0x00303000 0x0 0x14>;
+			clocks = <&scmi_clk A210_CLK_PERI0_TIMER0_CCLK_EN>,
+				 <&scmi_clk A210_CLK_PERI0_TIMER0_PCLK_EN>;
+			clock-names = "timer", "pclk";
+			interrupt-parent = <&intc>;
+			interrupts = <313 IRQ_TYPE_LEVEL_HIGH>;
+			resets = <&scmi_reset A210_RESET_PERI0_TIMER0_CRST>,
+				 <&scmi_reset A210_RESET_PERI0_TIMER0_PRST>;
+
+			status = "disabled";
+		};
+
+		timer1: timer@303014 {
+			compatible = "zhihe,a210-timer", "snps,dw-apb-timer";
+			reg = <0x00 0x00303014 0x0 0x14>;
+			clocks = <&scmi_clk A210_CLK_PERI0_TIMER0_CCLK_EN>,
+				 <&scmi_clk A210_CLK_PERI0_TIMER0_PCLK_EN>;
+			clock-names = "timer", "pclk";
+			interrupt-parent = <&intc>;
+			interrupts = <314 IRQ_TYPE_LEVEL_HIGH>;
+			resets = <&scmi_reset A210_RESET_PERI0_TIMER0_CRST>,
+				 <&scmi_reset A210_RESET_PERI0_TIMER0_PRST>;
+
+			status = "disabled";
+		};
+
+		timer2: timer@303028 {
+			compatible = "zhihe,a210-timer", "snps,dw-apb-timer";
+			reg = <0x00 0x00303028 0x0 0x14>;
+			clocks = <&scmi_clk A210_CLK_PERI0_TIMER0_CCLK_EN>,
+				 <&scmi_clk A210_CLK_PERI0_TIMER0_PCLK_EN>;
+			clock-names = "timer", "pclk";
+			interrupt-parent = <&intc>;
+			interrupts = <315 IRQ_TYPE_LEVEL_HIGH>;
+			resets = <&scmi_reset A210_RESET_PERI0_TIMER0_CRST>,
+				 <&scmi_reset A210_RESET_PERI0_TIMER0_PRST>;
+
+			status = "disabled";
+		};
+
+		timer3: timer@30303c {
+			compatible = "zhihe,a210-timer", "snps,dw-apb-timer";
+			reg = <0x00 0x0030303c 0x0 0x14>;
+			clocks = <&scmi_clk A210_CLK_PERI0_TIMER0_CCLK_EN>,
+				 <&scmi_clk A210_CLK_PERI0_TIMER0_PCLK_EN>;
+			clock-names = "timer", "pclk";
+			interrupt-parent = <&intc>;
+			interrupts = <316 IRQ_TYPE_LEVEL_HIGH>;
+			resets = <&scmi_reset A210_RESET_PERI0_TIMER0_CRST>,
+				 <&scmi_reset A210_RESET_PERI0_TIMER0_PRST>;
+
+			status = "disabled";
+		};
+
+		timer4: timer@304000 {
+			compatible = "zhihe,a210-timer", "snps,dw-apb-timer";
+			reg = <0x00 0x00304000 0x0 0x14>;
+			clocks = <&scmi_clk A210_CLK_PERI0_TIMER1_CCLK_EN>,
+				 <&scmi_clk A210_CLK_PERI0_TIMER1_PCLK_EN>;
+			clock-names = "timer", "pclk";
+			interrupt-parent = <&intc>;
+			interrupts = <317 IRQ_TYPE_LEVEL_HIGH>;
+			resets = <&scmi_reset A210_RESET_PERI0_TIMER1_CRST>,
+				 <&scmi_reset A210_RESET_PERI0_TIMER1_PRST>;
+
+			status = "disabled";
+		};
+
+		timer5: timer@304014 {
+			compatible = "zhihe,a210-timer", "snps,dw-apb-timer";
+			reg = <0x00 0x00304014 0x0 0x14>;
+			clocks = <&scmi_clk A210_CLK_PERI0_TIMER1_CCLK_EN>,
+				 <&scmi_clk A210_CLK_PERI0_TIMER1_PCLK_EN>;
+			clock-names = "timer", "pclk";
+			interrupt-parent = <&intc>;
+			interrupts = <318 IRQ_TYPE_LEVEL_HIGH>;
+			resets = <&scmi_reset A210_RESET_PERI0_TIMER1_CRST>,
+				 <&scmi_reset A210_RESET_PERI0_TIMER1_PRST>;
+
+			status = "disabled";
+		};
+
+		timer6: timer@304028 {
+			compatible = "zhihe,a210-timer", "snps,dw-apb-timer";
+			reg = <0x00 0x00304028 0x0 0x14>;
+			clocks = <&scmi_clk A210_CLK_PERI0_TIMER1_CCLK_EN>,
+				 <&scmi_clk A210_CLK_PERI0_TIMER1_PCLK_EN>;
+			clock-names = "timer", "pclk";
+			interrupt-parent = <&intc>;
+			interrupts = <319 IRQ_TYPE_LEVEL_HIGH>;
+			resets = <&scmi_reset A210_RESET_PERI0_TIMER1_CRST>,
+				 <&scmi_reset A210_RESET_PERI0_TIMER1_PRST>;
+
+			status = "disabled";
+		};
+
+		timer7: timer@30403c {
+			compatible = "zhihe,a210-timer", "snps,dw-apb-timer";
+			reg = <0x00 0x0030403c 0x0 0x14>;
+			clocks = <&scmi_clk A210_CLK_PERI0_TIMER1_CCLK_EN>,
+				 <&scmi_clk A210_CLK_PERI0_TIMER1_PCLK_EN>;
+			clock-names = "timer", "pclk";
+			interrupt-parent = <&intc>;
+			interrupts = <320 IRQ_TYPE_LEVEL_HIGH>;
+			resets = <&scmi_reset A210_RESET_PERI0_TIMER1_CRST>,
+				 <&scmi_reset A210_RESET_PERI0_TIMER1_PRST>;
+
+			status = "disabled";
+		};
+
+		watchdog0: watchdog@305000 {
+			compatible = "snps,dw-wdt";
+			reg = <0x00 0x00305000 0x0 0x1000>;
+			clocks = <&scmi_clk A210_CLK_PERI0_WDT0_PCLK_EN>;
+			clock-names = "tclk";
+			interrupt-parent = <&intc>;
+			interrupts = <331 IRQ_TYPE_LEVEL_HIGH>;
+			resets = <&scmi_reset A210_RESET_PERI0_WDT0_PRST>;
+		};
+
 		mbox_e902: mailbox@321000 {
 			compatible = "zhihe,a210-ap-mailbox";
 			reg = <0 0x00321000 0 0x1000>,
