@@ -666,7 +666,11 @@ struct ahci_host_priv *ahci_platform_get_resources(struct platform_device *pdev,
 		goto err_out;
 
 	pm_runtime_enable(dev);
-	pm_runtime_get_sync(dev);
+	rc = pm_runtime_resume_and_get(dev);
+	if (rc < 0) {
+		pm_runtime_disable(dev);
+		goto err_out;
+	}
 	hpriv->got_runtime_pm = true;
 
 	devres_remove_group(dev, NULL);
