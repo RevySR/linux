@@ -3,6 +3,7 @@
  * Copyright (C) 2021 Alibaba Group Holding Limited.
  */
 
+#include <dt-bindings/ata/ahci.h>
 #include <dt-bindings/clock/zhihe,a210-clk.h>
 #include <dt-bindings/clock/zhihe,a210-aon-clk.h>
 #include <dt-bindings/interrupt-controller/irq.h>
@@ -479,6 +480,34 @@
 			reg-names = "bpc", "pcu";
 			#power-domain-cells = <0>;
 			power-domains = <&power_top>;
+		};
+
+		power_sata: power-domain-sata@a006a00 {
+			compatible = "zhihe,a210-pd-sata";
+			reg = <0 0x0a006a00 0 0x200>,
+			      <0 0x0a006800 0 0x200>;
+			reg-names = "bpc", "pcu";
+			clocks = <&clk_pcie SATA_GEN3X2_ACLK_EN>,
+				 <&clk_pcie SATA_PMALIVE_CLK_EN>,
+				 <&clk_pcie SATA_MST_AFENCE_ACLK_EN>,
+				 <&clk_pcie SATA_SLV_AFENCE_ACLK_EN>,
+				 <&clk_pcie X2X_SATA_SLV_ACLK_EN>,
+				 <&clk_pcie X2X_SATA_MST_ACLK_EN>,
+				 <&clk_pcie SATA_RXOOB0_CLK_EN>,
+				 <&clk_pcie SATA_RXOOB1_CLK_EN>;
+			phys = <&e16phy>;
+			#power-domain-cells = <0>;
+			power-domains = <&power_top>;
+			resets = <&rst_pcie PCIE_X2X_SATA_MST_ARST>,
+				 <&rst_pcie PCIE_X2X_SATA_SLV_ARST>,
+				 <&rst_pcie PCIE_SATA_SLV_AFENCE_ARST>,
+				 <&rst_pcie PCIE_SATA_MST_AFENCE_ARST>,
+				 <&rst_pcie PCIE_SATA_RST_ASIC0>,
+				 <&rst_pcie PCIE_SATA_RST_ASIC1>,
+				 <&rst_pcie PCIE_SATA_RST_RXOOB0>,
+				 <&rst_pcie PCIE_SATA_RST_RXOOB1>;
+
+			status = "disabled";
 		};
 	};
 
@@ -1179,6 +1208,36 @@
 			reset-names = "apb", "phy";
 
 			status = "disabled";
+		};
+
+		sata: sata@a200000 {
+			compatible = "snps,dwc-ahci";
+			reg = <0 0x0a200000 0 0x100000>;
+			#address-cells = <1>;
+			clocks = <&clk_pcie SATA_GEN3X2_ACLK_EN>,
+				 <&clk_pcie SATA_PMALIVE_CLK_EN>;
+			clock-names = "aclk", "pmalive";
+			interrupt-parent = <&intc>;
+			interrupts = <170 IRQ_TYPE_LEVEL_HIGH>;
+			power-domains = <&power_sata>;
+			resets = <&rst_pcie PCIE_SATA_ARESET>,
+				 <&rst_pcie PCIE_SATA_RST_PMALIVE>;
+			reset-names = "arst", "pmalive";
+			#size-cells = <0>;
+
+			status = "disabled";
+
+			sata0: sata-port@0 {
+				reg = <0>;
+				phys = <&e16phy>;
+				phy-names = "sata-phy";
+			};
+
+			sata1: sata-port@1 {
+				reg = <1>;
+				phys = <&e16phy>;
+				phy-names = "sata-phy";
+			};
 		};
 
 		pcie0: pcie@b000000 {
