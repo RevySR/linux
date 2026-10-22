@@ -98,6 +98,14 @@ properties:
     description:
       The hart ID of this CPU node.
 
+  power-domains:
+    maxItems: 1
+    description:
+      Performance domain managing this CPU's operating points.
+
+  power-domain-names:
+    const: perf
+
   riscv,cbom-block-size:
     $ref: /schemas/types.yaml#/definitions/uint32
     description:
@@ -151,6 +159,8 @@ anyOf:
       - riscv,isa-base
 
 dependencies:
+  power-domains: [power-domain-names]
+  power-domain-names: [power-domains]
   riscv,isa-base: ["riscv,isa-extensions"]
   riscv,isa-extensions: ["riscv,isa-base"]
 
