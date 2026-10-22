@@ -9,3 +9,11 @@
 		reg = <0x0 0x80000000 0x1 0x0>;
 	};
 };
+
+&mbox_e902 {
+	status = "okay";
+};
+
+&scmi {
+	status = "okay";
+};

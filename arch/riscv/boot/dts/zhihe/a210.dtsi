@@ -6,6 +6,7 @@
 #include <dt-bindings/interrupt-controller/irq.h>
 
 #include "a210-clock.h"
+#include "a210-power.h"
 #include "a210-reset.h"
 
 / {
@@ -316,22 +317,48 @@
 	};
 
 	firmware {
-		scmi {
+		scmi: scmi {
 			compatible = "arm,scmi";
 			mboxes = <&mbox_e902 0>, <&mbox_e902 1>;
 			mbox-names = "tx", "rx";
 			shmem = <&scmi_shmem>, <&scmi_notification_shmem>;
+			arm,max-rx-timeout-ms = <250>;
 			#address-cells = <1>;
 			#size-cells = <0>;
+
+			status = "disabled";
+
+			scmi_power: protocol@11 {
+				reg = <0x11>;
+				#power-domain-cells = <1>;
+			};
+
+			scmi_system: protocol@12 {
+				reg = <0x12>;
+			};
+
+			scmi_perf: protocol@13 {
+				reg = <0x13>;
+				#power-domain-cells = <1>;
+			};
 
 			scmi_clk: protocol@14 {
 				reg = <0x14>;
 				#clock-cells = <1>;
 			};
 
+			scmi_sensors: protocol@15 {
+				reg = <0x15>;
+				#thermal-sensor-cells = <1>;
+			};
+
 			scmi_reset: protocol@16 {
 				reg = <0x16>;
 				#reset-cells = <1>;
+			};
+
+			scmi_voltage: protocol@17 {
+				reg = <0x17>;
 			};
 		};
 	};
@@ -351,6 +378,8 @@
 			interrupt-parent = <&intc>;
 			interrupts = <336 IRQ_TYPE_LEVEL_HIGH>;
 			#mbox-cells = <1>;
+
+			status = "disabled";
 		};
 
 		uart0: serial@2014000 {
