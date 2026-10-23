@@ -54,6 +54,11 @@ static void dw_i2c_plat_pm_cleanup(struct dw_i2c_dev *dev)
 		pm_runtime_put_noidle(dev->dev);
 }
 
+static void dw_i2c_plat_assert_reset(void *data)
+{
+	reset_control_assert(data);
+}
+
 static int dw_i2c_plat_request_regs(struct dw_i2c_dev *dev)
 {
 	struct platform_device *pdev = to_platform_device(dev->dev);
@@ -160,9 +165,17 @@ static int dw_i2c_plat_probe(struct platform_device *pdev)
 	if (ret)
 		return ret;
 
-	dev->rst = devm_reset_control_get_optional_exclusive_deasserted(device, NULL);
+	dev->rst = devm_reset_control_array_get_optional_exclusive(device);
 	if (IS_ERR(dev->rst))
 		return dev_err_probe(device, PTR_ERR(dev->rst), "failed to acquire reset\n");
+
+	ret = reset_control_deassert(dev->rst);
+	if (ret)
+		return dev_err_probe(device, ret, "failed to deassert reset\n");
+
+	ret = devm_add_action_or_reset(device, dw_i2c_plat_assert_reset, dev->rst);
+	if (ret)
+		return ret;
 
 	ret = i2c_dw_fw_parse_and_configure(dev);
 	if (ret)
