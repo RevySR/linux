@@ -13,6 +13,9 @@ properties:
   compatible:
     oneOf:
       - const: snps,dw-apb-timer
+      - items:
+          - const: zhihe,a210-timer
+          - const: snps,dw-apb-timer
       - enum:
           - snps,dw-apb-timer-sp
           - snps,dw-apb-timer-osc
@@ -25,7 +28,10 @@ properties:
     maxItems: 1
 
   resets:
-    maxItems: 1
+    minItems: 1
+    items:
+      - description: Timer ticks reset
+      - description: APB interface reset
 
   clocks:
     minItems: 1
@@ -40,6 +46,21 @@ properties:
       - const: pclk
 
   clock-frequency: true
+
+allOf:
+  - if:
+      properties:
+        compatible:
+          contains:
+            const: zhihe,a210-timer
+    then:
+      properties:
+        resets:
+          minItems: 2
+    else:
+      properties:
+        resets:
+          maxItems: 1
 
 additionalProperties: false
 
