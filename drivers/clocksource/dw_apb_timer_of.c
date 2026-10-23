@@ -31,7 +31,7 @@ static int __init timer_get_base_and_rate(struct device_node *np,
 	 * Reset the timer if the reset control is available, wiping
 	 * out the state the firmware may have left it
 	 */
-	rstc = of_reset_control_get(np, NULL);
+	rstc = of_reset_control_array_get_exclusive(np);
 	if (!IS_ERR(rstc)) {
 		reset_control_assert(rstc);
 		reset_control_deassert(rstc);
