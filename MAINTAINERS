@@ -30867,6 +30867,7 @@ L:	linux-riscv@lists.infradead.org
 S:	Maintained
 F:	Documentation/devicetree/bindings/iio/adc/thead,th1520-adc.yaml
 F:	Documentation/devicetree/bindings/mailbox/zhihe,a210-ap-mailbox.yaml
+F:	Documentation/devicetree/bindings/media/zhihe,a210-vc9000d.yaml
 F:	Documentation/devicetree/bindings/net/zhihe,a210-dwmac.yaml
 F:	Documentation/devicetree/bindings/pci/zhihe,a210-pcie.yaml
 F:	Documentation/devicetree/bindings/phy/zhihe,a210-*.yaml
