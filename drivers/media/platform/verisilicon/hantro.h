@@ -79,6 +79,7 @@ struct hantro_irq {
  * @double_buffer:		core needs double buffering
  * @legacy_regs:		core uses legacy register set
  * @late_postproc:		postproc must be set up at the end of the job
+ * @vc9000d:			VC8000D backend drives a VC9000D core
  * @shared_devices:		an array of device ids that cannot run concurrently
  */
 struct hantro_variant {
@@ -104,6 +105,7 @@ struct hantro_variant {
 	unsigned int double_buffer : 1;
 	unsigned int legacy_regs : 1;
 	unsigned int late_postproc : 1;
+	unsigned int vc9000d : 1;
 	const struct of_device_id *shared_devices;
 };
 

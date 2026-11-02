@@ -336,4 +336,37 @@
 #define VC8000_HEVC_ADDR_TILE_SAO	180
 #define VC8000_HEVC_ADDR_TILE_BSD	182
 
+/*
+ * VC9000D shares the decoder registers above but moves the post-processor.
+ * Register 353 holds its input format and the mask of enabled output units,
+ * and the first output unit starts at register 384. Scale mode 1 leaves the
+ * picture size unchanged.
+ */
+#define VC9000D_PP_IN_FORMAT_DEC	1
+#define VC9000D_PP_UNIT0		BIT(0)
+#define VC9000D_PP_SCALE_NONE		1
+
+#define vc9000d_pp_in_format		VC8000_REG(353, 27, 0x1f)
+#define vc9000d_pp_units		VC8000_REG(353, 0, 0xff)
+#define vc9000d_pp_out_e		VC8000_REG(384, 0, 0x1)
+#define vc9000d_pp_out_y_stride		VC8000_REG(391, 16, 0xffff)
+#define vc9000d_pp_out_c_stride		VC8000_REG(391, 0, 0xffff)
+#define vc9000d_pp_in_width		VC8000_REG(393, 16, 0xffff)
+#define vc9000d_pp_in_height		VC8000_REG(393, 0, 0xffff)
+#define vc9000d_pp_hor_scale_mode	VC8000_REG(394, 8, 0xff)
+#define vc9000d_pp_ver_scale_mode	VC8000_REG(394, 0, 0xff)
+#define vc9000d_pp_out_width		VC8000_REG(395, 16, 0xffff)
+#define vc9000d_pp_out_height		VC8000_REG(395, 0, 0xffff)
+
+/*
+ * VC9000D address pairs, MSB word first like above. The SDK programs the
+ * tile edge and post-processor column buffers into two pairs each.
+ */
+#define VC9000D_ADDR_TILE_EDGE(i)	(271 + (i) * 2)
+#define VC9000D_ADDR_PP_COLUMN(i)	(362 + (i) * 2)
+#define VC9000D_ADDR_PP_OUT_LUMA	385
+#define VC9000D_ADDR_PP_OUT_CHROMA	387
+#define VC9000D_ADDR_PP_SCALER0(i)	(403 + (i) * 2)
+#define VC9000D_ADDR_PP_SCALER1(i)	(407 + (i) * 2)
+
 #endif

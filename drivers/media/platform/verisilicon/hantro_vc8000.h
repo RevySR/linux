@@ -3,6 +3,8 @@
 #ifndef HANTRO_VC8000_H_
 #define HANTRO_VC8000_H_
 
+#include <linux/sizes.h>
+
 #include "hantro.h"
 #include "hantro_vc8000_regs.h"
 
@@ -33,6 +35,46 @@ struct hantro_vc8000_ctx {
 	struct hantro_vc8000_hevc_ctx hevc;
 	struct vc8000_vp9_ctx *vp9;
 };
+
+/*
+ * With tile columns, the VC9000D post-processor needs a column buffer of
+ * 36 bytes per 16-aligned row and bit of depth, followed by two scaler
+ * areas, as sized by PPGetLancozsColumnBufferSize() in the SDK.
+ */
+#define VC9000D_PP_SCALER0_SIZE		SZ_1M
+#define VC9000D_PP_SCALER1_SIZE		(SZ_512K + SZ_256K)
+
+static inline bool hantro_vc8000_is_vc9000d(const struct hantro_ctx *ctx)
+{
+	return ctx->dev->variant->vc9000d;
+}
+
+/*
+ * The native tiled stride is the number of bytes in four luma or chroma
+ * rows. VC9000D takes it divided by four for luma and by eight for chroma.
+ */
+static inline u32 hantro_vc8000_luma_stride(const struct hantro_ctx *ctx,
+					    u32 stride)
+{
+	return hantro_vc8000_is_vc9000d(ctx) ? stride / 4 : stride;
+}
+
+static inline u32 hantro_vc8000_chroma_stride(const struct hantro_ctx *ctx,
+					      u32 stride)
+{
+	return hantro_vc8000_is_vc9000d(ctx) ? stride / 8 : stride;
+}
+
+static inline size_t hantro_vc9000d_pp_column_size(u32 height, u32 depth)
+{
+	return 36 * ALIGN(height, 16) * depth;
+}
+
+static inline size_t hantro_vc9000d_pp_columns_size(u32 height, u32 depth)
+{
+	return hantro_vc9000d_pp_column_size(height, depth) +
+	       VC9000D_PP_SCALER0_SIZE + VC9000D_PP_SCALER1_SIZE;
+}
 
 static inline struct hantro_decoded_buffer *
 hantro_vc8000_buf(struct vb2_v4l2_buffer *vb)
@@ -107,6 +149,9 @@ void hantro_vc8000_write_addr(struct hantro_ctx *ctx, u16 lsb, u16 msb, dma_addr
 void hantro_vc8000_write_addr_pair(struct hantro_ctx *ctx, u16 msb, dma_addr_t addr);
 void hantro_vc8000_set_common_config(struct hantro_ctx *ctx);
 void hantro_vc8000_set_postproc(struct hantro_ctx *ctx, u32 width, u32 height);
+void hantro_vc9000d_set_tile_edge(struct hantro_ctx *ctx, dma_addr_t addr);
+void hantro_vc9000d_set_pp_columns(struct hantro_ctx *ctx, dma_addr_t addr,
+				   u32 height, u32 depth);
 void hantro_vc8000_start(struct hantro_ctx *ctx);
 void hantro_vc8000_hw_reset(struct hantro_ctx *ctx);
 irqreturn_t hantro_vc8000_irq(int irq, void *data);

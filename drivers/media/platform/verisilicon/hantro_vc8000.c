@@ -228,6 +228,27 @@ void hantro_vc8000_set_postproc(struct hantro_ctx *ctx, u32 width, u32 height)
 	u32 stride = ctx->dst_fmt.plane_fmt[0].bytesperline;
 	u32 chroma_offset = stride * ctx->dst_fmt.height;
 
+	if (hantro_vc8000_is_vc9000d(ctx)) {
+		hantro_vc8000_reg_write(ctx, &vc9000d_pp_in_format,
+					VC9000D_PP_IN_FORMAT_DEC);
+		hantro_vc8000_reg_write(ctx, &vc9000d_pp_units, VC9000D_PP_UNIT0);
+		hantro_vc8000_reg_write(ctx, &vc9000d_pp_out_e, 1);
+		hantro_vc8000_write_addr_pair(ctx, VC9000D_ADDR_PP_OUT_LUMA, dma);
+		hantro_vc8000_write_addr_pair(ctx, VC9000D_ADDR_PP_OUT_CHROMA,
+					      dma + chroma_offset);
+		hantro_vc8000_reg_write(ctx, &vc9000d_pp_out_y_stride, stride);
+		hantro_vc8000_reg_write(ctx, &vc9000d_pp_out_c_stride, stride);
+		hantro_vc8000_reg_write(ctx, &vc9000d_pp_in_width, width);
+		hantro_vc8000_reg_write(ctx, &vc9000d_pp_in_height, height);
+		hantro_vc8000_reg_write(ctx, &vc9000d_pp_hor_scale_mode,
+					VC9000D_PP_SCALE_NONE);
+		hantro_vc8000_reg_write(ctx, &vc9000d_pp_ver_scale_mode,
+					VC9000D_PP_SCALE_NONE);
+		hantro_vc8000_reg_write(ctx, &vc9000d_pp_out_width, width);
+		hantro_vc8000_reg_write(ctx, &vc9000d_pp_out_height, height);
+		return;
+	}
+
 	hantro_vc8000_reg_write_raw(ctx, 320, 1);
 	hantro_vc8000_reg_write_raw(ctx, 322, 1U << 27);
 	hantro_vc8000_write_addr_pair(ctx, 325, dma);
@@ -236,6 +257,28 @@ void hantro_vc8000_set_postproc(struct hantro_ctx *ctx, u32 width, u32 height)
 	hantro_vc8000_reg_write_raw(ctx, 331, ((width / 2) << 16) | (height / 2));
 	hantro_vc8000_reg_write_raw(ctx, 332, (width << 16) | height);
 	hantro_vc8000_reg_write_raw(ctx, 394, 0x01010000);
+}
+
+void hantro_vc9000d_set_tile_edge(struct hantro_ctx *ctx, dma_addr_t addr)
+{
+	hantro_vc8000_write_addr_pair(ctx, VC9000D_ADDR_TILE_EDGE(0), addr);
+	hantro_vc8000_write_addr_pair(ctx, VC9000D_ADDR_TILE_EDGE(1), addr);
+}
+
+void hantro_vc9000d_set_pp_columns(struct hantro_ctx *ctx, dma_addr_t addr,
+				   u32 height, u32 depth)
+{
+	dma_addr_t scaler0 = addr + hantro_vc9000d_pp_column_size(height, depth);
+	dma_addr_t scaler1 = scaler0 + VC9000D_PP_SCALER0_SIZE;
+	unsigned int i;
+
+	for (i = 0; i < 2; i++) {
+		hantro_vc8000_write_addr_pair(ctx, VC9000D_ADDR_PP_COLUMN(i), addr);
+		hantro_vc8000_write_addr_pair(ctx, VC9000D_ADDR_PP_SCALER0(i),
+					      scaler0);
+		hantro_vc8000_write_addr_pair(ctx, VC9000D_ADDR_PP_SCALER1(i),
+					      scaler1);
+	}
 }
 
 static unsigned int vc8000_buffer_size(struct hantro_ctx *ctx)

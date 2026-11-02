@@ -4,7 +4,7 @@ comment "Verisilicon media platform drivers"
 
 config VIDEO_HANTRO
 	tristate "Hantro VPU driver"
-	depends on ARCH_MXC || ARCH_ROCKCHIP || ARCH_AT91 || ARCH_SUNXI || ARCH_STM32 || ARCH_THEAD || COMPILE_TEST
+	depends on ARCH_MXC || ARCH_ROCKCHIP || ARCH_AT91 || ARCH_SUNXI || ARCH_STM32 || ARCH_THEAD || ARCH_ZHIHE || COMPILE_TEST
 	depends on V4L_MEM2MEM_DRIVERS
 	depends on VIDEO_DEV
 	select MEDIA_CONTROLLER
@@ -79,6 +79,15 @@ config VIDEO_HANTRO_TH1520
 	help
 	  Enable support for the VC8000D decoder and VC8000E encoder on
 	  TH1520 SoCs.
+
+config VIDEO_HANTRO_A210
+	bool "Hantro A210 support"
+	depends on VIDEO_HANTRO
+	depends on ARCH_ZHIHE || COMPILE_TEST
+	default y
+	select VIDEO_HANTRO_VC8000D
+	help
+	  Enable support for the VC9000D decoder on Zhihe A210 SoCs.
 
 config VIDEO_HANTRO_VC8000D
 	bool

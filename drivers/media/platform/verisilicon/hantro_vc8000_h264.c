@@ -255,6 +255,7 @@ static void vc8000_h264_set_buffers(struct hantro_ctx *ctx)
 	size_t mv_offset = hantro_vc8000_h264_native_mv_offset(ctx);
 	size_t chroma_offset = hantro_vc8000_h264_native_chroma_offset(ctx);
 	size_t sync_offset;
+	u32 stride;
 	unsigned int i;
 
 	dst_dma = native->dma;
@@ -286,10 +287,11 @@ static void vc8000_h264_set_buffers(struct hantro_ctx *ctx)
 	/* h264bsdInitDpb initializes the 32-byte picture synchronization area. */
 	memset((u8 *)native->cpu + sync_offset, 0xff, 32);
 
+	stride = ALIGN(ctx->src_fmt.width * 4, 64);
 	hantro_vc8000_reg_write(ctx, &h264_native_luma_stride,
-				ALIGN(ctx->src_fmt.width * 4, 64));
+				hantro_vc8000_luma_stride(ctx, stride));
 	hantro_vc8000_reg_write(ctx, &h264_native_chroma_stride,
-				ALIGN(ctx->src_fmt.width * 4, 64));
+				hantro_vc8000_chroma_stride(ctx, stride));
 	hantro_vc8000_set_postproc(ctx, ctx->src_fmt.width, ctx->src_fmt.height);
 
 	hantro_vc8000_write_addr(ctx, VC8000_H264_ADDR_QTABLE_LSB,

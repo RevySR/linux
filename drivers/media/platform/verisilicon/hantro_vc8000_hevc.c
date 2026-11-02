@@ -34,6 +34,83 @@
 /* The Request API identifies references by CAPTURE timestamps, not POC.
  * Keep the tiled decode surface separate from the linear PP output.
  */
+/*
+ * VC9000D takes the tile column edge areas from one buffer, laid out as by
+ * the SDK: deblocking filter, BSD control and SAO data like VC8000D, an
+ * edge area that grows for 16x16 CTBs, then the post-processor columns.
+ */
+struct vc9000d_hevc_tile_mem {
+	u32 bsd;
+	u32 sao;
+	u32 edge;
+	u32 pp;
+	u32 size;
+};
+
+static void vc9000d_hevc_tile_mem(const struct hantro_ctx *ctx,
+				  struct vc9000d_hevc_tile_mem *mem)
+{
+	const struct hantro_hevc_dec_ctrls *ctrls = &ctx->vc8000_dec->hevc.ctrls;
+	const struct v4l2_ctrl_hevc_sps *sps = ctrls->sps;
+	u32 rows = ALIGN(ctx->src_fmt.height, 64) *
+		   ctrls->pps->num_tile_columns_minus1;
+	u32 log2_ctb = sps->log2_min_luma_coding_block_size_minus3 + 3 +
+		       sps->log2_diff_max_min_luma_coding_block_size;
+
+	mem->bsd = VERT_FILTER_RAM_SIZE * rows * ctx->bit_depth / 8;
+	mem->sao = mem->bsd + BSD_CTRL_RAM_SIZE * rows;
+	mem->edge = mem->sao + VERT_SAO_RAM_SIZE * rows * ctx->bit_depth / 8;
+	mem->pp = mem->edge + (log2_ctb == 4 ? 8 : 4) * rows;
+	mem->size = mem->pp + hantro_vc9000d_pp_columns_size(ctx->src_fmt.height,
+							     ctx->bit_depth);
+}
+
+static int vc9000d_hevc_tile_buffer_realloc(struct hantro_ctx *ctx)
+{
+	struct hantro_vc8000_hevc_ctx *hevc = &ctx->vc8000_dec->hevc;
+	struct hantro_dev *vpu = ctx->dev;
+	struct vc9000d_hevc_tile_mem mem;
+	struct hantro_aux_buf buf;
+
+	if (!hevc->ctrls.pps->num_tile_columns_minus1)
+		return 0;
+
+	vc9000d_hevc_tile_mem(ctx, &mem);
+	if (mem.size <= hevc->tile_filter.size)
+		return 0;
+
+	/* Keep the previous allocation usable if the replacement fails. */
+	buf.size = mem.size;
+	buf.cpu = dma_alloc_coherent(vpu->dev, buf.size, &buf.dma, GFP_KERNEL);
+	if (!buf.cpu)
+		return -ENOMEM;
+
+	if (hevc->tile_filter.cpu)
+		dma_free_coherent(vpu->dev, hevc->tile_filter.size,
+				  hevc->tile_filter.cpu, hevc->tile_filter.dma);
+	hevc->tile_filter = buf;
+	return 0;
+}
+
+static void vc9000d_hevc_set_tile_buffers(struct hantro_ctx *ctx)
+{
+	dma_addr_t base = ctx->vc8000_dec->hevc.tile_filter.dma;
+	struct vc9000d_hevc_tile_mem mem;
+
+	if (!ctx->vc8000_dec->hevc.ctrls.pps->num_tile_columns_minus1)
+		return;
+
+	vc9000d_hevc_tile_mem(ctx, &mem);
+	hantro_vc8000_write_addr_pair(ctx, VC8000_HEVC_ADDR_TILE_FILTER, base);
+	hantro_vc8000_write_addr_pair(ctx, VC8000_HEVC_ADDR_TILE_BSD,
+				      base + mem.bsd);
+	hantro_vc8000_write_addr_pair(ctx, VC8000_HEVC_ADDR_TILE_SAO,
+				      base + mem.sao);
+	hantro_vc9000d_set_tile_edge(ctx, base + mem.edge);
+	hantro_vc9000d_set_pp_columns(ctx, base + mem.pp, ctx->src_fmt.height,
+				      ctx->bit_depth);
+}
+
 static int vc8000_hevc_tile_buffers_realloc(struct hantro_ctx *ctx)
 {
 	struct hantro_dev *vpu = ctx->dev;
@@ -44,6 +121,9 @@ static int vc8000_hevc_tile_buffers_realloc(struct hantro_ctx *ctx)
 	struct hantro_aux_buf bsd = { 0 };
 	unsigned int num_tile_cols = pps->num_tile_columns_minus1 + 1;
 	unsigned int height64 = ALIGN(ctx->src_fmt.height, 64);
+
+	if (hantro_vc8000_is_vc9000d(ctx))
+		return vc9000d_hevc_tile_buffer_realloc(ctx);
 
 	if (num_tile_cols <= 1 ||
 	    num_tile_cols <= hevc->num_tile_cols_allocated)
@@ -537,7 +617,7 @@ static void vc8000_hevc_set_buffers(struct hantro_ctx *ctx)
 {
 	struct vb2_v4l2_buffer *src_buf = hantro_get_src_buf(ctx);
 	dma_addr_t src_dma;
-	u32 src_len, src_buf_len, data_offset, start_byte;
+	u32 src_len, src_buf_len, data_offset, start_byte, stride;
 
 	src_dma = vb2_dma_contig_plane_dma_addr(&src_buf->vb2_buf, 0);
 	data_offset = src_buf->vb2_buf.planes[0].data_offset;
@@ -567,20 +647,25 @@ static void vc8000_hevc_set_buffers(struct hantro_ctx *ctx)
 
 	hantro_vc8000_write_addr_pair(ctx, VC8000_HEVC_ADDR_TILE_SIZES,
 				      ctx->vc8000_dec->hevc.tile_sizes.dma);
-	hantro_vc8000_write_addr_pair(ctx, VC8000_HEVC_ADDR_TILE_FILTER,
-				      ctx->vc8000_dec->hevc.tile_filter.dma);
-	hantro_vc8000_write_addr_pair(ctx, VC8000_HEVC_ADDR_TILE_SAO,
-				      ctx->vc8000_dec->hevc.tile_sao.dma);
-	hantro_vc8000_write_addr_pair(ctx, VC8000_HEVC_ADDR_TILE_BSD,
-				      ctx->vc8000_dec->hevc.tile_bsd.dma);
+	if (hantro_vc8000_is_vc9000d(ctx)) {
+		vc9000d_hevc_set_tile_buffers(ctx);
+	} else {
+		hantro_vc8000_write_addr_pair(ctx, VC8000_HEVC_ADDR_TILE_FILTER,
+					      ctx->vc8000_dec->hevc.tile_filter.dma);
+		hantro_vc8000_write_addr_pair(ctx, VC8000_HEVC_ADDR_TILE_SAO,
+					      ctx->vc8000_dec->hevc.tile_sao.dma);
+		hantro_vc8000_write_addr_pair(ctx, VC8000_HEVC_ADDR_TILE_BSD,
+					      ctx->vc8000_dec->hevc.tile_bsd.dma);
+	}
 
 	/*
 	 * Native tiled stride is the number of bytes in four luma or chroma rows.
 	 */
+	stride = ALIGN(ctx->src_fmt.width * 4, 64);
 	hantro_vc8000_reg_write(ctx, &hevc_native_luma_stride,
-				ALIGN(ctx->src_fmt.width * 4, 64));
+				hantro_vc8000_luma_stride(ctx, stride));
 	hantro_vc8000_reg_write(ctx, &hevc_native_chroma_stride,
-				ALIGN(ctx->src_fmt.width * 4, 64));
+				hantro_vc8000_chroma_stride(ctx, stride));
 }
 
 static void vc8000_hevc_prepare_scaling_list(struct hantro_ctx *ctx)
