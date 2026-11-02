@@ -360,8 +360,9 @@
 
 /*
  * VC9000D address pairs, MSB word first like above. The SDK programs the
- * tile edge and post-processor column buffers into two pairs each.
+ * tile edge, VP9 sync and post-processor column buffers into two pairs each.
  */
+#define VC9000D_ADDR_VP9_SYNC(i)	(174 + (i) * 2)
 #define VC9000D_ADDR_TILE_EDGE(i)	(271 + (i) * 2)
 #define VC9000D_ADDR_PP_COLUMN(i)	(362 + (i) * 2)
 #define VC9000D_ADDR_PP_OUT_LUMA	385

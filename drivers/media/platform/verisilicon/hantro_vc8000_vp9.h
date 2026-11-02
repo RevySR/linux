@@ -24,6 +24,7 @@ struct vc8000_vp9_ctx {
 	struct hantro_aux_buf tiles;
 	struct hantro_aux_buf tile_filter;
 	struct hantro_aux_buf tile_bsd;
+	struct hantro_aux_buf sync;
 	struct hantro_aux_buf segment_map;
 	struct hantro_aux_buf previous_mv;
 	struct v4l2_vp9_frame_symbol_counts cnts;

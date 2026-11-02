@@ -10,6 +10,7 @@
 
 #include <linux/dma-mapping.h>
 #include <linux/slab.h>
+#include <linux/unaligned.h>
 #include <media/videobuf2-dma-contig.h>
 
 #include "hantro_vc8000.h"
@@ -24,6 +25,48 @@
 /* Vp9AsicAllocateMem: 3744 bytes of probabilities, 13264 of counters. */
 static_assert(sizeof(struct hantro_g2_all_probs) == 3744);
 static_assert(sizeof(struct symbol_counts) == 13264);
+
+/*
+ * VC9000D takes 16-byte tile entries: SB columns, SB rows, and the start
+ * and end offsets of the tile from the first tile byte. The start of every
+ * tile but the last one covers its 4-byte size marker.
+ */
+struct vc9000d_vp9_tile {
+	__le32 sb_cols;
+	__le32 sb_rows;
+	__le32 start;
+	__le32 end;
+};
+
+#define VC9000D_VP9_TILES_SIZE	(64 * 4 * sizeof(struct vc9000d_vp9_tile))
+
+/*
+ * VC9000D tile column memory, as laid out by Vp9AsicSetFilterBlockMemIInfo():
+ * vertical filter, BSD control and tile edge data in bytes per 64-aligned
+ * row and column boundary, then the post-processor columns.
+ */
+#define VC9000D_VP9_FILTER_RAM_SIZE	20
+#define VC9000D_VP9_BSD_RAM_SIZE	8
+#define VC9000D_VP9_EDGE_RAM_SIZE	4
+#define VC9000D_VP9_SYNC_SIZE		SZ_8K
+
+struct vc9000d_vp9_tile_mem {
+	u32 bsd;
+	u32 edge;
+	u32 pp;
+	u32 size;
+};
+
+static void vc9000d_vp9_tile_mem(u32 height, u32 edges,
+				 struct vc9000d_vp9_tile_mem *mem)
+{
+	u32 rows = ALIGN(height, 64) * edges;
+
+	mem->bsd = VC9000D_VP9_FILTER_RAM_SIZE * rows;
+	mem->edge = mem->bsd + VC9000D_VP9_BSD_RAM_SIZE * rows;
+	mem->pp = mem->edge + VC9000D_VP9_EDGE_RAM_SIZE * rows;
+	mem->size = mem->pp + hantro_vc9000d_pp_columns_size(height, 8);
+}
 
 static void config_loop_filter(struct hantro_ctx *ctx, const struct v4l2_ctrl_vp9_frame *dec_params)
 {
@@ -170,8 +213,10 @@ static void vp9_config_output(struct hantro_ctx *ctx)
 				      native->dma + dst->vc8000_vp9.chroma_offset);
 	hantro_vc8000_write_addr_pair(ctx, VC8000_HEVC_ADDR_OUT_MV,
 				      native->dma + dst->vc8000_vp9.mv_offset);
-	hantro_vc8000_reg_write(ctx, &hevc_native_luma_stride, dst->vc8000_vp9.stride);
-	hantro_vc8000_reg_write(ctx, &hevc_native_chroma_stride, dst->vc8000_vp9.stride);
+	hantro_vc8000_reg_write(ctx, &hevc_native_luma_stride,
+				hantro_vc8000_luma_stride(ctx, dst->vc8000_vp9.stride));
+	hantro_vc8000_reg_write(ctx, &hevc_native_chroma_stride,
+				hantro_vc8000_chroma_stride(ctx, dst->vc8000_vp9.stride));
 }
 
 static bool vp9_intra(const struct v4l2_ctrl_vp9_frame *f)
@@ -198,7 +243,7 @@ static int vp9_config_refs(struct hantro_ctx *ctx)
 		struct hantro_decoded_buffer *ref;
 		struct hantro_aux_buf *ref_native;
 		struct vb2_buffer *vb = vb2_find_buffer(q, timestamps[i]);
-		u32 width, height;
+		u32 width, height, stride;
 
 		if (!vb || vb == &dst->vb2_buf)
 			return -EINVAL;
@@ -217,9 +262,10 @@ static int vp9_config_refs(struct hantro_ctx *ctx)
 					    (((width << 14) / vp9->cur.width) << 16) |
 			((height << 14) / vp9->cur.height));
 		/* SDK has explicit Y/C strides for LAST, GOLDEN and ALTREF. */
+		stride = ref->vc8000_vp9.stride;
 		hantro_vc8000_reg_write_raw(ctx, 42 + i,
-					    (ref->vc8000_vp9.stride << 16) |
-					    ref->vc8000_vp9.stride);
+					    (hantro_vc8000_luma_stride(ctx, stride) << 16) |
+					    hantro_vc8000_chroma_stride(ctx, stride));
 		hantro_vc8000_write_addr_pair(ctx, VC8000_HEVC_ADDR_REF_LUMA(slots[i]),
 					      ref_native->dma);
 		hantro_vc8000_write_addr_pair(ctx, VC8000_HEVC_ADDR_REF_CHROMA(slots[i]),
@@ -247,7 +293,7 @@ static int vp9_config_refs(struct hantro_ctx *ctx)
 	return 0;
 }
 
-static void vp9_config_tiles(struct hantro_ctx *ctx)
+static void vc8000_vp9_config_tiles(struct hantro_ctx *ctx)
 {
 	struct vc8000_vp9_ctx *vp9 = ctx->vc8000_dec->vp9;
 	u32 cols = 1U << vp9->frame.tile_cols_log2;
@@ -281,6 +327,90 @@ static void vp9_config_tiles(struct hantro_ctx *ctx)
 	hantro_vc8000_write_addr_pair(ctx, VC8000_HEVC_ADDR_TILE_FILTER,
 				      vp9->tile_filter.dma);
 	hantro_vc8000_write_addr_pair(ctx, VC8000_HEVC_ADDR_TILE_BSD, vp9->tile_bsd.dma);
+}
+
+/*
+ * Tile rows below the last SB row of a small picture are empty, but still
+ * have data in the bitstream. Their tiles are left out of the table.
+ */
+static int vc9000d_vp9_tile_entries(struct hantro_ctx *ctx, u32 sb_cols,
+				    u32 sb_rows)
+{
+	struct vc8000_vp9_ctx *vp9 = ctx->vc8000_dec->vp9;
+	const struct v4l2_ctrl_vp9_frame *f = &vp9->frame;
+	struct vb2_buffer *src = &hantro_get_src_buf(ctx)->vb2_buf;
+	u32 cols = 1U << f->tile_cols_log2, rows = 1U << f->tile_rows_log2;
+	u32 base = src->planes[0].data_offset + f->uncompressed_header_size +
+		   f->compressed_header_size;
+	u32 payload = vb2_get_plane_payload(src, 0), pos = base;
+	struct vc9000d_vp9_tile *entry = vp9->tiles.cpu;
+	const u8 *data = vb2_plane_vaddr(src, 0);
+	u32 row, col, size, start, previous = 0;
+
+	if (!data)
+		return -EINVAL;
+	memset(entry, 0, vp9->tiles.size);
+	for (row = 0; row < rows; row++) {
+		u32 end = (row + 1) * sb_rows / rows;
+
+		for (col = 0; col < cols; col++) {
+			start = pos;
+			if (row == rows - 1 && col == cols - 1) {
+				pos = payload;
+			} else {
+				/* Every other tile starts with its big-endian size. */
+				if (payload - pos < 4)
+					return -EINVAL;
+				size = get_unaligned_be32(data + pos);
+				if (size > payload - pos - 4)
+					return -EINVAL;
+				pos += 4 + size;
+			}
+			if (end == previous)
+				continue;
+			entry->sb_cols = cpu_to_le32((col + 1) * sb_cols / cols -
+						     col * sb_cols / cols);
+			entry->sb_rows = cpu_to_le32(end - previous);
+			entry->start = cpu_to_le32(start - base);
+			entry->end = cpu_to_le32(pos - base);
+			entry++;
+		}
+		previous = end;
+	}
+	return 0;
+}
+
+static int vc9000d_vp9_config_tiles(struct hantro_ctx *ctx)
+{
+	struct vc8000_vp9_ctx *vp9 = ctx->vc8000_dec->vp9;
+	u32 cols = 1U << vp9->frame.tile_cols_log2;
+	u32 rows = 1U << vp9->frame.tile_rows_log2;
+	u32 sb_cols = DIV_ROUND_UP(vp9->cur.width, 64);
+	u32 sb_rows = DIV_ROUND_UP(vp9->cur.height, 64);
+	dma_addr_t base = vp9->tile_filter.dma;
+	struct vc9000d_vp9_tile_mem mem;
+	int ret;
+
+	ret = vc9000d_vp9_tile_entries(ctx, sb_cols, sb_rows);
+	if (ret)
+		return ret;
+	hantro_vc8000_reg_write(ctx, &hevc_tile_enable, cols > 1 || rows > 1);
+	hantro_vc8000_reg_write(ctx, &hevc_num_tile_cols_8k, cols);
+	hantro_vc8000_reg_write(ctx, &hevc_num_tile_rows_8k, min(rows, sb_rows));
+	hantro_vc8000_write_addr_pair(ctx, VC8000_HEVC_ADDR_TILE_SIZES, vp9->tiles.dma);
+
+	vc9000d_vp9_tile_mem(vp9->cur.height, cols - 1, &mem);
+	hantro_vc8000_write_addr_pair(ctx, VC8000_HEVC_ADDR_TILE_FILTER, base);
+	hantro_vc8000_write_addr_pair(ctx, VC8000_HEVC_ADDR_TILE_BSD, base + mem.bsd);
+	hantro_vc9000d_set_tile_edge(ctx, base + mem.edge);
+	if (cols > 1)
+		hantro_vc9000d_set_pp_columns(ctx, base + mem.pp, vp9->cur.height, 8);
+
+	/* Vp9AsicInitPicture() clears this area for every single-core decode. */
+	memset(vp9->sync.cpu, 0, vp9->sync.size);
+	hantro_vc8000_write_addr_pair(ctx, VC9000D_ADDR_VP9_SYNC(0), vp9->sync.dma);
+	hantro_vc8000_write_addr_pair(ctx, VC9000D_ADDR_VP9_SYNC(1), vp9->sync.dma);
+	return 0;
 }
 
 static void vp9_config_segmentation(struct hantro_ctx *ctx)
@@ -464,7 +594,13 @@ int vc8000_vp9_run(struct hantro_ctx *ctx)
 	if (ret)
 		return ret;
 	vp9_config_frame(ctx);
-	vp9_config_tiles(ctx);
+	if (hantro_vc8000_is_vc9000d(ctx)) {
+		ret = vc9000d_vp9_config_tiles(ctx);
+		if (ret)
+			return ret;
+	} else {
+		vc8000_vp9_config_tiles(ctx);
+	}
 	vp9_config_stream(ctx);
 	memset(vp9->probs.cpu, 0, vp9->probs.size);
 	memset(vp9->counts.cpu, 0, vp9->counts.size);
@@ -492,6 +628,15 @@ int vc8000_vp9_check_result(struct hantro_ctx *ctx)
 	 * bytesused. The hardware updates STREAM_BASE with its consumed position.
 	 * Check before publishing reference contents or entropy/segment state.
 	 */
+	/*
+	 * In tile mode, VC9000D decodes the tile ranges checked by
+	 * vc9000d_vp9_tile_entries(), but reports a position up to 20 bytes
+	 * past the last one.
+	 */
+	if (hantro_vc8000_is_vc9000d(ctx) &&
+	    (f->tile_cols_log2 || f->tile_rows_log2))
+		return 0;
+
 	position = (u64)vdpu_read(ctx->dev, VC8000_VDEC_REG_OFF(VC8000_HEVC_ADDR_STREAM)) << 32;
 	position |= vdpu_read(ctx->dev, VC8000_VDEC_REG_OFF(VC8000_HEVC_ADDR_STREAM + 1));
 	if (position < start || position > end) {
@@ -535,7 +680,7 @@ void vc8000_vp9_abort(struct hantro_ctx *ctx)
 static void vc8000_vp9_free(struct hantro_ctx *ctx)
 {
 	struct vc8000_vp9_ctx *vp9 = ctx->vc8000_dec->vp9;
-	struct hantro_aux_buf *buffers[7];
+	struct hantro_aux_buf *buffers[8];
 	unsigned int i;
 
 	if (!vp9)
@@ -547,6 +692,7 @@ static void vc8000_vp9_free(struct hantro_ctx *ctx)
 	buffers[4] = &vp9->tile_bsd;
 	buffers[5] = &vp9->segment_map;
 	buffers[6] = &vp9->previous_mv;
+	buffers[7] = &vp9->sync;
 	for (i = 0; i < ARRAY_SIZE(buffers); i++)
 		if (buffers[i]->cpu)
 			dma_free_coherent(ctx->dev->dev, buffers[i]->size,
@@ -582,12 +728,22 @@ int vc8000_vp9_init(struct hantro_ctx *ctx)
 		goto err_ctx;
 	ctx->vc8000_dec->vp9 = vp9;
 	vp9->segment_map_size = DIV_ROUND_UP(width, 64) * DIV_ROUND_UP(height, 64) * 32;
-	/* SDK edge storage: 24 and 4 bytes per padded row per column boundary. */
-	if (vp9_alloc(ctx, &vp9->probs, sizeof(struct hantro_g2_all_probs)) ||
+	if (hantro_vc8000_is_vc9000d(ctx)) {
+		struct vc9000d_vp9_tile_mem mem;
+
+		vc9000d_vp9_tile_mem(height, edges, &mem);
+		ret = vp9_alloc(ctx, &vp9->tiles, VC9000D_VP9_TILES_SIZE) ||
+		      vp9_alloc(ctx, &vp9->tile_filter, mem.size) ||
+		      vp9_alloc(ctx, &vp9->sync, VC9000D_VP9_SYNC_SIZE);
+	} else {
+		/* SDK edge storage: 24 and 4 bytes per padded row per column boundary. */
+		ret = vp9_alloc(ctx, &vp9->tiles, 3536) ||
+		      vp9_alloc(ctx, &vp9->tile_filter, 24 * ALIGN(height, 64) * edges) ||
+		      vp9_alloc(ctx, &vp9->tile_bsd, 4 * ALIGN(height, 64) * edges);
+	}
+	if (ret ||
+	    vp9_alloc(ctx, &vp9->probs, sizeof(struct hantro_g2_all_probs)) ||
 	    vp9_alloc(ctx, &vp9->counts, sizeof(struct symbol_counts)) ||
-	    vp9_alloc(ctx, &vp9->tiles, 3536) ||
-	    vp9_alloc(ctx, &vp9->tile_filter, 24 * ALIGN(height, 64) * edges) ||
-	    vp9_alloc(ctx, &vp9->tile_bsd, 4 * ALIGN(height, 64) * edges) ||
 	    vp9_alloc(ctx, &vp9->segment_map, 2 * vp9->segment_map_size) ||
 	    vp9_alloc(ctx, &vp9->previous_mv, vp9_mv_size(width, height))) {
 		vc8000_vp9_free(ctx);

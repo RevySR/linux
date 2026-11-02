@@ -24,6 +24,11 @@ static const struct hantro_fmt a210_vdec_fmts[] = {
 		.codec_mode = HANTRO_MODE_HEVC_DEC,
 		.max_depth = 2,
 		.frmsize = VC8000_FRAMESIZE,
+	}, {
+		.fourcc = V4L2_PIX_FMT_VP9_FRAME,
+		.codec_mode = HANTRO_MODE_VP9_DEC,
+		.max_depth = 2,
+		.frmsize = VC8000_FRAMESIZE,
 	},
 };
 
@@ -64,6 +69,15 @@ static const struct hantro_codec_ops a210_vdec_codec_ops[] = {
 		.run = vc8000_hevc_run,
 		.reset = hantro_vc8000_hw_reset,
 	},
+	[HANTRO_MODE_VP9_DEC] = {
+		.init = vc8000_vp9_init,
+		.exit = vc8000_vp9_exit,
+		.run = vc8000_vp9_run,
+		.check_result = vc8000_vp9_check_result,
+		.done = vc8000_vp9_done,
+		.abort = vc8000_vp9_abort,
+		.reset = hantro_vc8000_hw_reset,
+	},
 };
 
 static const struct hantro_irq a210_vdec_irqs[] = {
@@ -76,7 +90,7 @@ const struct hantro_variant a210_vdec_variant = {
 	.dec_fmts = a210_vdec_fmts,
 	.num_dec_fmts = ARRAY_SIZE(a210_vdec_fmts),
 	.postproc_ops = &hantro_vc8000_postproc_ops,
-	.codec = HANTRO_H264_DECODER | HANTRO_HEVC_DECODER,
+	.codec = HANTRO_H264_DECODER | HANTRO_HEVC_DECODER | HANTRO_VP9_DECODER,
 	.codec_ops = a210_vdec_codec_ops,
 	.runtime_resume = a210_vdec_runtime_resume,
 	.irqs = a210_vdec_irqs,

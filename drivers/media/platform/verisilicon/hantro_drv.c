@@ -224,10 +224,12 @@ queue_init(void *priv, struct vb2_queue *src_vq, struct vb2_queue *dst_vq)
 	/*
 	 * Driver does mostly sequential access, so sacrifice TLB efficiency
 	 * for faster allocation. Also, no CPU access on the source queue,
-	 * so no kernel mapping needed.
+	 * so no kernel mapping needed, except for the VC9000D VP9 decoder,
+	 * which reads the tile sizes.
 	 */
-	src_vq->dma_attrs = DMA_ATTR_ALLOC_SINGLE_PAGES |
-			    DMA_ATTR_NO_KERNEL_MAPPING;
+	src_vq->dma_attrs = DMA_ATTR_ALLOC_SINGLE_PAGES;
+	if (!ctx->dev->variant->vc9000d)
+		src_vq->dma_attrs |= DMA_ATTR_NO_KERNEL_MAPPING;
 	src_vq->buf_struct_size = sizeof(struct v4l2_m2m_buffer);
 	src_vq->timestamp_flags = V4L2_BUF_FLAG_TIMESTAMP_COPY;
 	src_vq->lock = &ctx->dev->vpu_mutex;
