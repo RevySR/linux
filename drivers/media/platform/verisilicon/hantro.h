@@ -236,6 +236,8 @@ struct hantro_dev {
  * @ref_fmt:		V4L2 pixel format of the reference frames format.
  *
  * @ctrl_handler:	Control handler used to register controls.
+ * @ctrls_completed:	The request controls of the running job have been
+ *			completed.
  * @jpeg_quality:	User-specified JPEG compression quality.
  * @bit_depth:		Bit depth of current frame
  * @need_postproc:	Set to true if the bitstream features require to
@@ -269,6 +271,7 @@ struct hantro_ctx {
 	struct v4l2_fract dst_timeperframe;
 
 	struct v4l2_ctrl_handler ctrl_handler;
+	bool ctrls_completed;
 	int jpeg_quality;
 	int bit_depth;
 

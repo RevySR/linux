@@ -164,6 +164,7 @@ void hantro_end_prepare_run(struct hantro_ctx *ctx)
 	src_buf = hantro_get_src_buf(ctx);
 	v4l2_ctrl_request_complete(src_buf->vb2_buf.req_obj.req,
 				   &ctx->ctrl_handler);
+	ctx->ctrls_completed = true;
 
 	/* Kick the watchdog. */
 	schedule_delayed_work(&ctx->dev->watchdog_work,
@@ -182,15 +183,26 @@ static void device_run(void *priv)
 
 	ret = pm_runtime_resume_and_get(vpu->dev);
 	if (ret < 0) {
+		v4l2_ctrl_request_complete(src->vb2_buf.req_obj.req,
+					   &ctx->ctrl_handler);
 		hantro_job_finish_no_pm(ctx, VB2_BUF_STATE_ERROR);
 		return;
 	}
 
 	v4l2_m2m_buf_copy_metadata(src, dst);
 
+	ctx->ctrls_completed = false;
 	ret = ctx->codec_ops->run(ctx);
-	if (ret)
+	if (ret) {
+		/*
+		 * The request cannot complete before its controls do, and
+		 * a codec may fail before hantro_end_prepare_run().
+		 */
+		if (!ctx->ctrls_completed)
+			v4l2_ctrl_request_complete(src->vb2_buf.req_obj.req,
+						   &ctx->ctrl_handler);
 		hantro_job_finish(ctx, VB2_BUF_STATE_ERROR);
+	}
 }
 
 static const struct v4l2_m2m_ops vpu_m2m_ops = {
