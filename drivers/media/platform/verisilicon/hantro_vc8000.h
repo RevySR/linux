@@ -11,6 +11,11 @@
 #define VC8000_MAX_WIDTH 4096
 #define VC8000_MAX_HEIGHT 2304
 
+#define VC8000_FRAMESIZE \
+	{ .min_width = VC8000_MIN_WIDTH, .max_width = VC8000_MAX_WIDTH, \
+	  .step_width = MB_DIM, .min_height = VC8000_MIN_HEIGHT, \
+	  .max_height = VC8000_MAX_HEIGHT, .step_height = MB_DIM }
+
 struct hantro_vc8000_hevc_ctx {
 	struct hantro_aux_buf tile_sizes;
 	struct hantro_aux_buf scaling_lists;
@@ -90,6 +95,8 @@ hantro_vc8000_h264_native_size(const struct hantro_ctx *ctx)
 	/* Allocate before per-request SPS determines mode0/mode15. */
 	return hantro_vc8000_hevc_native_mv_offset(ctx) + ALIGN(80 * ALIGN(mbs, 4), 64);
 }
+
+extern const struct hantro_postproc_ops hantro_vc8000_postproc_ops;
 
 int hantro_vc8000_ctx_init(struct hantro_ctx *ctx);
 void hantro_vc8000_ctx_exit(struct hantro_ctx *ctx);

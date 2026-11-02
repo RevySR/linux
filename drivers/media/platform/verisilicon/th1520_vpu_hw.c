@@ -1,8 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /* Copyright (C) 2026 Han Gao <gaohan@iscas.ac.cn> */
 
-#include <linux/slab.h>
-
 #include "hantro_vc8000.h"
 #include "hantro_vc8000e_regs.h"
 
@@ -11,11 +9,6 @@
 #define VC8000_BUILD_REG		(309 * 4)
 #define VC8000_MMU_CONTROL	(226 * 4)
 #define VC8000_MMU_ENABLE	BIT(0)
-
-#define VC8000_FRAMESIZE \
-	{ .min_width = VC8000_MIN_WIDTH, .max_width = VC8000_MAX_WIDTH, \
-	  .step_width = MB_DIM, .min_height = VC8000_MIN_HEIGHT, \
-	  .max_height = VC8000_MAX_HEIGHT, .step_height = MB_DIM }
 
 static const struct hantro_fmt th1520_vdec_fmts[] = {
 	{
@@ -41,48 +34,6 @@ static const struct hantro_fmt th1520_vdec_fmts[] = {
 		.frmsize = VC8000_FRAMESIZE,
 	},
 };
-
-static unsigned int vc8000_buffer_size(struct hantro_ctx *ctx)
-{
-	switch (ctx->vpu_src_fmt->codec_mode) {
-	case HANTRO_MODE_H264_DEC:
-		return hantro_vc8000_h264_native_size(ctx);
-	case HANTRO_MODE_HEVC_DEC:
-		return hantro_vc8000_hevc_native_size(ctx);
-	case HANTRO_MODE_VP9_DEC:
-		return hantro_vc8000_vp9_native_size(ctx);
-	default:
-		return 0;
-	}
-}
-
-static int vc8000_enum_framesizes(struct hantro_ctx *ctx,
-				  struct v4l2_frmsizeenum *fsize)
-{
-	if (fsize->index)
-		return -EINVAL;
-	fsize->type = V4L2_FRMSIZE_TYPE_STEPWISE;
-	fsize->stepwise = (struct v4l2_frmsize_stepwise)VC8000_FRAMESIZE;
-	return 0;
-}
-
-static const struct hantro_postproc_ops vc8000_postproc_ops = {
-	.buffer_size = vc8000_buffer_size,
-	.cpu_access = true,
-	.enum_framesizes = vc8000_enum_framesizes,
-};
-
-int hantro_vc8000_ctx_init(struct hantro_ctx *ctx)
-{
-	ctx->vc8000_dec = kzalloc_obj(*ctx->vc8000_dec, GFP_KERNEL);
-	return ctx->vc8000_dec ? 0 : -ENOMEM;
-}
-
-void hantro_vc8000_ctx_exit(struct hantro_ctx *ctx)
-{
-	kfree(ctx->vc8000_dec);
-	ctx->vc8000_dec = NULL;
-}
 
 static int th1520_vdec_runtime_resume(struct hantro_dev *vpu)
 {
@@ -147,7 +98,7 @@ static const char * const th1520_vdec_reg_names[] = { "decoder", "mmu" };
 const struct hantro_variant th1520_vdec_variant = {
 	.dec_fmts = th1520_vdec_fmts,
 	.num_dec_fmts = ARRAY_SIZE(th1520_vdec_fmts),
-	.postproc_ops = &vc8000_postproc_ops,
+	.postproc_ops = &hantro_vc8000_postproc_ops,
 	.codec = HANTRO_H264_DECODER | HANTRO_HEVC_DECODER | HANTRO_VP9_DECODER,
 	.codec_ops = th1520_vdec_codec_ops,
 	.runtime_resume = th1520_vdec_runtime_resume,

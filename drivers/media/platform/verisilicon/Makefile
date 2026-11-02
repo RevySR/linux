@@ -46,7 +46,9 @@ hantro-vpu-$(CONFIG_VIDEO_HANTRO_STM32MP25) += \
 		stm32mp25_vpu_hw.o
 
 hantro-vpu-$(CONFIG_VIDEO_HANTRO_TH1520) += \
-		th1520_vpu_hw.o \
+		th1520_vpu_hw.o
+
+hantro-vpu-$(CONFIG_VIDEO_HANTRO_VC8000D) += \
 		hantro_vc8000.o \
 		hantro_vc8000_h264.o \
 		hantro_vc8000_hevc.o \

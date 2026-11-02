@@ -13,10 +13,23 @@
 #include <linux/interrupt.h>
 #include <linux/io.h>
 #include <linux/iopoll.h>
+#include <linux/slab.h>
 #include <linux/string.h>
 #include <media/videobuf2-dma-contig.h>
 
 #include "hantro_vc8000.h"
+
+int hantro_vc8000_ctx_init(struct hantro_ctx *ctx)
+{
+	ctx->vc8000_dec = kzalloc_obj(*ctx->vc8000_dec, GFP_KERNEL);
+	return ctx->vc8000_dec ? 0 : -ENOMEM;
+}
+
+void hantro_vc8000_ctx_exit(struct hantro_ctx *ctx)
+{
+	kfree(ctx->vc8000_dec);
+	ctx->vc8000_dec = NULL;
+}
 
 static void hantro_vc8000_regs_reset(struct hantro_ctx *ctx)
 {
@@ -224,6 +237,36 @@ void hantro_vc8000_set_postproc(struct hantro_ctx *ctx, u32 width, u32 height)
 	hantro_vc8000_reg_write_raw(ctx, 332, (width << 16) | height);
 	hantro_vc8000_reg_write_raw(ctx, 394, 0x01010000);
 }
+
+static unsigned int vc8000_buffer_size(struct hantro_ctx *ctx)
+{
+	switch (ctx->vpu_src_fmt->codec_mode) {
+	case HANTRO_MODE_H264_DEC:
+		return hantro_vc8000_h264_native_size(ctx);
+	case HANTRO_MODE_HEVC_DEC:
+		return hantro_vc8000_hevc_native_size(ctx);
+	case HANTRO_MODE_VP9_DEC:
+		return hantro_vc8000_vp9_native_size(ctx);
+	default:
+		return 0;
+	}
+}
+
+static int vc8000_enum_framesizes(struct hantro_ctx *ctx,
+				  struct v4l2_frmsizeenum *fsize)
+{
+	if (fsize->index)
+		return -EINVAL;
+	fsize->type = V4L2_FRMSIZE_TYPE_STEPWISE;
+	fsize->stepwise = (struct v4l2_frmsize_stepwise)VC8000_FRAMESIZE;
+	return 0;
+}
+
+const struct hantro_postproc_ops hantro_vc8000_postproc_ops = {
+	.buffer_size = vc8000_buffer_size,
+	.cpu_access = true,
+	.enum_framesizes = vc8000_enum_framesizes,
+};
 
 /*
  * Submit registers 3 through 511, then register 2, and finally register 1.
