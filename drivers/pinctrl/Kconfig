@@ -675,8 +675,8 @@ config PINCTRL_ZHIHE_A210
 	  This selects the pinctrl driver for the Zhihe A210 RISC-V SoC.
 
 	  It provides pin multiplexing and configuration support for
-	  the A210 AON, PERI1 and PERI2 pad controllers. Say Y if you
-	  are building a kernel for the Zhihe A210 platform.
+	  the A210 AON, PERI1, PERI2 and PERI3 pad controllers. Say Y if
+	  you are building a kernel for the Zhihe A210 platform.
 
 config PINCTRL_ZYNQ
 	bool "Pinctrl driver for Xilinx Zynq"

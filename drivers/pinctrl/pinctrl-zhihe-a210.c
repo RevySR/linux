@@ -48,6 +48,17 @@
 #define A210_PADCFG_DS GENMASK(3, 0)
 #define A210_PADCFG_MASK GENMASK(9, 0)
 
+/*
+ * The peripheral 3 controller only has the six SDIO pads. Each pad has its
+ * own 32-bit configuration register with just the bias bits, and the bit
+ * at A210_SDIO_MUX selects SDIO (0) or GPIO (1) for all six pads.
+ */
+#define A210_SDIO_MUX 0x200
+#define A210_SDIO_MUX_MASK BIT(0)
+#define A210_SDIO_PULL_UP BIT(1)
+#define A210_SDIO_PULL_DOWN BIT(0)
+#define A210_SDIO_BIAS (A210_SDIO_PULL_UP | A210_SDIO_PULL_DOWN)
+
 #define A210_PULL_DOWN_OHM 44000 /* typ. 44kOhm */
 #define A210_PULL_UP_OHM 48000 /* typ. 48kOhm */
 #define A210_PULL_STRONG_OHM 2100 /* typ. 2.1kOhm */
@@ -64,6 +75,7 @@ struct a210_pad_group {
 	const struct pinctrl_pin_desc *pins;
 	unsigned int npins;
 	bool aon;
+	bool sdio;
 };
 
 struct a210_pinctrl {
@@ -73,6 +85,7 @@ struct a210_pinctrl {
 	struct clk *clk;
 	bool clk_enabled;
 	bool aon;
+	bool sdio;
 	struct pinctrl_dev *pctl;
 	struct a210_register_state cfg_state[DIV_ROUND_UP(A210_MAX_PINS, A210_CFG_PER_REG)];
 	struct a210_register_state mux_state[DIV_ROUND_UP(A210_MAX_PINS, A210_MUX_PER_REG)];
@@ -80,21 +93,34 @@ struct a210_pinctrl {
 
 static void __iomem *a210_padcfg(struct a210_pinctrl *pp, unsigned int pin)
 {
+	if (pp->sdio)
+		return pp->base + pin * sizeof(u32);
 	return pp->base + pin / A210_CFG_PER_REG * sizeof(u32);
 }
 
-static unsigned int a210_padcfg_shift(unsigned int pin)
+static unsigned int a210_padcfg_shift(struct a210_pinctrl *pp, unsigned int pin)
 {
+	if (pp->sdio)
+		return 0;
 	return pin % A210_CFG_PER_REG * A210_CFG_WIDTH;
+}
+
+static void __iomem *a210_mux_base(struct a210_pinctrl *pp)
+{
+	return pp->base + (pp->sdio ? A210_SDIO_MUX : A210_MUX_BASE);
 }
 
 static void __iomem *a210_muxcfg(struct a210_pinctrl *pp, unsigned int pin)
 {
-	return pp->base + A210_MUX_BASE + pin / A210_MUX_PER_REG * sizeof(u32);
+	if (pp->sdio)
+		return a210_mux_base(pp);
+	return a210_mux_base(pp) + pin / A210_MUX_PER_REG * sizeof(u32);
 }
 
-static unsigned int a210_muxcfg_shift(unsigned int pin)
+static unsigned int a210_muxcfg_shift(struct a210_pinctrl *pp, unsigned int pin)
 {
+	if (pp->sdio)
+		return 0;
 	return pin % A210_MUX_PER_REG * A210_MUX_WIDTH;
 }
 
@@ -388,6 +414,15 @@ static const struct pinctrl_pin_desc a210_group2_pins[] = {
 	A210_PAD(42, GPIO3_10, GPIO, UART4, I2S1, I2C7_SMB, UART5, USB31, ____, ____),
 };
 
+static const struct pinctrl_pin_desc a210_group3_pins[] = {
+	A210_PAD(0, SDIO_CLK, SDIO, GPIO, ____, ____, ____, ____, ____, ____),
+	A210_PAD(1, SDIO_CMD, SDIO, GPIO, ____, ____, ____, ____, ____, ____),
+	A210_PAD(2, SDIO_DAT0, SDIO, GPIO, ____, ____, ____, ____, ____, ____),
+	A210_PAD(3, SDIO_DAT1, SDIO, GPIO, ____, ____, ____, ____, ____, ____),
+	A210_PAD(4, SDIO_DAT2, SDIO, GPIO, ____, ____, ____, ____, ____, ____),
+	A210_PAD(5, SDIO_DAT3, SDIO, GPIO, ____, ____, ____, ____, ____, ____),
+};
+
 static const struct a210_pad_group a210_group0 = {
 	.name = "a210-aon",
 	.pins = a210_group0_pins,
@@ -405,6 +440,13 @@ static const struct a210_pad_group a210_group2 = {
 	.name = "a210-peri2",
 	.pins = a210_group2_pins,
 	.npins = ARRAY_SIZE(a210_group2_pins),
+};
+
+static const struct a210_pad_group a210_group3 = {
+	.name = "a210-peri3",
+	.pins = a210_group3_pins,
+	.npins = ARRAY_SIZE(a210_group3_pins),
+	.sdio = true,
 };
 
 static const struct a210_pad *a210_pad_get(struct pinctrl_dev *pctldev, unsigned int pin)
@@ -486,7 +528,7 @@ static int a210_drive_strength_from_ma(u32 arg)
 static int a210_padcfg_rmw(struct a210_pinctrl *pp, unsigned int pin, u32 mask, u32 value)
 {
 	void __iomem *padcfg = a210_padcfg(pp, pin);
-	unsigned int shift = a210_padcfg_shift(pin);
+	unsigned int shift = a210_padcfg_shift(pp, pin);
 	u32 tmp;
 
 	mask <<= shift;
@@ -500,9 +542,73 @@ static int a210_padcfg_rmw(struct a210_pinctrl *pp, unsigned int pin, u32 mask, 
 		 * Track the fields Linux has written. Suspend saves and resume
 		 * restores only those, leaving fields set up by firmware alone.
 		 */
-		pp->cfg_state[pin / A210_CFG_PER_REG].mask |= mask;
+		pp->cfg_state[(padcfg - pp->base) / sizeof(u32)].mask |= mask;
 	}
 	return 0;
+}
+
+static int a210_sdio_pinconf_get(struct a210_pinctrl *pp, unsigned int pin,
+				 unsigned long *config)
+{
+	enum pin_config_param param = pinconf_to_config_param(*config);
+	u32 value = readl_relaxed(a210_padcfg(pp, pin)) & A210_SDIO_BIAS;
+
+	switch (param) {
+	case PIN_CONFIG_BIAS_DISABLE:
+		if (value)
+			return -EINVAL;
+		break;
+	case PIN_CONFIG_BIAS_PULL_UP:
+		if (value != A210_SDIO_PULL_UP)
+			return -EINVAL;
+		break;
+	case PIN_CONFIG_BIAS_PULL_DOWN:
+		if (value != A210_SDIO_PULL_DOWN)
+			return -EINVAL;
+		break;
+	default:
+		return -ENOTSUPP;
+	}
+
+	/*
+	 * The strength of the SDIO pulls is not documented, so report 1 for
+	 * them, as a bias property without a value does. bias-disable takes
+	 * no argument.
+	 */
+	*config = pinconf_to_config_packed(param, param != PIN_CONFIG_BIAS_DISABLE);
+	return 0;
+}
+
+static int a210_sdio_pinconf_set(struct a210_pinctrl *pp, unsigned int pin,
+				 unsigned long *configs, unsigned int num_configs)
+{
+	u32 value = 0;
+	unsigned int i;
+
+	for (i = 0; i < num_configs; i++) {
+		enum pin_config_param param = pinconf_to_config_param(configs[i]);
+		u32 arg = pinconf_to_config_argument(configs[i]);
+
+		switch (param) {
+		case PIN_CONFIG_BIAS_DISABLE:
+			value = 0;
+			break;
+		case PIN_CONFIG_BIAS_PULL_UP:
+		case PIN_CONFIG_BIAS_PULL_DOWN:
+			if (arg != 1)
+				return -EINVAL;
+			value = param == PIN_CONFIG_BIAS_PULL_UP ?
+				A210_SDIO_PULL_UP : A210_SDIO_PULL_DOWN;
+			break;
+		default:
+			return -ENOTSUPP;
+		}
+	}
+
+	if (!num_configs)
+		return 0;
+
+	return a210_padcfg_rmw(pp, pin, A210_SDIO_BIAS, value);
 }
 
 static int a210_pinconf_get(struct pinctrl_dev *pctldev, unsigned int pin, unsigned long *config)
@@ -515,9 +621,11 @@ static int a210_pinconf_get(struct pinctrl_dev *pctldev, unsigned int pin, unsig
 
 	if (a210_pad_get(pctldev, pin)->fixed)
 		return -ENOTSUPP;
+	if (pp->sdio)
+		return a210_sdio_pinconf_get(pp, pin, config);
 
 	value = readl_relaxed(a210_padcfg(pp, pin));
-	value = (value >> a210_padcfg_shift(pin)) & A210_PADCFG_MASK;
+	value = (value >> a210_padcfg_shift(pp, pin)) & A210_PADCFG_MASK;
 
 	param = pinconf_to_config_param(*config);
 	switch (param) {
@@ -575,6 +683,8 @@ static int a210_pinconf_set(struct pinctrl_dev *pctldev, unsigned int pin, unsig
 
 	if (a210_pad_get(pctldev, pin)->fixed)
 		return -ENOTSUPP;
+	if (pp->sdio)
+		return a210_sdio_pinconf_set(pp, pin, configs, num_configs);
 
 	mask = 0;
 	value = 0;
@@ -671,7 +781,7 @@ static void a210_pinconf_dbg_show(struct pinctrl_dev *pctldev, struct seq_file *
 		return;
 
 	value = readl_relaxed(a210_padcfg(pp, pin));
-	value = (value >> a210_padcfg_shift(pin)) & A210_PADCFG_MASK;
+	value = (value >> a210_padcfg_shift(pp, pin)) & A210_PADCFG_MASK;
 
 	seq_printf(s, " [0x%03x]", value);
 }
@@ -693,7 +803,7 @@ static int a210_pinmux_set(struct a210_pinctrl *pp, unsigned int pin,
 {
 	const struct a210_pad *pad = a210_pad_get(pp->pctl, pin);
 	void __iomem *muxcfg = a210_muxcfg(pp, pin);
-	unsigned int shift = a210_muxcfg_shift(pin);
+	unsigned int shift = a210_muxcfg_shift(pp, pin);
 	u32 mask, value, tmp;
 
 	for (value = 0; value < ARRAY_SIZE(pad->mux); value++)
@@ -705,7 +815,9 @@ static int a210_pinmux_set(struct a210_pinctrl *pp, unsigned int pin,
 		return -EINVAL;
 	}
 
-	mask = GENMASK(A210_MUX_WIDTH - 1, 0) << shift;
+	/* For the SDIO pads this switches all six of them. */
+	mask = pp->sdio ? A210_SDIO_MUX_MASK : GENMASK(A210_MUX_WIDTH - 1, 0);
+	mask <<= shift;
 	value <<= shift;
 
 	scoped_guard(raw_spinlock_irqsave, &pp->lock) {
@@ -713,7 +825,7 @@ static int a210_pinmux_set(struct a210_pinctrl *pp, unsigned int pin,
 		tmp = (tmp & ~mask) | value;
 		writel_relaxed(tmp, muxcfg);
 		/* See a210_padcfg_rmw(). */
-		pp->mux_state[pin / A210_MUX_PER_REG].mask |= mask;
+		pp->mux_state[(muxcfg - a210_mux_base(pp)) / sizeof(u32)].mask |= mask;
 	}
 
 	return 0;
@@ -740,6 +852,13 @@ static int a210_gpio_request_enable(struct pinctrl_dev *pctldev, struct pinctrl_
 	const struct a210_pad *pad = a210_pad_get(pctldev, offset);
 	unsigned int i;
 
+	/*
+	 * The SDIO pads share one mux bit, so a GPIO request cannot switch
+	 * just one of them. Accept it only if the pads already select GPIO.
+	 */
+	if (pp->sdio)
+		return readl_relaxed(a210_muxcfg(pp, offset)) & A210_SDIO_MUX_MASK ? 0 : -EBUSY;
+
 	for (i = 0; i < ARRAY_SIZE(pad->mux); i++)
 		if (a210_mux_is_gpio(pad->mux[i]))
 			return a210_pinmux_set(pp, offset, pad->mux[i]);
@@ -753,6 +872,10 @@ static int a210_gpio_set_direction(struct pinctrl_dev *pctldev, struct pinctrl_g
 				   unsigned int offset, bool input)
 {
 	struct a210_pinctrl *pp = pinctrl_dev_get_drvdata(pctldev);
+
+	/* The SDIO pads have no input enable. */
+	if (pp->sdio)
+		return 0;
 
 	return a210_padcfg_rmw(pp, offset, A210_PADCFG_IE, input ? A210_PADCFG_IE : 0);
 }
@@ -873,6 +996,7 @@ static int a210_pinctrl_probe(struct platform_device *pdev)
 	pp->desc.pins = group->pins;
 	pp->desc.npins = group->npins;
 	pp->aon = group->aon;
+	pp->sdio = group->sdio;
 	pp->desc.pctlops = &a210_pinctrl_ops;
 	pp->desc.pmxops = &a210_pinmux_ops;
 	pp->desc.confops = &a210_pinconf_ops;
@@ -942,7 +1066,7 @@ static int a210_pinctrl_suspend(struct device *dev)
 	scoped_guard(raw_spinlock_irqsave, &pp->lock) {
 		a210_pinctrl_save_regs(pp->cfg_state, ARRAY_SIZE(pp->cfg_state), pp->base);
 		a210_pinctrl_save_regs(pp->mux_state, ARRAY_SIZE(pp->mux_state),
-				       pp->base + A210_MUX_BASE);
+				       a210_mux_base(pp));
 	}
 	if (!pp->aon)
 		a210_pinctrl_disable_clock(pp);
@@ -964,7 +1088,7 @@ static int a210_pinctrl_resume(struct device *dev)
 	scoped_guard(raw_spinlock_irqsave, &pp->lock) {
 		a210_pinctrl_restore_regs(pp->cfg_state, ARRAY_SIZE(pp->cfg_state), pp->base);
 		a210_pinctrl_restore_regs(pp->mux_state, ARRAY_SIZE(pp->mux_state),
-					  pp->base + A210_MUX_BASE);
+					  a210_mux_base(pp));
 	}
 	return 0;
 }
@@ -977,6 +1101,7 @@ static const struct of_device_id a210_pinctrl_of_match[] = {
 	{ .compatible = "zhihe,a210-aon-pinctrl", .data = &a210_group0 },
 	{ .compatible = "zhihe,a210-peri1-pinctrl", .data = &a210_group1 },
 	{ .compatible = "zhihe,a210-peri2-pinctrl", .data = &a210_group2 },
+	{ .compatible = "zhihe,a210-peri3-pinctrl", .data = &a210_group3 },
 	{ /* sentinel */ }
 };
 MODULE_DEVICE_TABLE(of, a210_pinctrl_of_match);
