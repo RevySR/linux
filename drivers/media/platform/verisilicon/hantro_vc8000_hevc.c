@@ -353,6 +353,7 @@ static void vc8000_hevc_set_params(struct hantro_ctx *ctx)
 	 */
 	hantro_vc8000_reg_write(ctx, &hevc_init_qp, pps->init_qp_minus26 + 26);
 
+	hantro_vc8000_reg_write(ctx, &hevc_pps_id, pps->pic_parameter_set_id);
 	hantro_vc8000_reg_write(ctx, &hevc_refidx0_active,
 				pps->num_ref_idx_l0_default_active_minus1 + 1);
 	hantro_vc8000_reg_write(ctx, &hevc_refidx1_active,

@@ -246,6 +246,7 @@
 #define hevc_output_8_bits		VC8000_REG(8, 3, 0x1)
 #define hevc_output_format		VC8000_REG(8, 0, 0x7)
 
+#define hevc_pps_id			VC8000_REG(9, 24, 0xff)
 #define hevc_refidx1_active		VC8000_REG(9, 19, 0x1f)
 #define hevc_refidx0_active		VC8000_REG(9, 14, 0x1f)
 #define hevc_hdr_skip_length		VC8000_REG(9, 0, 0x3fff)
