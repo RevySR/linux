@@ -12,19 +12,25 @@ maintainers:
 description: |
   Pinmux and pinconf controller of the Zhihe A210 RISC-V SoC.
 
-  Most pads of the A210 are split into three groups, each managed by its
+  The pads of the A210 are split into four groups, each managed by its
   own pad controller with a separate register range:
 
     AON pad controller   -> zhihe,a210-aon-pinctrl
     Peripheral 1 pads    -> zhihe,a210-peri1-pinctrl
     Peripheral 2 pads    -> zhihe,a210-peri2-pinctrl
+    Peripheral 3 pads    -> zhihe,a210-peri3-pinctrl
 
   Each pad can be muxed individually to up to 8 different functions,
   though for most pads only a few of those settings are valid. A few pads
   in the AON group do not support muxing or configuration at all.
 
-  The pads support configurable drive strength, bias, input enable,
-  Schmitt trigger and slew rate.
+  AON, peripheral 1 and peripheral 2 pads support configurable drive
+  strength, bias, input enable, Schmitt trigger and slew rate.
+
+  The peripheral 3 controller handles the six dedicated SDIO pads, named
+  SDIO_CLK, SDIO_CMD and SDIO_DAT0 to SDIO_DAT3 in the SoC pin list. One
+  mux bit selects SDIO or GPIO for all six pads at once, so they must all
+  use the same function. Only their bias can be configured, per pad.
 
 properties:
   compatible:
@@ -32,6 +38,7 @@ properties:
       - zhihe,a210-aon-pinctrl
       - zhihe,a210-peri1-pinctrl
       - zhihe,a210-peri2-pinctrl
+      - zhihe,a210-peri3-pinctrl
 
   reg:
     maxItems: 1
@@ -116,6 +123,37 @@ patternProperties:
 
         additionalProperties: false
 
+allOf:
+  - if:
+      properties:
+        compatible:
+          const: zhihe,a210-peri3-pinctrl
+    then:
+      patternProperties:
+        '-[0-9]+$':
+          patternProperties:
+            '-pins$':
+              properties:
+                pins:
+                  items:
+                    enum: [ SDIO_CLK, SDIO_CMD, SDIO_DAT0, SDIO_DAT1,
+                            SDIO_DAT2, SDIO_DAT3 ]
+
+                function:
+                  enum: [ sdio, gpio ]
+
+                drive-strength: false
+
+                input-enable: false
+
+                input-disable: false
+
+                input-schmitt-enable: false
+
+                input-schmitt-disable: false
+
+                slew-rate: false
+
 required:
   - compatible
   - reg
@@ -141,6 +179,29 @@ examples:
                 input-disable;
                 input-schmitt-disable;
                 slew-rate = <0>;
+            };
+        };
+    };
+
+  - |
+    pinctrl@542000 {
+        compatible = "zhihe,a210-peri3-pinctrl";
+        reg = <0x542000 0x1000>;
+        clocks = <&clk 0>;
+        clock-names = "pclk";
+
+        sdio-0 {
+            clock-pins {
+                pins = "SDIO_CLK";
+                function = "sdio";
+                bias-disable;
+            };
+
+            cmd-data-pins {
+                pins = "SDIO_CMD", "SDIO_DAT0", "SDIO_DAT1",
+                       "SDIO_DAT2", "SDIO_DAT3";
+                function = "sdio";
+                bias-pull-up;
             };
         };
     };
