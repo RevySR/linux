@@ -998,6 +998,22 @@
 			};
 		};
 
+		video-codec@6800800 {
+			compatible = "zhihe,a210-vc9000d";
+			reg = <0 0x06800800 0 0xc00>;
+			clocks = <&scmi_clk A210_CLK_VP_VDEC_ACLK_EN>,
+				 <&scmi_clk A210_CLK_VP_VDEC_CCLK_EN>,
+				 <&scmi_clk A210_CLK_VP_VDEC_PCLK_EN>;
+			clock-names = "aclk", "cclk", "pclk";
+			interrupt-parent = <&intc>;
+			interrupts = <229 IRQ_TYPE_LEVEL_HIGH>;
+			power-domains = <&scmi_power A210_PD_VDEC>;
+			resets = <&scmi_reset A210_RESET_VP_VDEC_PRST>,
+				 <&scmi_reset A210_RESET_VP_VDEC_ARST>,
+				 <&scmi_reset A210_RESET_VP_VDEC_CRST>;
+			reset-names = "apb", "axi", "core";
+		};
+
 		gpu: gpu@6c00000 {
 			compatible = "zhihe,a210-gpu", "img,img-bxm-4-64",
 				     "img,img-rogue";

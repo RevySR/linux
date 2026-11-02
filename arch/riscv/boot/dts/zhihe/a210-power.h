@@ -16,5 +16,7 @@
 #define A210_PD_PWM 10
 #define A210_PD_GMAC0 11
 #define A210_PD_GMAC1 12
+#define A210_PD_VDEC 13
+#define A210_PD_VENC 14
 
 #endif
