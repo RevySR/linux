@@ -54,6 +54,7 @@ struct sun6i_rtc_match_data {
 	bool				have_dcxo_status	: 1;
 	bool				have_phy_ref_gates	: 1;
 	bool				rtc_32k_single_parent	: 1;
+	unsigned int			osc24M_32k_div;
 	const struct clk_parent_data	*osc32k_fanout_parents;
 	u8				osc32k_fanout_nparents;
 };
@@ -390,6 +391,16 @@ static const struct sun6i_rtc_match_data sun60i_a733_rtc_ccu_data = {
 	.osc32k_fanout_nparents	= ARRAY_SIZE(sun50i_r329_osc32k_fanout_parents),
 };
 
+/*
+ * The V861 has no 32k fanout mux. Its 24 MHz to 32k divider is not
+ * documented, so use the A733 ratio for a 24 MHz oscillator.
+ */
+static const struct sun6i_rtc_match_data sun252i_v861_rtc_ccu_data = {
+	.have_ext_osc32k	= true,
+	.have_iosc_calibration	= true,
+	.osc24M_32k_div		= 732,
+};
+
 static const struct of_device_id sun6i_rtc_ccu_match[] = {
 	{
 		.compatible	= "allwinner,sun50i-h616-rtc",
@@ -398,6 +409,10 @@ static const struct of_device_id sun6i_rtc_ccu_match[] = {
 	{
 		.compatible	= "allwinner,sun50i-r329-rtc",
 		.data		= &sun50i_r329_rtc_ccu_data,
+	},
+	{
+		.compatible	= "allwinner,sun252i-v861-rtc",
+		.data		= &sun252i_v861_rtc_ccu_data,
 	},
 	{
 		.compatible	= "allwinner,sun55i-a523-rtc",
@@ -436,8 +451,15 @@ int sun6i_rtc_ccu_probe(struct device *dev, void __iomem *reg)
 	if (data->rtc_32k_single_parent)
 		rtc_32k_init_data.num_parents = 1;
 
-	osc32k_fanout_init_data.parent_data = data->osc32k_fanout_parents;
-	osc32k_fanout_init_data.num_parents = data->osc32k_fanout_nparents;
+	if (data->osc24M_32k_div)
+		osc24M_32k_div_clk.div = data->osc24M_32k_div;
+
+	if (data->osc32k_fanout_nparents) {
+		osc32k_fanout_init_data.parent_data = data->osc32k_fanout_parents;
+		osc32k_fanout_init_data.num_parents = data->osc32k_fanout_nparents;
+	} else {
+		sun6i_rtc_ccu_hw_clks.hws[CLK_OSC32K_FANOUT] = NULL;
+	}
 
 	if (data->have_dcxo_status)
 		sun6i_rtc_ccu_hw_clks.hws[CLK_OSC24M_32K_DIV] =
