@@ -188,6 +188,34 @@
 			interrupt-controller;
 			#interrupt-cells = <3>;
 
+			mmc0_pins: mmc0-pins {
+				pins = "PF0", "PF1", "PF3", "PF4", "PF5";
+				function = "mmc0";
+				allwinner,pinmux = <2>;
+				bias-pull-up;
+			};
+
+			mmc0_clk_pin: mmc0-clk-pin {
+				pins = "PF2";
+				function = "mmc0";
+				allwinner,pinmux = <2>;
+				bias-disable;
+			};
+
+			spif_pins: spif-pins {
+				pins = "PC0", "PC2", "PC3";
+				function = "spif";
+				allwinner,pinmux = <2>;
+				bias-disable;
+			};
+
+			spif_data_pins: spif-data-pins {
+				pins = "PC1", "PC4", "PC5";
+				function = "spif";
+				allwinner,pinmux = <2>;
+				bias-pull-up;
+			};
+
 			uart0_ph_pins: uart0-ph-pins {
 				pins = "PH9", "PH10";
 				function = "uart0";
@@ -225,6 +253,35 @@
 			reg-io-width = <4>;
 			clocks = <&ccu CLK_BUS_UART0>;
 			resets = <&ccu RST_BUS_UART0>;
+			status = "disabled";
+		};
+
+		mmc0: mmc@4020000 {
+			compatible = "allwinner,sun252i-v861-mmc";
+			reg = <0 0x04020000 0 0x1000>;
+			interrupts = <40 IRQ_TYPE_LEVEL_HIGH>;
+			clocks = <&ccu CLK_BUS_MMC0>, <&ccu CLK_MMC0>;
+			clock-names = "ahb", "mmc";
+			resets = <&ccu RST_BUS_MMC0>;
+			reset-names = "ahb";
+			pinctrl-names = "default";
+			pinctrl-0 = <&mmc0_pins>, <&mmc0_clk_pin>;
+			#address-cells = <1>;
+			#size-cells = <0>;
+			status = "disabled";
+		};
+
+		spif: spi@4f00000 {
+			compatible = "allwinner,sun252i-v861-spif";
+			reg = <0 0x04f00000 0 0x1000>;
+			interrupts = <19 IRQ_TYPE_LEVEL_HIGH>;
+			clocks = <&ccu CLK_BUS_SPIF>, <&ccu CLK_SPIF>;
+			clock-names = "ahb", "mod";
+			resets = <&ccu RST_BUS_SPIF>;
+			pinctrl-names = "default";
+			pinctrl-0 = <&spif_pins>, <&spif_data_pins>;
+			#address-cells = <1>;
+			#size-cells = <0>;
 			status = "disabled";
 		};
 
