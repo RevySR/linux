@@ -22,6 +22,11 @@ config SUN20I_D1_R_CCU
 	default ARCH_SUNXI
 	depends on MACH_SUN8I || RISCV || COMPILE_TEST
 
+config SUN252I_V861_CCU
+	tristate "Support for the Allwinner V861 CCU"
+	default ARCH_SUNXI
+	depends on RISCV || COMPILE_TEST
+
 config SUN50I_A64_CCU
 	tristate "Support for the Allwinner A64 CCU"
 	default ARCH_SUNXI
