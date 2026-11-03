@@ -1,0 +1,31 @@
+// SPDX-License-Identifier: (GPL-2.0-only OR MIT)
+/* Copyright (c) 2026 Han Gao <gaohan@iscas.ac.cn> */
+
+/dts-v1/;
+
+#include "sun252i-v861.dtsi"
+
+/ {
+	model = "Avaota F2";
+	compatible = "yuzukihd,avaota-f2", "allwinner,sun252i-v861";
+
+	aliases {
+		serial0 = &uart0;
+	};
+
+	chosen {
+		stdout-path = "serial0:115200n8";
+	};
+
+	/* U-Boot updates this node with the detected DRAM capacity. */
+	memory@40000000 {
+		device_type = "memory";
+		reg = <0 0x40000000 0 0x08000000>;
+	};
+};
+
+&uart0 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&uart0_ph_pins>;
+	status = "okay";
+};
