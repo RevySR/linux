@@ -91,6 +91,11 @@ config PINCTRL_SUN252I_V861
 	default RISCV && ARCH_SUNXI
 	select PINCTRL_SUNXI
 
+config PINCTRL_SUN252I_V861_R
+	bool "Support for the Allwinner V861 R-PIO"
+	default RISCV && ARCH_SUNXI
+	select PINCTRL_SUNXI
+
 config PINCTRL_SUN50I_A64
 	bool "Support for the Allwinner A64 PIO"
 	default ARM64 && ARCH_SUNXI
