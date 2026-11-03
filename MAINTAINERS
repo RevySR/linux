@@ -24037,9 +24037,11 @@ L:	linux-riscv@lists.infradead.org
 L:	linux-sunxi@lists.linux.dev
 S:	Maintained
 F:	Documentation/devicetree/bindings/clock/allwinner,sun252i-v861-ccu.yaml
+F:	Documentation/devicetree/bindings/spi/allwinner,sun252i-v861-spif.yaml
 F:	arch/riscv/boot/dts/allwinner/sun252i-v861*
 F:	drivers/clk/sunxi-ng/ccu-sun252i-v861*.c
 F:	drivers/pinctrl/sunxi/pinctrl-sun252i-v861*.c
+F:	drivers/spi/spi-sunxi-spif.c
 F:	include/dt-bindings/clock/sun252i-v861*.h
 F:	include/dt-bindings/reset/sun252i-v861*.h
 

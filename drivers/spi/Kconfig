@@ -1199,6 +1199,15 @@ config SPI_SUNPLUS_SP7021
 	  If you have a  Sunplus SP7021 platform say Y here.
 	  If unsure, say N.
 
+config SPI_SUNXI_SPIF
+	tristate "Allwinner SPI flash controller"
+	depends on ARCH_SUNXI || COMPILE_TEST
+	depends on HAS_DMA
+	select SPI_MEM
+	help
+	  Support the dedicated SPI flash controller found on Allwinner V861.
+	  It uses SPI-MEM operations and the controller's descriptor DMA engine.
+
 config SPI_SYNQUACER
 	tristate "Socionext's SynQuacer HighSpeed SPI controller"
 	depends on ARCH_SYNQUACER || COMPILE_TEST
