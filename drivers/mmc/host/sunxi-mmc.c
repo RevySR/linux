@@ -220,6 +220,11 @@
 #define SDXC_CLK_50M_DDR_8BIT	4
 
 #define SDXC_2X_TIMING_MODE	BIT(31)
+#define SDXC_CMD_SAMPLE_PH_MASK	GENMASK(5, 4)
+#define SDXC_CMD_SAMPLE_PH_180	BIT(4)	/* 90 degrees when cleared */
+
+#define SDXC_DAT_DRV_PH_180	BIT(17)	/* 90 degrees when cleared */
+#define SDXC_CMD_DRV_PH_180	BIT(16)	/* 90 degrees when cleared */
 
 #define SDXC_CAL_START		BIT(15)
 #define SDXC_CAL_DONE		BIT(14)
@@ -245,6 +250,7 @@ struct sunxi_idma_des {
 struct sunxi_mmc_cfg {
 	u32 idma_des_size_bits;
 	u32 idma_des_shift;
+	u32 fifo_trigger_level;
 	const struct sunxi_mmc_clk_delay *clk_delays;
 
 	/* does the IP block support autocalibration? */
@@ -263,6 +269,11 @@ struct sunxi_mmc_cfg {
 
 	/* clock hardware can switch between old and new timing modes */
 	bool ccu_has_timings_switch;
+
+	/* The new timing mode needs non-default drive and sample phases. */
+	bool needs_timing_phases;
+	/* The segment limit is smaller than the descriptor length field. */
+	bool idma_des_size_explicit;
 };
 
 struct sunxi_mmc_host {
@@ -332,7 +343,7 @@ static int sunxi_mmc_init_host(struct sunxi_mmc_host *host)
 	 *
 	 * TODO: sun9i has a larger FIFO and supports higher trigger values
 	 */
-	mmc_writel(host, REG_FTRGL, 0x20070008);
+	mmc_writel(host, REG_FTRGL, host->cfg->fifo_trigger_level ?: 0x20070008);
 	/* Maximum timeout value */
 	mmc_writel(host, REG_TMOUT, 0xffffffff);
 	/* Unmask SDIO interrupt if needed */
@@ -367,7 +378,8 @@ static void sunxi_mmc_init_idma_des(struct sunxi_mmc_host *host,
 					     SDXC_IDMAC_DES0_OWN |
 					     SDXC_IDMAC_DES0_DIC);
 
-		if (data->sg[i].length == max_len)
+		if (!host->cfg->idma_des_size_explicit &&
+		    data->sg[i].length == max_len)
 			pdes[i].buf_size = 0; /* 0 == max_len */
 		else
 			pdes[i].buf_size = cpu_to_le32(data->sg[i].length);
@@ -838,6 +850,14 @@ static int sunxi_mmc_clk_set_rate(struct sunxi_mmc_host *host,
 		mmc_writel(host, REG_SD_NTSR, rval);
 	}
 
+	if (host->cfg->needs_timing_phases) {
+		/* Sample commands later at the default bus speed. */
+		rval = mmc_readl(host, REG_SD_NTSR) & ~SDXC_CMD_SAMPLE_PH_MASK;
+		if (ios->timing == MMC_TIMING_LEGACY)
+			rval |= SDXC_CMD_SAMPLE_PH_180;
+		mmc_writel(host, REG_SD_NTSR, rval);
+	}
+
 	/* sunxi_mmc_clk_set_phase expects the actual card clock rate */
 	ret = sunxi_mmc_clk_set_phase(host, ios, rate);
 	if (ret)
@@ -1206,6 +1226,18 @@ static const struct sunxi_mmc_cfg sun50i_a100_emmc_cfg = {
 	.needs_new_timings = true,
 };
 
+static const struct sunxi_mmc_cfg sun252i_v861_cfg = {
+	.idma_des_size_bits = 12,
+	.idma_des_shift = 2,
+	.idma_des_size_explicit = true,
+	/* burst 8 transfers, RX trigger level: 7, TX trigger level: 248 */
+	.fifo_trigger_level = 0x200700f8,
+	.can_calibrate = true,
+	.mask_data0 = true,
+	.needs_new_timings = true,
+	.needs_timing_phases = true,
+};
+
 static const struct of_device_id sunxi_mmc_of_match[] = {
 	{ .compatible = "allwinner,sun4i-a10-mmc", .data = &sun4i_a10_cfg },
 	{ .compatible = "allwinner,sun5i-a13-mmc", .data = &sun5i_a13_cfg },
@@ -1218,12 +1250,14 @@ static const struct of_device_id sunxi_mmc_of_match[] = {
 	{ .compatible = "allwinner,sun50i-a100-mmc", .data = &sun20i_d1_cfg },
 	{ .compatible = "allwinner,sun50i-a100-emmc", .data = &sun50i_a100_emmc_cfg },
 	{ .compatible = "allwinner,sun50i-h616-mmc", .data = &sun50i_h616_cfg },
+	{ .compatible = "allwinner,sun252i-v861-mmc", .data = &sun252i_v861_cfg },
 	{ /* sentinel */ }
 };
 MODULE_DEVICE_TABLE(of, sunxi_mmc_of_match);
 
 static int sunxi_mmc_enable(struct sunxi_mmc_host *host)
 {
+	u32 rval;
 	int ret;
 
 	if (!IS_ERR(host->reset)) {
@@ -1239,6 +1273,13 @@ static int sunxi_mmc_enable(struct sunxi_mmc_host *host)
 	if (ret) {
 		dev_err(host->dev, "Couldn't enable the bus clocks (%d)\n", ret);
 		goto error_assert_reset;
+	}
+
+	/* The drive phases must not change while the module clock runs. */
+	if (host->cfg->needs_timing_phases) {
+		rval = mmc_readl(host, REG_DRV_DL);
+		rval |= SDXC_DAT_DRV_PH_180 | SDXC_CMD_DRV_PH_180;
+		mmc_writel(host, REG_DRV_DL, rval);
 	}
 
 	ret = clk_prepare_enable(host->clk_mmc);
