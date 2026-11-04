@@ -168,6 +168,23 @@ static bool errata_probe_ghostwrite(unsigned int stage,
 	return true;
 }
 
+static bool errata_probe_sv32_pbmt(unsigned int stage,
+				   unsigned long arch_id, unsigned long impid)
+{
+	if (!IS_ENABLED(CONFIG_ERRATA_THEAD_SV32_PBMT))
+		return false;
+
+	/* The ISA extensions are known from the boot stage on. */
+	if (stage == RISCV_ALTERNATIVES_EARLY_BOOT)
+		return false;
+
+	/*
+	 * Svpbmt is only defined for RV64, but T-Head cores also implement it
+	 * in Sv32. The device tree lists it when the firmware has enabled it.
+	 */
+	return riscv_isa_extension_available(NULL, SVPBMT);
+}
+
 static u32 thead_errata_probe(unsigned int stage,
 			      unsigned long archid, unsigned long impid)
 {
@@ -182,6 +199,9 @@ static u32 thead_errata_probe(unsigned int stage,
 		cpu_req_errata |= BIT(ERRATA_THEAD_PMU);
 
 	errata_probe_ghostwrite(stage, archid, impid);
+
+	if (errata_probe_sv32_pbmt(stage, archid, impid))
+		cpu_req_errata |= BIT(ERRATA_THEAD_SV32_PBMT);
 
 	return cpu_req_errata;
 }

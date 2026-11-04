@@ -108,6 +108,15 @@ asm(ALTERNATIVE_2("li %0, 0\t\nnop",					\
 		  "I"(ALT_SVPBMT_SHIFT),				\
 		  "I"(ALT_THEAD_MAE_SHIFT))
 
+#define ALT_THEAD_SV32_PBMT_SHIFT 30
+#define ALT_THEAD_SV32_PBMT(_val, prot)					\
+asm(ALTERNATIVE("li %0, 0\t\nnop",					\
+		"li %0, %1\t\nslli %0,%0,%2", THEAD_VENDOR_ID,		\
+		ERRATA_THEAD_SV32_PBMT, CONFIG_ERRATA_THEAD_SV32_PBMT)	\
+		: "=r"(_val)						\
+		: "I"(prot##_THEAD >> ALT_THEAD_SV32_PBMT_SHIFT),	\
+		  "I"(ALT_THEAD_SV32_PBMT_SHIFT))
+
 #ifdef CONFIG_ERRATA_THEAD_MAE
 /*
  * IO/NOCACHE memory types are handled together with svpbmt,
